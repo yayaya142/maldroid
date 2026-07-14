@@ -2,7 +2,7 @@
 
 | Tool | Role | Policy |
 |---|---|---|
-| llama-server | Local model API and tool-call formatting | User-supplied; `--jinja`, no UI, proxy, agent, or built-in tools |
+| llama-server | Local model API, WebUI, host tools, and tool-call formatting | User-supplied; `--jinja`, loopback WebUI/MCP proxy, `--tools all`; agent mode disabled |
 | ripgrep | Exact and regex text search | Preferred; argument array and timeout |
 | strings | Static printable-string extraction | Optional; output saved and bounded |
 | readelf/objdump/nm | Future Native profile | Allowlisted arguments only; never execute evidence |

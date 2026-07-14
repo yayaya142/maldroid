@@ -50,6 +50,11 @@ enabled, a per-run key is generated and redacted. MalDroid polls `/v1/health` an
 and stderr. Exit, Ctrl+C, and SIGTERM terminate the process group gracefully, then force it only
 after a timeout. Command construction remains centralized.
 
+The owner-controlled llama.cpp WebUI enables its MCP CORS proxy and all built-in host tools. These
+tools execute in the llama-server process with host permissions and are explicitly outside
+MalDroid's case path, output, and audit policy. MalDroid-managed chat continues to receive only the
+active profile schemas and execute them through the separate Python MCP dispatcher.
+
 The Python MCP server binds `127.0.0.1` only, enables MCP transport DNS-rebinding protection, and
 uses a pre-bound socket. Its fixed default port is 8765. Every collision fails rather than changing
 the client endpoint silently. Interactive chat owns the MCP lifecycle, while `maldroid mcp serve`

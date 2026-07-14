@@ -141,10 +141,14 @@ when configured as a default. The MCP port is fixed at 8765 by default and never
 
 The loopback llama.cpp API does not require an API key by default, which keeps direct local UIs and
 clients simple. Enable `llama.api_key_enabled` only when local model API authentication is needed;
-MalDroid then creates a new random key on every server start. The model host remains loopback-only.
+MalDroid then creates a new random key on every server start. `/status` and `/server` show the key
+for the active process. Treat it as a secret. The model host remains loopback-only.
 
-MalDroid rejects `--tools`, `--agent`, and MCP proxy flags in `extra_args`. Its MCP server is the
-Python security boundary; `llama-server` built-in tools and experimental MCP proxy remain disabled.
+The llama.cpp WebUI, experimental MCP proxy, and `--tools all` are enabled by default for the local
+owner-controlled workflow. WebUI built-in tools include shell execution and unrestricted host file
+access; they are not case-scoped or audited by MalDroid. The separate MalDroid MCP tools at
+`http://127.0.0.1:8765/mcp` retain profile, path, output, and audit enforcement. Both servers remain
+loopback-only, and `--agent` stays forbidden.
 
 ## Evidence, findings, and large files
 

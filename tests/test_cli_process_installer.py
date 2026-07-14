@@ -114,10 +114,28 @@ def test_first_time_config_wizard_explains_defaults(
     plain_output = Text.from_ansi(result.stdout).plain
     assert "MalDroid first-time setup" in plain_output
     assert "Press Enter to accept" in plain_output
+    assert "Keep API-key authentication disabled?" in plain_output
     assert "API authentication: disabled" in plain_output
+    assert "WebUI: http://127.0.0.1:7575" in plain_output
+    assert "Built-in llama.cpp tools: all enabled" in plain_output
     shown = runner.invoke(cli.app, ["config", "get", "llama.api_key_enabled", "--json"])
     assert shown.exit_code == 0
     assert json.loads(shown.stdout)["value"] is False
+
+
+def test_first_time_config_wizard_n_enables_api_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("MALDROID_CONFIG_DIR", str(tmp_path / "config"))
+    monkeypatch.setenv("MALDROID_DATA_DIR", str(tmp_path / "data"))
+    runner = CliRunner()
+
+    result = runner.invoke(cli.app, ["config", "init"], input="\n\n\n\nn\n\n")
+
+    assert result.exit_code == 0, result.output
+    assert "API authentication: enabled" in Text.from_ansi(result.stdout).plain
+    shown = runner.invoke(cli.app, ["config", "get", "llama.api_key_enabled", "--json"])
+    assert json.loads(shown.stdout)["value"] is True
 
 
 @pytest.mark.parametrize(
@@ -174,10 +192,19 @@ def test_process_manager_start_and_shutdown(
     process.start()
     assert process.status()["running"] is True
     assert process.status()["port"] == process.command.port
+    assert process.status()["api_key_enabled"] is False
+    assert process.status()["api_key"] is None
     assert process.base_url == f"http://127.0.0.1:{process.command.port}/v1"
     process.stop(graceful_seconds=1)
     assert process.status()["running"] is False
     assert (case / ".maldroid" / "logs" / "llama-server.stdout.log").is_file()
+
+
+def test_process_status_displays_enabled_api_key(tmp_path: Path, app_config: AppConfig) -> None:
+    process = LlamaServerProcess(app_config, tmp_path)
+    process.command = ServerCommand(arguments=[], port=7575, api_key="visible-test-key")
+    assert process.status()["api_key_enabled"] is True
+    assert process.status()["api_key"] == "visible-test-key"
 
 
 def test_process_manager_health_uses_direct_loopback_http(

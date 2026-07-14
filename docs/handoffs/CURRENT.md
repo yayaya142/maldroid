@@ -40,6 +40,11 @@ Run target-machine acceptance with the authorized Gemma 4 model and an external 
   use. `llama.api_key_enabled=true` restores a redacted random key per managed server run.
 - Installation and `config init` now use a five-step guided flow with detected paths, explained
   defaults, quiet package installation, preserved existing configuration, and practical next steps.
+- Setup asks `Keep API-key authentication disabled? [Y/n]`; choosing `n` enables a random key that
+  the active `/status` and `/server` output exposes for local clients.
+- By explicit owner decision, llama.cpp starts with `--ui --ui-mcp-proxy --tools all`. Built-in
+  WebUI shell/file tools run with host permissions outside MalDroid case policy; managed chat tools
+  still use the case-scoped Python MCP dispatcher.
 
 ## Verification
 
@@ -53,7 +58,7 @@ PYTHON="$PWD/.venv/bin/python" ./install.sh --dry-run
 ```
 
 Results: the consolidated `./scripts/dev release-check` passed. Ruff formatting and lint passed;
-mypy passed for 34 source files; 47 tests passed with 68% line coverage. Project hygiene,
+mypy passed for 34 source files; 50 tests passed with 68% line coverage. Project hygiene,
 installer dry-run, JSON parsing tests, nested help/version/config UX, MCP protocol integration, and
 wheel build/archive verification passed. The wheel is `dist/maldroid-0.1.0-py3-none-any.whl`.
 

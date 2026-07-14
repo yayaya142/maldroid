@@ -53,7 +53,17 @@ key only. The configuration file is private-mode TOML and saves atomically.
 
 `llama.api_key_enabled` defaults to `false` for uncomplicated direct access to the loopback
 llama.cpp UI and API. When set to `true`, each managed server start receives a new random key. The
-setting does not change MCP access and cannot make the model server listen beyond loopback.
+interactive `/status` and `/server` commands show the current key for direct local clients; treat
+that output as secret. The setting does not change MCP access and cannot make the model server
+listen beyond loopback.
+
+`llama.ui_enabled`, `llama.ui_mcp_proxy_enabled`, and `llama.built_in_tools_enabled` default to
+`true`. This produces `--ui --ui-mcp-proxy --tools all`. Built-in WebUI tools run with the host
+permissions of llama-server and are not constrained or audited by MalDroid. Disable them with:
+
+```bash
+maldroid config set llama.built_in_tools_enabled false
+```
 
 ## MCP
 

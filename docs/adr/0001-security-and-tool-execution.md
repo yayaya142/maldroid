@@ -3,7 +3,7 @@
 Status: accepted
 
 MalDroid sends OpenAI-compatible schemas to a local model, but executes handlers inside its Python
-process. llama.cpp built-in tools, agent mode, and MCP proxy are disabled because they include host
-filesystem mutation and command execution outside MalDroid's case boundary. This keeps profile,
-path, timeout, and output policy deterministic even after prompt injection.
-
+process. Those MCP handlers retain profile, path, timeout, output, and audit policy even after
+prompt injection. Separately, the owner explicitly enables llama.cpp WebUI built-in host tools and
+accepts that they can execute commands and mutate files outside MalDroid's case boundary. Agent mode
+remains disabled, and both services remain loopback-only.

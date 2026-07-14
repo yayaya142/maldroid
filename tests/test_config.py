@@ -26,6 +26,9 @@ def test_default_model_performance_settings() -> None:
     assert config.llama.batch_size == 512
     assert config.llama.flash_attention == "on"
     assert config.llama.api_key_enabled is False
+    assert config.llama.ui_enabled is True
+    assert config.llama.ui_mcp_proxy_enabled is True
+    assert config.llama.built_in_tools_enabled is True
 
 
 @pytest.mark.parametrize(

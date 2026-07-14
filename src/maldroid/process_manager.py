@@ -117,6 +117,8 @@ class LlamaServerProcess:
             "running": running,
             "pid": self.process.pid if running and self.process else None,
             "port": self.command.port if self.command else None,
+            "api_key_enabled": bool(self.command and self.command.api_key),
+            "api_key": self.command.api_key if self.command else None,
         }
 
     def __enter__(self) -> LlamaServerProcess:

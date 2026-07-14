@@ -19,9 +19,18 @@ from maldroid.paths import config_directory, default_cases_directory, expand_pat
 DANGEROUS_SERVER_FLAGS = {
     "--agent",
     "-ag",
+}
+
+MANAGED_SERVER_FLAGS = {
     "--tools",
     "--ui-mcp-proxy",
+    "--no-ui-mcp-proxy",
     "--webui-mcp-proxy",
+    "--no-webui-mcp-proxy",
+    "--ui",
+    "--no-ui",
+    "--webui",
+    "--no-webui",
 }
 
 
@@ -55,6 +64,9 @@ class LlamaConfig(BaseModel):
     temperature: float = Field(default=0.2, ge=0.0, le=2.0)
     max_response_tokens: int = Field(default=4096, ge=128)
     api_key_enabled: bool = False
+    ui_enabled: bool = True
+    ui_mcp_proxy_enabled: bool = True
+    built_in_tools_enabled: bool = True
     chat_template_file: str | None = None
     extra_args: list[str] = Field(default_factory=list)
 
@@ -72,6 +84,10 @@ class LlamaConfig(BaseModel):
             flag = argument.split("=", 1)[0]
             if flag in DANGEROUS_SERVER_FLAGS:
                 raise ValueError(f"Unsafe llama-server flag is forbidden: {flag}")
+            if flag in MANAGED_SERVER_FLAGS:
+                raise ValueError(
+                    f"Set the managed llama configuration instead of extra_args: {flag}"
+                )
             if flag == "--host":
                 raise ValueError("Set host through the validated llama.host setting")
         return value

@@ -90,6 +90,9 @@ CONFIG_DESCRIPTIONS = {
     "llama.temperature": "Sampling temperature for assistant responses.",
     "llama.max_response_tokens": "Maximum generated tokens per model response.",
     "llama.api_key_enabled": "Enable a random per-run key for the loopback model API.",
+    "llama.ui_enabled": "Serve the built-in llama.cpp WebUI.",
+    "llama.ui_mcp_proxy_enabled": "Enable the experimental WebUI-to-MCP CORS proxy.",
+    "llama.built_in_tools_enabled": "Expose all llama.cpp host tools in the local WebUI.",
     "llama.chat_template_file": "Optional explicit Jinja chat-template path.",
     "llama.extra_args": "Additional validated llama-server arguments.",
     "limits.max_tool_output_characters": "Largest inline tool result before disk overflow.",
@@ -420,6 +423,36 @@ def doctor(
     checks.append(("Host boundary", "ok", config.llama.host))
     checks.append(
         (
+            "Model API authentication",
+            "ok",
+            "random per-run key" if config.llama.api_key_enabled else "disabled on loopback",
+        )
+    )
+    checks.append(
+        (
+            "llama.cpp WebUI",
+            "ok" if config.llama.ui_enabled else "warning",
+            "enabled" if config.llama.ui_enabled else "disabled",
+        )
+    )
+    checks.append(
+        (
+            "WebUI MCP proxy",
+            "warning" if config.llama.ui_mcp_proxy_enabled else "ok",
+            "enabled (experimental)" if config.llama.ui_mcp_proxy_enabled else "disabled",
+        )
+    )
+    checks.append(
+        (
+            "llama.cpp built-in tools",
+            "warning" if config.llama.built_in_tools_enabled else "ok",
+            "all enabled with host permissions"
+            if config.llama.built_in_tools_enabled
+            else "disabled",
+        )
+    )
+    checks.append(
+        (
             "MCP transport",
             "ok",
             f"streamable-http on {config.mcp.host}:{config.mcp.preferred_port}/mcp",
@@ -490,12 +523,10 @@ def config_init() -> None:
     console.print("\n[bold]5/5 — Local access[/bold]")
     console.print(
         "API-key authentication is normally unnecessary because the server only listens on "
-        "this computer. Leave it disabled for direct llama-server UI and API access."
+        "this computer. Keeping it disabled allows direct WebUI and API access."
     )
-    api_key_enabled = typer.confirm(
-        "Enable a new random API key on every server start?",
-        default=current.llama.api_key_enabled,
-    )
+    keep_api_key_disabled = typer.confirm("Keep API-key authentication disabled?", default=True)
+    api_key_enabled = not keep_api_key_disabled
     console.print(
         "\n[dim]Advanced arguments are optional. Most users should leave this empty.[/dim]"
     )
@@ -515,6 +546,11 @@ def config_init() -> None:
     console.print(
         "API authentication: "
         + ("enabled (a new key is generated per run)" if api_key_enabled else "disabled")
+    )
+    console.print(f"WebUI: http://{config.llama.host}:{config.llama.preferred_port}")
+    console.print("WebUI MCP proxy: enabled")
+    console.print(
+        "Built-in llama.cpp tools: all enabled (host shell and files; select tools in the WebUI)."
     )
     console.print("Run [bold]maldroid doctor[/bold] to verify the complete setup.")
 

@@ -3,7 +3,8 @@
 ## 0.1.0 - Unreleased
 
 - Added secure local llama-server lifecycle using the authorized Gemma 4 performance settings.
-- Disabled llama.cpp UI, MCP proxy, agent mode, and built-in tools.
+- Enabled the owner-controlled llama.cpp WebUI, MCP proxy, and built-in host tools while keeping
+  agent mode disabled and MalDroid-managed tools on the separate case-scoped MCP path.
 - Added case/evidence management, persistent investigation state, sessions, and line chat.
 - Added validated core tool calling, large-file contentless FTS5, local knowledge, and React Native
   Metro tooling.
@@ -39,3 +40,7 @@
 - Reworked installation and first-use configuration into an explained five-step flow with automatic
   llama-server detection, Enter-to-accept defaults, quieter dependency output, and clearer next
   commands.
+- Reworded setup as `Keep API-key authentication disabled? [Y/n]` and exposed the active random key
+  through `/status` and `/server` only when authentication is enabled.
+- Added explicit defaults for `--ui --ui-mcp-proxy --tools all`, with doctor warnings that built-in
+  shell and file operations run outside MalDroid case policy.

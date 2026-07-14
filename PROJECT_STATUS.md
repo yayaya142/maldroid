@@ -42,6 +42,10 @@ Last updated: 2026-07-14
   prompt for MCP file workflows and evidence handling.
 - Installation and `config init` provide an explained first-use workflow, automatic server
   detection, preserved reinstallation settings, and explicit local-access choices.
+- API-key setup uses disabled-positive `[Y/n]` wording, and interactive server status exposes the
+  active per-run key only when the user has explicitly enabled authentication.
+- Owner-controlled llama.cpp WebUI, MCP proxy, and all built-in host tools are enabled by default on
+  loopback. They are explicitly documented as outside MalDroid case path and audit policy.
 
 ## Partial or environment-gated
 

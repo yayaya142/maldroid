@@ -108,9 +108,11 @@ def build_server_command(
         "--flash-attn",
         config.llama.flash_attention,
         "--jinja",
-        "--no-ui",
-        "--no-ui-mcp-proxy",
+        "--ui" if config.llama.ui_enabled else "--no-ui",
+        "--ui-mcp-proxy" if config.llama.ui_mcp_proxy_enabled else "--no-ui-mcp-proxy",
     ]
+    if config.llama.built_in_tools_enabled:
+        arguments.extend(["--tools", "all"])
     if api_key:
         arguments.extend(["--api-key", api_key])
     if config.llama.chat_template_file:
