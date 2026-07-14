@@ -292,6 +292,11 @@ class CheckpointingClient:
                         id="inspect-1",
                         name=mcp_tool_name("get_file_info"),
                         arguments='{"path":"sample.txt"}',
+                    ),
+                    ToolCall(
+                        id="inspect-2",
+                        name=mcp_tool_name("get_file_info"),
+                        arguments='{"path":"sample.txt"}',
                     )
                 ],
             )
@@ -342,6 +347,11 @@ class CheckpointIgnoringClient:
                 tool_calls=[
                     ToolCall(
                         id="inspect-1",
+                        name=mcp_tool_name("get_file_info"),
+                        arguments='{"path":"sample.txt"}',
+                    ),
+                    ToolCall(
+                        id="inspect-2",
                         name=mcp_tool_name("get_file_info"),
                         arguments='{"path":"sample.txt"}',
                     )

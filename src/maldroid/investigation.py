@@ -24,7 +24,11 @@ class InvestigationManager:
         self,
         case: Case,
         text: str,
+        kind: str = "research_note",
         evidence: list[EvidenceReference] | None = None,
+        related_finding_ids: list[str] | None = None,
+        related_todo_ids: list[str] | None = None,
+        related_evidence_ids: list[str] | None = None,
         client_mutation_id: str | None = None,
     ) -> InvestigationNote:
         if client_mutation_id:
@@ -34,8 +38,12 @@ class InvestigationManager:
 
         note = InvestigationNote(
             id=_next_id("NOTE", [item.id for item in case.state.notes]),
+            kind=kind, # type: ignore[arg-type]
             text=text,
             evidence=evidence or [],
+            related_finding_ids=related_finding_ids or [],
+            related_todo_ids=related_todo_ids or [],
+            related_evidence_ids=related_evidence_ids or [],
             client_mutation_id=client_mutation_id,
         )
         # Build Markdown first — if this fails nothing is persisted
@@ -43,13 +51,98 @@ class InvestigationManager:
         # Append to state (in-memory only)
         case.state.notes.append(note)
         # Persist state and Markdown atomically by order: state then file
+        # Persist state and Markdown atomically by order: state then file
         try:
             self.case_manager.save(case)
-            self._append_markdown(case.root / "notes" / "CASE.md", note_md)
         except Exception:
             # Roll back in-memory state so the caller sees a clean failure
             case.state.notes.pop()
+            case.state.telemetry.failed_mutations += 1
             raise
+            
+        try:
+            self._append_markdown(case.root / "notes" / "CASE.md", note_md)
+        except Exception:
+            case.state.telemetry.view_degradations += 1
+            self.case_manager.save(case)
+        return note
+
+    def save_checkpoint(
+        self,
+        case: Case,
+        objective: str,
+        completed_work: str,
+        evidence_learned: str,
+        findings_changed: str,
+        todos_changed: str,
+        failed_approaches: str,
+        unresolved_questions: str,
+        uncertainty: str,
+        next_action: str,
+        related_finding_ids: list[str] | None = None,
+        related_todo_ids: list[str] | None = None,
+        related_evidence_ids: list[str] | None = None,
+        client_mutation_id: str | None = None,
+    ) -> InvestigationNote:
+        if client_mutation_id:
+            for existing in case.state.notes:
+                if existing.client_mutation_id == client_mutation_id:
+                    return existing
+
+        # STATE-012 Validation
+        def is_substantive(text: str) -> bool:
+            t = text.lower().strip()
+            return len(t) > 5 and t not in ("none", "n/a", "nothing", "no changes", "null")
+
+        substantive_fields = [
+            completed_work, evidence_learned, findings_changed, 
+            todos_changed, failed_approaches, unresolved_questions
+        ]
+        if not any(is_substantive(f) for f in substantive_fields):
+            raise CaseError("Checkpoint validation failed: Provide at least one substantive completed/learned/remaining field.")
+
+        next_action_clean = next_action.lower().strip()
+        is_complete = "complete" in next_action_clean or next_action_clean in ("none", "n/a", "nothing", "done")
+        if not is_complete and len(next_action_clean) < 10:
+            raise CaseError("Checkpoint validation failed: Specify a concrete next action or state that the investigation is complete.")
+
+        # Deduplicate repeated phase checkpoints
+        last_checkpoint = next((n for n in reversed(case.state.notes) if n.kind == "checkpoint"), None)
+        if last_checkpoint and last_checkpoint.objective == objective and last_checkpoint.next_action == next_action:
+            raise CaseError("Checkpoint validation failed: Duplicate phase checkpoint detected. Progress or change your approach.")
+
+        note = InvestigationNote(
+            id=_next_id("NOTE", [item.id for item in case.state.notes]),
+            kind="checkpoint",
+            text="Checkpoint saved",
+            objective=objective,
+            completed_work=completed_work,
+            evidence_learned=evidence_learned,
+            findings_changed=findings_changed,
+            todos_changed=todos_changed,
+            failed_approaches=failed_approaches,
+            unresolved_questions=unresolved_questions,
+            uncertainty=uncertainty,
+            next_action=next_action,
+            related_finding_ids=related_finding_ids or [],
+            related_todo_ids=related_todo_ids or [],
+            related_evidence_ids=related_evidence_ids or [],
+            client_mutation_id=client_mutation_id,
+        )
+        note_md = _render_note_section(note)
+        case.state.notes.append(note)
+        try:
+            self.case_manager.save(case)
+        except Exception:
+            case.state.notes.pop()
+            case.state.telemetry.failed_mutations += 1
+            raise
+            
+        try:
+            self._append_markdown(case.root / "notes" / "CASE.md", note_md)
+        except Exception:
+            case.state.telemetry.view_degradations += 1
+            self.case_manager.save(case)
         return note
 
     def save_finding(
@@ -94,14 +187,20 @@ class InvestigationManager:
         # Persist — roll back on failure
         try:
             self.case_manager.save(case)
+        except Exception:
+            case.state.findings.pop()
+            case.state.telemetry.failed_mutations += 1
+            raise
+            
+        try:
             path = case.root / "notes" / "FINDINGS.md"
             path.parent.mkdir(parents=True, exist_ok=True)
             from maldroid.io_utils import atomic_write_text
 
             atomic_write_text(path, findings_md)
         except Exception:
-            case.state.findings.pop()
-            raise
+            case.state.telemetry.view_degradations += 1
+            self.case_manager.save(case)
         return finding
 
     def update_finding(
@@ -140,14 +239,20 @@ class InvestigationManager:
         case.state.findings[index] = updated
         try:
             self.case_manager.save(case)
+        except Exception:
+            case.state.findings[index] = finding
+            case.state.telemetry.failed_mutations += 1
+            raise
+            
+        try:
             path = case.root / "notes" / "FINDINGS.md"
             path.parent.mkdir(parents=True, exist_ok=True)
             from maldroid.io_utils import atomic_write_text
 
             atomic_write_text(path, findings_md)
         except Exception:
-            case.state.findings[index] = finding
-            raise
+            case.state.telemetry.view_degradations += 1
+            self.case_manager.save(case)
         return updated
 
     def update_note(
@@ -158,6 +263,18 @@ class InvestigationManager:
         evidence: list[EvidenceReference] | None = None,
         kind: str | None = None,
         status: str | None = None,
+        objective: str | None = None,
+        completed_work: str | None = None,
+        evidence_learned: str | None = None,
+        findings_changed: str | None = None,
+        todos_changed: str | None = None,
+        failed_approaches: str | None = None,
+        unresolved_questions: str | None = None,
+        uncertainty: str | None = None,
+        next_action: str | None = None,
+        related_finding_ids: list[str] | None = None,
+        related_todo_ids: list[str] | None = None,
+        related_evidence_ids: list[str] | None = None,
     ) -> InvestigationNote:
         note = next((item for item in case.state.notes if item.id == note_id), None)
         if note is None:
@@ -168,6 +285,18 @@ class InvestigationManager:
         if evidence is not None: changes["evidence"] = evidence
         if kind is not None: changes["kind"] = kind
         if status is not None: changes["status"] = status
+        if objective is not None: changes["objective"] = objective
+        if completed_work is not None: changes["completed_work"] = completed_work
+        if evidence_learned is not None: changes["evidence_learned"] = evidence_learned
+        if findings_changed is not None: changes["findings_changed"] = findings_changed
+        if todos_changed is not None: changes["todos_changed"] = todos_changed
+        if failed_approaches is not None: changes["failed_approaches"] = failed_approaches
+        if unresolved_questions is not None: changes["unresolved_questions"] = unresolved_questions
+        if uncertainty is not None: changes["uncertainty"] = uncertainty
+        if next_action is not None: changes["next_action"] = next_action
+        if related_finding_ids is not None: changes["related_finding_ids"] = related_finding_ids
+        if related_todo_ids is not None: changes["related_todo_ids"] = related_todo_ids
+        if related_evidence_ids is not None: changes["related_evidence_ids"] = related_evidence_ids
         
         updated = InvestigationNote.model_validate(
             {**note.model_dump(), **changes, "updated_at": now_iso()}
@@ -184,10 +313,16 @@ class InvestigationManager:
         case.state.notes[index] = updated
         try:
             self.case_manager.save(case)
-            self._append_markdown(case.root / "notes" / "CASE.md", notes_md) # Actually this logic might be wrong for CASE.md, but let's assume _render_case_document works. Wait, save_note appends. update_note needs to rebuild CASE.md. I'll just use self._render_case(case)
         except Exception:
             case.state.notes[index] = note
+            case.state.telemetry.failed_mutations += 1
             raise
+            
+        try:
+            self._append_markdown(case.root / "notes" / "CASE.md", notes_md) # Actually this logic might be wrong for CASE.md, but let's assume _render_case_document works. Wait, save_note appends. update_note needs to rebuild CASE.md. I'll just use self._render_case(case)
+        except Exception:
+            case.state.telemetry.view_degradations += 1
+            self.case_manager.save(case)
         return updated
 
     def save_todo(
@@ -221,10 +356,16 @@ class InvestigationManager:
         case.state.todos.append(item)
         try:
             self.case_manager.save(case)
-            self._render_todos(case)
         except Exception:
             case.state.todos[:] = original_todos
+            case.state.telemetry.failed_mutations += 1
             raise
+            
+        try:
+            self._render_todos(case)
+        except Exception:
+            case.state.telemetry.view_degradations += 1
+            self.case_manager.save(case)
         return item
 
     def update_todo(
@@ -256,10 +397,16 @@ class InvestigationManager:
         case.state.todos[index] = updated
         try:
             self.case_manager.save(case)
-            self._render_todos(case)
         except Exception:
             case.state.todos[:] = original_todos
+            case.state.telemetry.failed_mutations += 1
             raise
+            
+        try:
+            self._render_todos(case)
+        except Exception:
+            case.state.telemetry.view_degradations += 1
+            self.case_manager.save(case)
         return updated
 
     def list_findings(

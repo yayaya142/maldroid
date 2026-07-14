@@ -18,6 +18,7 @@ from maldroid.tools.models import mcp_tool_name
 from maldroid.tools.registry import ToolRegistry
 
 CHECKPOINT_TOOLS = {
+    mcp_tool_name("save_checkpoint"),
     mcp_tool_name("save_note"),
 }
 STRUCTURED_STATE_TOOLS = {
@@ -34,14 +35,13 @@ NON_INVESTIGATION_TOOLS = {
 CHECKPOINT_REMINDER = (
     "Durable investigation state is required before the final answer. Update or complete relevant "
     "TODOs, save each evidence-backed conclusion with MalDroid_save_finding, then call "
-    "MalDroid_save_note with a synthesis of completed work, exact evidence paths and lines or "
-    "offsets, facts versus hypotheses, uncertainty, unresolved questions, and the exact next "
-    "action. Do not replace conclusions with a list of tool names."
+    "MalDroid_save_checkpoint with a structured phase transition including objectives, completed work, "
+    "failed approaches, and next actions. Do not replace conclusions with a list of tool names."
 )
 STATE_DISCIPLINE_REMINDER = (
     "Maintain the case files while you investigate. Create concrete TODOs for the remaining plan "
-    "with MalDroid_update_todo, complete them as work finishes, and call MalDroid_save_finding as "
-    "soon as a supported fact or clearly labeled hypothesis emerges. Notes are phase syntheses; a "
+    "with MalDroid_save_todo, complete them as work finishes, and call MalDroid_save_finding as "
+    "soon as a supported fact or clearly labeled hypothesis emerges. A "
     "tool-call list alone is not meaningful progress. Continue the investigation after updating "
     "state."
 )
@@ -147,7 +147,7 @@ class MalDroidAgent:
             if not assistant.tool_calls:
                 if not assistant.content:
                     return "The model returned an empty response. Run maldroid doctor --model-tool-test."
-                if investigation_performed and not checkpoint_saved:
+                if investigation_performed and investigation_calls > 1 and not checkpoint_saved:
                     if not checkpoint_requested:
                         self._emit("checkpoint_required")
                         self.messages.append({"role": "system", "content": CHECKPOINT_REMINDER})

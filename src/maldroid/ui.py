@@ -686,11 +686,19 @@ class InteractiveChat:
                 ]
             )
         if self.case.state.notes:
-            blocks.append(Text("Recent durable notes", style="bold cyan"))
+            blocks.append(Text("Recent Checkpoints & Notes", style="bold cyan"))
             for note in self.case.state.notes[-5:]:
-                blocks.append(Text(f"{note.id} · {note.created_at}", style="dim"))
-                blocks.append(Text(note.text))
-        self.console.print(Panel(Group(*blocks), title="Checkpoints", border_style="cyan"))
+                if note.kind == "checkpoint":
+                    cp_text = f"[bold]Objective:[/bold] {note.objective}\n"
+                    cp_text += f"[bold]Completed Work:[/bold] {note.completed_work}\n"
+                    cp_text += f"[bold]Next Action:[/bold] {note.next_action}"
+                    if note.failed_approaches and note.failed_approaches.lower() not in ("none", "n/a"):
+                        cp_text += f"\n[bold yellow]Failed Approaches:[/bold yellow] {note.failed_approaches}"
+                    blocks.append(Panel(Text.from_markup(cp_text), title=f"Checkpoint {note.id} · {note.created_at}", border_style="blue"))
+                else:
+                    blocks.append(Text(f"[{note.kind}] {note.id} · {note.created_at}", style="dim"))
+                    blocks.append(Text(note.text))
+        self.console.print(Panel(Group(*blocks), title="State Progress", border_style="cyan"))
 
     def _show_history(self) -> None:
         history_path = self.agent.sessions.history_path

@@ -84,7 +84,26 @@ class SelectProfileInput(Arguments):
 
 class SaveNoteInput(Arguments):
     text: str = Field(min_length=1, max_length=50000)
+    kind: Literal["general", "research_note", "decision", "hypothesis", "tool_error", "user_note"] = "research_note"
     evidence: list[EvidenceReference] = Field(default_factory=list)
+    related_finding_ids: list[str] = Field(default_factory=list)
+    related_todo_ids: list[str] = Field(default_factory=list)
+    related_evidence_ids: list[str] = Field(default_factory=list)
+    client_mutation_id: str | None = Field(default=None, description="Optional ID for idempotent retries")
+
+class SaveCheckpointInput(Arguments):
+    objective: str = Field(min_length=1)
+    completed_work: str = Field(min_length=1)
+    evidence_learned: str = Field(min_length=1)
+    findings_changed: str = Field(min_length=1)
+    todos_changed: str = Field(min_length=1)
+    failed_approaches: str = Field(min_length=1)
+    unresolved_questions: str = Field(min_length=1)
+    uncertainty: str = Field(min_length=1)
+    next_action: str = Field(min_length=1)
+    related_finding_ids: list[str] = Field(default_factory=list)
+    related_todo_ids: list[str] = Field(default_factory=list)
+    related_evidence_ids: list[str] = Field(default_factory=list)
     client_mutation_id: str | None = Field(default=None, description="Optional ID for idempotent retries")
 
 
@@ -114,8 +133,22 @@ class UpdateNoteInput(Arguments):
     note_id: str
     text: str | None = Field(default=None, min_length=1, max_length=50000)
     evidence: list[EvidenceReference] | None = None
-    kind: Literal["general", "checkpoint", "decision"] | None = None
+    kind: Literal["general", "research_note", "checkpoint", "decision", "hypothesis", "tool_error", "user_note"] | None = None
     status: Literal["active", "archived"] | None = None
+    
+    objective: str | None = None
+    completed_work: str | None = None
+    evidence_learned: str | None = None
+    findings_changed: str | None = None
+    todos_changed: str | None = None
+    failed_approaches: str | None = None
+    unresolved_questions: str | None = None
+    uncertainty: str | None = None
+    next_action: str | None = None
+    
+    related_finding_ids: list[str] | None = None
+    related_todo_ids: list[str] | None = None
+    related_evidence_ids: list[str] | None = None
 
 
 class SaveTodoInput(Arguments):
@@ -417,7 +450,34 @@ def select_case_profile(_: ToolContext, arguments: BaseModel) -> dict[str, Any]:
 def save_note(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
     values = SaveNoteInput.model_validate(arguments)
     return context.investigation.save_note(
-        context.case, values.text, values.evidence, values.client_mutation_id
+        context.case, 
+        values.text, 
+        kind=values.kind,
+        evidence=values.evidence, 
+        related_finding_ids=values.related_finding_ids,
+        related_todo_ids=values.related_todo_ids,
+        related_evidence_ids=values.related_evidence_ids,
+        client_mutation_id=values.client_mutation_id
+    ).model_dump()
+
+
+def save_checkpoint(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
+    values = SaveCheckpointInput.model_validate(arguments)
+    return context.investigation.save_checkpoint(
+        context.case,
+        objective=values.objective,
+        completed_work=values.completed_work,
+        evidence_learned=values.evidence_learned,
+        findings_changed=values.findings_changed,
+        todos_changed=values.todos_changed,
+        failed_approaches=values.failed_approaches,
+        unresolved_questions=values.unresolved_questions,
+        uncertainty=values.uncertainty,
+        next_action=values.next_action,
+        related_finding_ids=values.related_finding_ids,
+        related_todo_ids=values.related_todo_ids,
+        related_evidence_ids=values.related_evidence_ids,
+        client_mutation_id=values.client_mutation_id,
     ).model_dump()
 
 
@@ -460,6 +520,18 @@ def update_note(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
         evidence=values.evidence,
         kind=values.kind,
         status=values.status,
+        objective=values.objective,
+        completed_work=values.completed_work,
+        evidence_learned=values.evidence_learned,
+        findings_changed=values.findings_changed,
+        todos_changed=values.todos_changed,
+        failed_approaches=values.failed_approaches,
+        unresolved_questions=values.unresolved_questions,
+        uncertainty=values.uncertainty,
+        next_action=values.next_action,
+        related_finding_ids=values.related_finding_ids,
+        related_todo_ids=values.related_todo_ids,
+        related_evidence_ids=values.related_evidence_ids,
     ).model_dump()
 
 
@@ -709,6 +781,7 @@ def register_core_tools(registry: ToolRegistry) -> None:
         ("list_notes", "List investigation notes.", ListNotesInput, list_notes),
         ("get_note", "Get a single investigation note.", GetNoteInput, get_note),
         ("save_note", "Save an investigation note.", SaveNoteInput, save_note),
+        ("save_checkpoint", "Save a structured checkpoint representing a phase transition.", SaveCheckpointInput, save_checkpoint),
         ("update_note", "Update an investigation note.", UpdateNoteInput, update_note),
         ("list_todos", "List TODO items.", ListTodosInput, list_todos),
         ("save_todo", "Save a new TODO item.", SaveTodoInput, save_todo),

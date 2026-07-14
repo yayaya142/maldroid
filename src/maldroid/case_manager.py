@@ -127,6 +127,26 @@ class CaseManager:
     def save(self, case: Case) -> None:
         case.internal.mkdir(parents=True, exist_ok=True)
         metadata = case.metadata
+        
+        # Calculate dynamic telemetry before saving
+        telemetry = case.state.telemetry
+        telemetry.orphan_references = 0
+        finding_ids = {f.id for f in case.state.findings}
+        todo_ids = {t.id for t in case.state.todos}
+        open_todos = sum(1 for t in case.state.todos if t.status == "open")
+        telemetry.stale_todos = open_todos
+        
+        for note in case.state.notes:
+            for fid in note.related_finding_ids:
+                if fid not in finding_ids:
+                    telemetry.orphan_references += 1
+            for tid in note.related_todo_ids:
+                if tid not in todo_ids:
+                    telemetry.orphan_references += 1
+                    
+        # Update state revision
+        case.state.state_revision += 1
+        
         toml = (
             f"schema_version = {metadata.schema_version}\n"
             f"case_id = {json.dumps(metadata.case_id)}\n"
