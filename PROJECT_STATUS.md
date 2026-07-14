@@ -30,17 +30,18 @@ Last updated: 2026-07-14
   rolling distribution Python.
 - Cross-platform process lifecycle tests launch their fake server with pytest's exact interpreter,
   avoiding runner-specific `env python3` resolution.
-- GitHub Actions uses the stable macOS 15 image explicitly so OS upgrades are deliberate and the
-  target-platform signal remains reproducible.
+- GitHub Actions uses macOS 26 explicitly so the tested environment matches the current target
+  release and future OS upgrades remain deliberate.
 - Process termination and direct loopback health behavior have independent deterministic tests;
   neither test depends on nested listener availability in hosted CI.
-- GitHub Actions passes on macOS 15 with Python 3.12 and Kali rolling, including lint, formatting,
-  the complete test suite, and installer dry-run.
+- The last completed GitHub Actions baseline passed on macOS 15 with Python 3.12 and Kali rolling,
+  including lint, formatting, the complete test suite, and installer dry-run. macOS 26 validation
+  is active for the current change.
 
 ## Partial or environment-gated
 
 - Real Gemma 4 tool-call verification requires the supplied macOS model and local llama-server.
-- A physical Apple Silicon smoke test remains pending; hosted macOS 15 and Kali rolling CI pass.
+- A physical Apple Silicon smoke test remains pending; hosted macOS 26 is the current CI target.
 - External-client MCP acceptance on the user's macOS client remains environment-gated.
 - Installer dry-run passes in hosted macOS and Kali; real install/uninstall smoke tests remain
   required on the user's target machines.

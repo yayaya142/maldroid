@@ -25,12 +25,12 @@ Run target-machine acceptance with the authorized Gemma 4 model and an external 
   it no longer silently selects a preinstalled Homebrew Python 3.14.
 - The process lifecycle fixture now invokes its fake server with pytest's exact interpreter rather
   than resolving `python3` through the macOS runner PATH.
-- The workflow targets `macos-15` explicitly after GitHub migrated `macos-latest` to macOS 26 during
-  validation; future macOS image upgrades must be deliberate compatibility tasks.
+- The workflow targets `macos-26` explicitly to match the user's current macOS release; future OS
+  image upgrades must be deliberate compatibility tasks.
 - Process lifecycle and direct loopback health checks are tested independently to avoid hosted
   macOS nested-listener stalls while retaining assertions for the exact health endpoint.
-- Public GitHub Actions run `29319396213` passed on macOS 15/Python 3.12 and Kali rolling, including
-  lint, format checks, all tests, and installer dry-run.
+- Public GitHub Actions run `29319488601` passed on macOS 15/Python 3.12 and Kali rolling before the
+  target moved to macOS 26; the current commit must establish the new macOS 26 baseline.
 
 ## Verification
 

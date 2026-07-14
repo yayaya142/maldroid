@@ -25,8 +25,8 @@
   unrelated preinstalled Homebrew interpreter, and upgraded Actions to their Node 24 releases.
 - Made the fake llama-server integration fixture use pytest's exact Python interpreter so process
   lifecycle tests do not depend on the macOS runner's shell PATH.
-- Pinned CI to the stable macOS 15 runner instead of the moving `macos-latest` label, which migrated
-  to macOS 26 during validation.
+- Pinned CI to macOS 26 explicitly so the tested environment matches the current target macOS
+  release without depending on the moving `macos-latest` label.
 - Split process lifecycle and health-probe tests so macOS CI verifies both behaviors without relying
   on a nested test listener that runner networking can stall.
-- Validated the complete GitHub Actions pipeline on macOS 15 and Kali rolling.
+- Validated the complete GitHub Actions pipeline on macOS and Kali rolling.
