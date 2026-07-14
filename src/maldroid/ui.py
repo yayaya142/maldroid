@@ -47,6 +47,7 @@ COMMANDS: dict[str, str] = {
     "/plan": "Alias for /todo to view the investigation plan",
     "/dashboard": "Show the investigation dashboard",
     "/detail": "Show detailed, expandable view of recent activities or specific items",
+    "/report": "Export the investigation state to a Markdown report in the case directory",
     "/skip-todo": "Mark a TODO item as completed/skipped",
     "/mark-blocked": "Mark a TODO item as blocked",
     "/note": "Save a durable progress note",
@@ -224,19 +225,17 @@ class InteractiveChat:
             return
         except Exception as exc:
             self.console.print()
+            error_id = f"ERR-{int(time.time())}"
             self.console.print(
                 Panel(
                     Text.assemble(
-                        ("The active turn paused after automatic retries.\n", "bold yellow"),
-                        str(exc),
-                        "\n\n",
-                        (
-                            "The CLI is still running and durable case state is preserved. "
-                            "Check /server, then retry when the local dependency is available.",
-                            "dim",
-                        ),
+                        (f"[{error_id}] The active turn paused after an error.\n\n", "bold yellow"),
+                        ("Failed Component: ", "bold"), f"{exc.__class__.__name__}\n",
+                        ("Details: ", "bold"), f"{str(exc)}\n\n",
+                        ("State Impact: ", "bold cyan"), "Durable case state is preserved. No corruption occurred.\n",
+                        ("Next Steps: ", "bold cyan"), "Check /server status, verify dependencies, and press Enter to retry.",
                     ),
-                    title="External dependency required",
+                    title="Execution Interrupted",
                     border_style="yellow",
                 )
             )
@@ -384,6 +383,24 @@ class InteractiveChat:
                 padding=(1, 2),
             )
         )
+        
+        if not self.case.state.findings and not self.case.state.todos:
+            self.console.print(
+                Panel(
+                    Text.assemble(
+                        ("Welcome to your new MalDroid investigation!\n\n", "bold green"),
+                        "This case workspace is managed and tracked. Here is how it works:\n",
+                        ("Evidence: ", "bold cyan"), "Drop files or symlinks into the workspace.\n",
+                        ("Profiles: ", "bold cyan"), "MalDroid uses specific profiles (e.g. android-static) to guide analysis.\n",
+                        ("State: ", "bold cyan"), "The agent works autonomously but records explicit TODOs and Findings.\n",
+                        ("Commands: ", "bold cyan"), "Use `/dashboard` to view status, or type a natural language prompt to begin.\n\n",
+                        ("Try this: ", "dim"), "Analyze the main binary for hardcoded credentials."
+                    ),
+                    title="Getting Started",
+                    border_style="green",
+                    padding=(1, 2)
+                )
+            )
         self.console.print(
             "[dim]Enter[/dim] send  [dim]Alt+Enter[/dim] newline  "
             "[dim]Tab[/dim] complete  [dim]↑/↓[/dim] history  "
@@ -455,6 +472,8 @@ class InteractiveChat:
             self._show_dashboard()
         elif name == "/detail":
             self._show_detail(rest)
+        elif name == "/report":
+            self._export_report()
         elif name == "/skip-todo":
             if not rest:
                 self.console.print("Usage: [cyan]/skip-todo TODO_ID[/cyan]")
@@ -621,6 +640,40 @@ class InteractiveChat:
             return
             
         self.console.print(f"[yellow]Target '{target}' not found for detailed expansion.[/yellow]")
+
+    def _export_report(self) -> None:
+        report_path = self.case.root / "report.md"
+        lines = [
+            f"# MalDroid Investigation Report: {self.case.metadata.name}",
+            f"**Case ID:** {self.case.metadata.case_id}",
+            f"**Created:** {self.case.metadata.created_at}",
+            f"**Profile:** {self.case.state.active_profile}",
+            "",
+            "## Findings",
+        ]
+        
+        for f in self.case.state.findings:
+            lines.extend([
+                f"### {f.title} [{f.severity}]",
+                f"**Confidence:** {f.confidence} | **Status:** {f.status} | **Verified:** {f.verification_status}",
+                f"{f.summary}",
+                "",
+                "**Evidence:**",
+                f"```json\n{f.evidence}\n```",
+                "",
+            ])
+            
+        lines.extend(["## Open TODOs"])
+        for t in self.case.state.todos:
+            if t.status == "open":
+                lines.extend([f"- [{t.priority}] {t.text}"])
+                
+        lines.extend(["", "## Notes"])
+        for n in self.case.state.notes:
+            lines.extend([f"- **{n.kind}**: {n.text}"])
+            
+        report_path.write_text("\n".join(lines), encoding="utf-8")
+        self.console.print(f"[bold green]Report exported to:[/bold green] {report_path}")
 
     def _show_context(self) -> None:
         used, total, remaining, percent = self._context_numbers()
