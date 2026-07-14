@@ -22,6 +22,8 @@ Last updated: 2026-07-14
 - Complete CLI discovery and automation surface: nested help, version/completion, explained config
   tables, get/set/reset/validate/path, consistent JSON output, MCP connector generation, and a
   reproducible wheel/release-check workflow.
+- Public distribution metadata targets `yayaya142/maldroid`; local defaults do not expose a macOS
+  account name.
 
 ## Partial or environment-gated
 

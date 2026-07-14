@@ -1,11 +1,10 @@
 # Current Handoff
 
-Task: `CLI-001`
+Task: `PUBLISH-001`
 
 ## Goal
 
-Make the complete CLI discoverable, consistent, automation-friendly, and straightforward to
-package and distribute.
+Prepare and publish the clean local history to the new public `yayaya142/maldroid` repository.
 
 ## State
 
@@ -18,6 +17,8 @@ package and distribute.
   macOS GGUF path and `llama-server`.
 - Root and nested help, version, shell completion, JSON inventory/doctor output, full configuration
   discovery/reset/validation, MCP connector generation, and release build scripts are implemented.
+- README and package metadata point to the real GitHub repository. The model default is home-relative
+  so it resolves to the authorized path without publishing the local macOS account name.
 
 ## Verification
 

@@ -17,7 +17,7 @@ adapters remain explicit and report compatibility limitations rather than assumi
 ## Installation
 
 ```bash
-git clone <repository>
+git clone https://github.com/yayaya142/maldroid.git
 cd maldroid
 ./install.sh
 ```
@@ -39,7 +39,7 @@ The first-use setup requests the local `llama-server` and GGUF paths. The suppli
 model is:
 
 ```text
-/Users/shaio/Desktop/Tools/Ai Models/gemma-4-12B-it-qat-q4_0.gguf
+~/Desktop/Tools/Ai Models/gemma-4-12B-it-qat-q4_0.gguf
 ```
 
 Validate model tool calling before research use:

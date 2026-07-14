@@ -50,6 +50,12 @@ dev = [
 [project.scripts]
 maldroid = "maldroid.cli:entrypoint"
 
+[project.urls]
+Homepage = "https://github.com/yayaya142/maldroid"
+Documentation = "https://github.com/yayaya142/maldroid/blob/main/docs/CLI.md"
+Issues = "https://github.com/yayaya142/maldroid/issues"
+Source = "https://github.com/yayaya142/maldroid"
+
 [tool.setuptools]
 package-dir = { "" = "src" }
 

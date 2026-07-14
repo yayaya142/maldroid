@@ -17,6 +17,7 @@ from maldroid.config import (
 
 def test_default_model_performance_settings() -> None:
     config = AppConfig()
+    assert config.llama.model == "~/Desktop/Tools/Ai Models/gemma-4-12B-it-qat-q4_0.gguf"
     assert config.general.default_context_size == 65536
     assert config.llama.preferred_port == 7575
     assert config.llama.parallel == 1

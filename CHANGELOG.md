@@ -17,3 +17,5 @@
 - Added a polished CLI command hierarchy, nested help, version and shell completion, documented
   configuration discovery/reset/validation, JSON automation output, MCP client-config generation,
   and reproducible wheel/release-check commands.
+- Prepared public GitHub distribution metadata and replaced the user-specific model prefix with an
+  equivalent home-relative default.
