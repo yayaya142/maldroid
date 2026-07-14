@@ -26,6 +26,8 @@ Last updated: 2026-07-14
   account name.
 - Loopback model health checks use direct HTTP connections without proxy routing; CLI help
   assertions are portable across ANSI behavior on Linux and macOS.
+- GitHub macOS CI now uses the declared setup-python 3.12 runtime deterministically; Kali uses its
+  rolling distribution Python.
 
 ## Partial or environment-gated
 

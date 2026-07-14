@@ -21,6 +21,8 @@ Make the first public macOS and Kali GitHub Actions run pass after publishing th
   so it resolves to the authorized path without publishing the local macOS account name.
 - The initial CI failures were isolated to ANSI-decorated help output and proxy-sensitive loopback
   health probes. Tests now normalize ANSI, and production health checks use direct loopback HTTP.
+- The macOS workflow now forces bootstrap to use the Python 3.12 runtime selected by setup-python;
+  it no longer silently selects a preinstalled Homebrew Python 3.14.
 
 ## Verification
 

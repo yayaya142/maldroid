@@ -21,3 +21,5 @@
   equivalent home-relative default.
 - Fixed cross-platform CI by normalizing ANSI help output in tests and using direct loopback HTTP
   connections that cannot inherit proxy routing.
+- Pinned the macOS bootstrap to the Python 3.12 runtime selected by GitHub Actions instead of an
+  unrelated preinstalled Homebrew interpreter, and upgraded Actions to their Node 24 releases.

@@ -8,11 +8,11 @@ jobs:
   macos:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - run: ./scripts/bootstrap-dev.sh
+      - run: PYTHON="${pythonLocation}/bin/python" ./scripts/bootstrap-dev.sh
       - run: ./scripts/dev lint
       - run: ./scripts/dev format-check
       - run: ./scripts/dev test --cov=maldroid
@@ -23,7 +23,7 @@ jobs:
     container: kalilinux/kali-rolling
     steps:
       - run: apt-get update && apt-get install -y git python3-full python3-venv ripgrep
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: ./scripts/bootstrap-dev.sh
       - run: ./scripts/dev lint
       - run: ./scripts/dev format-check
