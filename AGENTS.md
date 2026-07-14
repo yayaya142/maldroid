@@ -27,6 +27,7 @@ This repository is maintained by one agent at a time. Never perform concurrent e
 ## Mandatory handoff
 
 Run formatting checks, lint, type checking, targeted tests, the full suite, and installer dry-run.
+Use `./scripts/dev release-check` for the consolidated local release gate.
 Update tests and technical documentation with functional changes. Update `PROJECT_STATUS.md`,
 `NEXT_STEPS.md`, `CHANGELOG.md`, and `docs/handoffs/CURRENT.md`. Record exact commands and results,
 known issues, dirty-tree state, and the next command. Create an ADR for architectural decisions.

@@ -170,23 +170,15 @@ def _toml_literal(value: Any) -> str:
 
 
 def set_config_value(config: AppConfig, dotted_key: str, raw_value: str) -> AppConfig:
-    parts = dotted_key.split(".")
-    if len(parts) != 2 or parts[0] not in {
-        "general",
-        "llama",
-        "limits",
-        "external_tools",
-        "mcp",
-    }:
-        raise ConfigurationError("Configuration keys must use section.key form.")
+    section, key = _validate_config_key(config, dotted_key)
     data = config.model_dump()
-    section, key = parts
-    if key not in data[section]:
-        raise ConfigurationError(f"Unknown configuration key: {dotted_key}")
     current = data[section][key]
     try:
         if isinstance(current, bool):
-            parsed: Any = raw_value.lower() in {"1", "true", "yes", "on"}
+            normalized = raw_value.lower()
+            if normalized not in {"1", "0", "true", "false", "yes", "no", "on", "off"}:
+                raise ValueError("expected true/false, yes/no, on/off, or 1/0")
+            parsed: Any = normalized in {"1", "true", "yes", "on"}
         elif isinstance(current, int):
             parsed = int(raw_value)
         elif isinstance(current, float):
@@ -201,6 +193,39 @@ def set_config_value(config: AppConfig, dotted_key: str, raw_value: str) -> AppC
         return AppConfig.model_validate(data)
     except ValueError as exc:
         raise ConfigurationError(f"Invalid value for {dotted_key}: {exc}") from exc
+
+
+def get_config_value(config: AppConfig, dotted_key: str) -> Any:
+    section, key = _validate_config_key(config, dotted_key)
+    return config.model_dump()[section][key]
+
+
+def reset_config_value(config: AppConfig, dotted_key: str) -> AppConfig:
+    section, key = _validate_config_key(config, dotted_key)
+    data = config.model_dump()
+    defaults = AppConfig().model_dump()
+    data[section][key] = defaults[section][key]
+    try:
+        return AppConfig.model_validate(data)
+    except ValueError as exc:  # pragma: no cover - protects cross-field defaults
+        raise ConfigurationError(f"Cannot reset {dotted_key}: {exc}") from exc
+
+
+def _validate_config_key(config: AppConfig, dotted_key: str) -> tuple[str, str]:
+    parts = dotted_key.split(".")
+    if len(parts) != 2 or parts[0] not in {
+        "general",
+        "llama",
+        "limits",
+        "external_tools",
+        "mcp",
+    }:
+        raise ConfigurationError("Configuration keys must use section.key form.")
+    data = config.model_dump()
+    section, key = parts
+    if key not in data[section]:
+        raise ConfigurationError(f"Unknown configuration key: {dotted_key}")
+    return section, key
 
 
 def resolved_cases_directory(config: AppConfig) -> Path:

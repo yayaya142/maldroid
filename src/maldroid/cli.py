@@ -19,10 +19,14 @@ from maldroid.agent import MalDroidAgent
 from maldroid.case_manager import Case, CaseManager
 from maldroid.config import (
     AppConfig,
+    default_config_path,
+    get_config_value,
     load_config,
+    reset_config_value,
     save_config,
     set_config_value,
 )
+from maldroid.constants import VERSION
 from maldroid.evidence_manager import EvidenceManager
 from maldroid.exceptions import MalDroidError
 from maldroid.investigation import InvestigationManager
@@ -42,31 +46,133 @@ from maldroid.ui import InteractiveChat
 
 app = typer.Typer(
     name="maldroid",
-    help="Local static-analysis assistant for Android malware research.",
+    help="Local, MCP-enabled static-analysis workspace for Android research.",
+    epilog=(
+        "[bold]Start here:[/bold] maldroid doctor → maldroid config init → "
+        "maldroid open PATH\n\nUse [bold]maldroid help COMMAND[/bold] for detailed command help."
+    ),
+    rich_markup_mode="rich",
+    context_settings={"help_option_names": ["-h", "--help"]},
 )
-config_app = typer.Typer(help="Manage validated local configuration.")
-knowledge_app = typer.Typer(help="Manage local research playbooks.")
-mcp_app = typer.Typer(help="Expose case-scoped MalDroid tools through MCP.")
+config_app = typer.Typer(
+    help="Inspect and manage validated local configuration.",
+    no_args_is_help=True,
+    rich_markup_mode="rich",
+)
+knowledge_app = typer.Typer(
+    help="Manage local research playbooks.", no_args_is_help=True, rich_markup_mode="rich"
+)
+mcp_app = typer.Typer(
+    help="Serve and configure case-scoped MCP tools.",
+    no_args_is_help=True,
+    rich_markup_mode="rich",
+)
 app.add_typer(config_app, name="config")
 app.add_typer(knowledge_app, name="knowledge")
 app.add_typer(mcp_app, name="mcp")
+
+CONFIG_DESCRIPTIONS = {
+    "general.cases_directory": "Directory where managed investigation cases are created.",
+    "general.default_profile": "Profile selected for newly created cases.",
+    "general.default_context_size": "Model context window used for new cases.",
+    "general.evidence_mode": "Default evidence registration mode: symlink or copy.",
+    "llama.binary": "Path or command name for the local llama-server executable.",
+    "llama.model": "Absolute path to the local GGUF model.",
+    "llama.host": "Validated loopback host for llama-server.",
+    "llama.preferred_port": "Preferred llama-server port; may fall back when occupied.",
+    "llama.startup_timeout_seconds": "Maximum time to wait for model-server readiness.",
+    "llama.parallel": "Number of llama-server request slots.",
+    "llama.keep": "Prompt tokens retained across context shifts.",
+    "llama.gpu_layers": "Model layers requested for GPU offload.",
+    "llama.batch_size": "llama.cpp logical batch size.",
+    "llama.flash_attention": "Flash-attention mode: on, off, or auto.",
+    "llama.temperature": "Sampling temperature for assistant responses.",
+    "llama.max_response_tokens": "Maximum generated tokens per model response.",
+    "llama.chat_template_file": "Optional explicit Jinja chat-template path.",
+    "llama.extra_args": "Additional validated llama-server arguments.",
+    "limits.max_tool_output_characters": "Largest inline tool result before disk overflow.",
+    "limits.max_search_results": "Global upper bound for search matches.",
+    "limits.max_read_lines": "Global upper bound for one bounded text read.",
+    "limits.max_file_tree_entries": "Global upper bound for file-tree results.",
+    "limits.command_timeout_seconds": "Timeout for external tools and MCP calls.",
+    "limits.max_tool_rounds": "Maximum sequential tool rounds per user request.",
+    "external_tools.blutter": "Optional path to an explicitly configured Blutter adapter.",
+    "mcp.host": "Fixed loopback host for the Python MCP server.",
+    "mcp.preferred_port": "Fixed MCP port; defaults to 8765 and never falls back.",
+    "mcp.startup_timeout_seconds": "Maximum time to wait for MCP readiness.",
+}
 
 
 def _console(no_color: bool = False) -> Console:
     return Console(no_color=no_color)
 
 
+def _emit_json(data: Any) -> None:
+    """Write stable, color-free JSON for scripts and connector configuration."""
+    sys.stdout.write(json.dumps(data, ensure_ascii=False, indent=2, default=str) + "\n")
+    sys.stdout.flush()
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        _console().print(f"MalDroid {VERSION}")
+        raise typer.Exit()
+
+
+@app.callback()
+def main(
+    version: bool = typer.Option(
+        False,
+        "--version",
+        callback=_version_callback,
+        is_eager=True,
+        help="Show the installed MalDroid version and exit.",
+    ),
+) -> None:
+    """Initialize global CLI options."""
+
+
+@app.command("help")
+def help_command(
+    command: list[str] | None = typer.Argument(
+        None, help="Optional nested command, for example: mcp serve"
+    ),
+) -> None:
+    """Show root help or detailed help for any nested command."""
+    root = typer.main.get_command(app)
+    node: Any = root
+    context: Any = root.make_context("maldroid", [], resilient_parsing=True)
+    path = command or []
+    for part in path:
+        if not hasattr(node, "get_command"):
+            raise MalDroidError(f"Command has no subcommands: {' '.join(path)}")
+        child = node.get_command(context, part)
+        if child is None:
+            raise MalDroidError(f"Unknown command: {' '.join(path)}")
+        node = child
+        context = node.make_context(part, [], parent=context, resilient_parsing=True)
+    _console().print(node.get_help(context))
+
+
 @app.command()
 def new(
-    name: str | None = typer.Argument(None),
-    profile: str = typer.Option("generic", "--profile"),
-    context_size: int | None = typer.Option(None, "--context-size", "-c"),
-    model: Path | None = typer.Option(None, "--model"),
-    llama_server: Path | None = typer.Option(None, "--llama-server"),
-    port: int | None = typer.Option(None, "--port", min=1, max=65535),
-    mcp_port: int | None = typer.Option(None, "--mcp-port", min=1, max=65535),
-    no_color: bool = typer.Option(False, "--no-color"),
-    debug: bool = typer.Option(False, "--debug"),
+    name: str | None = typer.Argument(None, help="Optional human-readable case name."),
+    profile: str = typer.Option("generic", "--profile", help="Initial static-analysis profile."),
+    context_size: int | None = typer.Option(
+        None, "--context-size", "-c", help="Override the configured model context size."
+    ),
+    model: Path | None = typer.Option(None, "--model", help="Override the GGUF model path."),
+    llama_server: Path | None = typer.Option(
+        None, "--llama-server", help="Override the llama-server executable."
+    ),
+    port: int | None = typer.Option(
+        None, "--port", min=1, max=65535, help="One-run llama-server port override."
+    ),
+    mcp_port: int | None = typer.Option(
+        None, "--mcp-port", min=1, max=65535, help="One-run fixed MCP port override."
+    ),
+    no_color: bool = typer.Option(False, "--no-color", help="Disable terminal colors."),
+    debug: bool = typer.Option(False, "--debug", help="Show tracebacks for unexpected failures."),
 ) -> None:
     """Create a new managed case and start the assistant."""
     _run_guarded(
@@ -89,17 +195,27 @@ def new(
 
 @app.command("open")
 def open_command(
-    path: Path,
-    profile: str | None = typer.Option(None, "--profile"),
-    copy: bool = typer.Option(False, "--copy"),
-    name: str | None = typer.Option(None, "--name"),
-    context_size: int | None = typer.Option(None, "--context-size", "-c"),
-    model: Path | None = typer.Option(None, "--model"),
-    llama_server: Path | None = typer.Option(None, "--llama-server"),
-    port: int | None = typer.Option(None, "--port", min=1, max=65535),
-    mcp_port: int | None = typer.Option(None, "--mcp-port", min=1, max=65535),
-    no_color: bool = typer.Option(False, "--no-color"),
-    debug: bool = typer.Option(False, "--debug"),
+    path: Path = typer.Argument(help="Case directory or single evidence artifact."),
+    profile: str | None = typer.Option(None, "--profile", help="Static-analysis profile."),
+    copy: bool = typer.Option(
+        False, "--copy", help="Copy a file into evidence instead of symlinking."
+    ),
+    name: str | None = typer.Option(None, "--name", help="Name for a newly created case."),
+    context_size: int | None = typer.Option(
+        None, "--context-size", "-c", help="Override the configured model context size."
+    ),
+    model: Path | None = typer.Option(None, "--model", help="Override the GGUF model path."),
+    llama_server: Path | None = typer.Option(
+        None, "--llama-server", help="Override the llama-server executable."
+    ),
+    port: int | None = typer.Option(
+        None, "--port", min=1, max=65535, help="One-run llama-server port override."
+    ),
+    mcp_port: int | None = typer.Option(
+        None, "--mcp-port", min=1, max=65535, help="One-run fixed MCP port override."
+    ),
+    no_color: bool = typer.Option(False, "--no-color", help="Disable terminal colors."),
+    debug: bool = typer.Option(False, "--debug", help="Show tracebacks for unexpected failures."),
 ) -> None:
     """Open a directory or register a single artifact in a new case."""
     _run_guarded(
@@ -126,15 +242,21 @@ def resume() -> None:
     _run_guarded(lambda: _launch_resume(), False, _console())
 
 
-@app.command()
-def cases() -> None:
+@app.command(epilog="Example: maldroid cases --json")
+def cases(
+    json_output: bool = typer.Option(False, "--json", help="Emit stable JSON output."),
+) -> None:
     """List known cases and compact investigation counts."""
     console = _console()
     manager = CaseManager(load_config())
+    records = manager.list_cases()
+    if json_output:
+        _emit_json(records)
+        return
     table = Table(
         "Name", "Case ID", "Path", "Created", "Last opened", "Profile", "Findings", "Open TODO"
     )
-    for item in manager.list_cases():
+    for item in records:
         table.add_row(
             str(item["name"]),
             str(item["case_id"]),
@@ -148,29 +270,58 @@ def cases() -> None:
     console.print(table)
 
 
-@app.command()
-def profiles() -> None:
+@app.command(epilog="Example: maldroid profiles --json")
+def profiles(
+    json_output: bool = typer.Option(False, "--json", help="Emit stable JSON output."),
+) -> None:
     """List profiles and implementation status."""
+    if json_output:
+        _emit_json([vars(profile) for profile in PROFILES.values()])
+        return
     table = Table("Profile", "Status", "Instruction")
     for profile in PROFILES.values():
         table.add_row(profile.name, profile.status, profile.instruction)
     _console().print(table)
 
 
-@app.command("tools")
-def tools_command(profile: str = typer.Option("generic", "--profile")) -> None:
+@app.command("tools", epilog="Example: maldroid tools --profile react-native --json")
+def tools_command(
+    profile: str = typer.Option("generic", "--profile", help="Profile whose tool set to inspect."),
+    json_output: bool = typer.Option(False, "--json", help="Emit names and schemas as JSON."),
+) -> None:
     """List exactly which tools a profile exposes."""
     get_profile(profile)
     registry = build_registry()
-    _console().print("\n".join(registry.names(profile)))
+    if json_output:
+        _emit_json(
+            {
+                "profile": profile,
+                "names": registry.names(profile),
+                "tools": registry.schemas(profile),
+            }
+        )
+    else:
+        _console().print("\n".join(registry.names(profile)))
 
 
-@mcp_app.command("serve")
+@mcp_app.command(
+    "serve",
+    epilog=(
+        "Examples:\n  maldroid mcp serve /path/to/case\n"
+        "  maldroid mcp serve /path/to/case --port 8765 --json"
+    ),
+)
 def mcp_serve(
-    case_path: Path | None = typer.Argument(None),
-    profile: str | None = typer.Option(None, "--profile"),
-    port: int | None = typer.Option(None, "--port", min=1, max=65535),
-    json_output: bool = typer.Option(False, "--json"),
+    case_path: Path | None = typer.Argument(
+        None, help="Existing MalDroid case; defaults to the most recent case."
+    ),
+    profile: str | None = typer.Option(
+        None, "--profile", help="Persist this active profile before serving."
+    ),
+    port: int | None = typer.Option(
+        None, "--port", min=1, max=65535, help="One-run fixed MCP port override."
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Print startup metadata as JSON."),
 ) -> None:
     """Serve the latest or selected case through loopback MCP Streamable HTTP."""
 
@@ -189,8 +340,8 @@ def mcp_serve(
         endpoint = server.start(port)
         console = _console()
         if json_output:
-            console.print_json(
-                data={
+            _emit_json(
+                {
                     "status": "ready",
                     "transport": "streamable-http",
                     "host": server.host,
@@ -216,10 +367,35 @@ def mcp_serve(
     _run_guarded(run, False, _console())
 
 
-@app.command()
+@mcp_app.command("client-config")
+def mcp_client_config(
+    name: str = typer.Option("maldroid", "--name", help="Connector name in the generated config."),
+    port: int | None = typer.Option(None, "--port", min=1, max=65535),
+) -> None:
+    """Print a ready-to-paste MCP client configuration."""
+    config = load_config()
+    selected_port = port or config.mcp.preferred_port
+    _emit_json(
+        {
+            "mcpServers": {
+                name: {
+                    "type": "http",
+                    "url": f"http://{config.mcp.host}:{selected_port}/mcp",
+                }
+            }
+        }
+    )
+
+
+@app.command(epilog="Examples: maldroid doctor --json | maldroid doctor --model-tool-test")
 def doctor(
-    show_command: bool = typer.Option(False, "--show-command"),
-    model_tool_test: bool = typer.Option(False, "--model-tool-test"),
+    show_command: bool = typer.Option(
+        False, "--show-command", help="Show the secret-redacted llama-server command."
+    ),
+    model_tool_test: bool = typer.Option(
+        False, "--model-tool-test", help="Run the real structured tool-call compatibility test."
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Emit diagnostic checks as JSON."),
 ) -> None:
     """Diagnose local dependencies and optionally verify real model tool calling."""
     console = _console()
@@ -247,18 +423,35 @@ def doctor(
             f"streamable-http on {config.mcp.host}:{config.mcp.preferred_port}/mcp",
         )
     )
-    table = Table("Check", "Status", "Details")
-    for check, status, details in checks:
-        table.add_row(check, status, details)
-    console.print(table)
-    if show_command:
+    if json_output and model_tool_test:
+        raise MalDroidError("--json cannot be combined with the interactive --model-tool-test.")
+    if json_output:
+        payload: dict[str, Any] = {
+            "version": VERSION,
+            "checks": [
+                {"name": check, "status": status, "details": details}
+                for check, status, details in checks
+            ],
+        }
+        if show_command:
+            payload["llama_server_command"] = build_server_command(config).display()
+        _emit_json(payload)
+    else:
+        table = Table("Check", "Status", "Details")
+        for check, status, details in checks:
+            table.add_row(check, status, details)
+        console.print(table)
+    if show_command and not json_output:
         command = build_server_command(config)
         console.print(command.display())
     if model_tool_test:
         _doctor_model_tool_test(config, console)
 
 
-@config_app.command("init")
+@config_app.command(
+    "init",
+    epilog="Run this once after installation. Existing values are offered as prompt defaults.",
+)
 def config_init() -> None:
     """Run first-use configuration and save a validated TOML file."""
     current = load_config()
@@ -280,18 +473,100 @@ def config_init() -> None:
     _console().print(f"Saved configuration: {target}")
 
 
-@config_app.command("show")
-def config_show() -> None:
-    """Display effective validated configuration."""
-    _console().print_json(data=load_config().model_dump())
+@config_app.command("show", epilog="Use --json for scripts and support bundles.")
+def config_show(
+    json_output: bool = typer.Option(False, "--json", help="Emit the complete config as JSON."),
+) -> None:
+    """Display every effective value, default, and plain-language description."""
+    config = load_config()
+    if json_output:
+        _emit_json(config.model_dump(mode="json"))
+        return
+    defaults = AppConfig()
+    console = _console()
+    console.print(f"Configuration file: {default_config_path()}")
+    for section, values in config.model_dump(mode="json").items():
+        table = Table("Setting", "Effective value", "State", "Purpose", title=f"[{section}]")
+        for key, value in values.items():
+            dotted_key = f"{section}.{key}"
+            default = get_config_value(defaults, dotted_key)
+            table.add_row(
+                key,
+                _display_config_value(value),
+                "default" if value == default else "custom",
+                CONFIG_DESCRIPTIONS.get(dotted_key, ""),
+            )
+        console.print(table)
 
 
-@config_app.command("set")
-def config_set(key: str, value: str) -> None:
+@config_app.command("get")
+def config_get(
+    key: str = typer.Argument(help="Configuration key in section.key form."),
+    json_output: bool = typer.Option(False, "--json", help="Emit key metadata as JSON."),
+) -> None:
+    """Read one effective configuration value."""
+    config = load_config()
+    value = get_config_value(config, key)
+    if json_output:
+        _emit_json(
+            {
+                "key": key,
+                "value": value,
+                "default": get_config_value(AppConfig(), key),
+                "description": CONFIG_DESCRIPTIONS.get(key, ""),
+            }
+        )
+    else:
+        _console().print(_display_config_value(value))
+
+
+@config_app.command("path")
+def config_path() -> None:
+    """Print the configuration file path without creating it."""
+    _console().print(str(default_config_path()))
+
+
+@config_app.command("validate")
+def config_validate() -> None:
+    """Validate the saved configuration and security constraints."""
+    config = load_config()
+    _console().print(
+        f"Configuration is valid: {default_config_path()}\n"
+        f"MCP endpoint: http://{config.mcp.host}:{config.mcp.preferred_port}/mcp"
+    )
+
+
+@config_app.command("set", epilog="Example: maldroid config set mcp.preferred_port 8765")
+def config_set(
+    key: str = typer.Argument(help="Configuration key in section.key form."),
+    value: str = typer.Argument(help="New value; quote lists or paths containing spaces."),
+) -> None:
     """Set one section.key value after validation."""
     config = set_config_value(load_config(), key, value)
     target = save_config(config)
-    _console().print(f"Updated {key} in {target}")
+    _console().print(f"Updated {key} = {_display_config_value(get_config_value(config, key))}")
+    _console().print(f"Saved: {target}")
+
+
+@config_app.command("reset")
+def config_reset(
+    key: str = typer.Argument(help="Configuration key in section.key form."),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Reset without confirmation."),
+) -> None:
+    """Reset one configuration key to its packaged default."""
+    config = load_config()
+    current = get_config_value(config, key)
+    default = get_config_value(AppConfig(), key)
+    if not yes:
+        typer.confirm(
+            f"Reset {key} from {_display_config_value(current)} to "
+            f"{_display_config_value(default)}?",
+            abort=True,
+        )
+    updated = reset_config_value(config, key)
+    target = save_config(updated)
+    _console().print(f"Reset {key} = {_display_config_value(default)}")
+    _console().print(f"Saved: {target}")
 
 
 @knowledge_app.command("add")
@@ -313,14 +588,14 @@ def knowledge_list() -> None:
     manager, _ = _knowledge_manager_for_cli()
     if not manager.list_documents():
         manager.reindex()
-    _console().print_json(data=manager.list_documents())
+    _emit_json(manager.list_documents())
 
 
 @knowledge_app.command("reindex")
 def knowledge_reindex() -> None:
     """Rebuild the local FTS5 knowledge index for the latest case."""
     manager, _ = _knowledge_manager_for_cli()
-    _console().print_json(data=manager.reindex())
+    _emit_json(manager.reindex())
 
 
 def _launch(
@@ -542,6 +817,14 @@ def _knowledge_manager_for_cli() -> tuple[KnowledgeManager, Case]:
     return KnowledgeManager(case), case
 
 
+def _display_config_value(value: Any) -> str:
+    if value is None:
+        return "<not set>"
+    if isinstance(value, str):
+        return value or "<empty>"
+    return json.dumps(value, ensure_ascii=False)
+
+
 def _run_guarded(action: Any, debug: bool, console: Console) -> None:
     try:
         action()
@@ -565,11 +848,19 @@ def entrypoint() -> None:
         "config",
         "knowledge",
         "mcp",
+        "help",
     }
     arguments = sys.argv[1:]
+    global_options = {
+        "--version",
+        "--install-completion",
+        "--show-completion",
+        "--help",
+        "-h",
+    }
     if not arguments:
         sys.argv.append("new")
-    elif arguments[0] not in commands and arguments[0] not in {"--help", "-h"}:
+    elif arguments[0] not in commands and arguments[0] not in global_options:
         sys.argv.insert(1, "new" if arguments[0].startswith("-") else "open")
     try:
         app()

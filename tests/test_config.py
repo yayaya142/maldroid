@@ -5,7 +5,14 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from maldroid.config import AppConfig, load_config, save_config, set_config_value
+from maldroid.config import (
+    AppConfig,
+    get_config_value,
+    load_config,
+    reset_config_value,
+    save_config,
+    set_config_value,
+)
 
 
 def test_default_model_performance_settings() -> None:
@@ -46,3 +53,12 @@ def test_config_round_trip_and_expansion(
     assert loaded.llama.model == str(tmp_path / "model.gguf")
     assert loaded.llama.chat_template_file is None
     assert loaded == set_config_value(loaded, "llama.temperature", "0.2")
+
+
+def test_config_get_reset_and_invalid_values() -> None:
+    changed = set_config_value(AppConfig(), "mcp.preferred_port", "9000")
+    assert get_config_value(changed, "mcp.preferred_port") == 9000
+    reset = reset_config_value(changed, "mcp.preferred_port")
+    assert reset.mcp.preferred_port == 8765
+    with pytest.raises(Exception, match="Invalid value"):
+        set_config_value(AppConfig(), "general.evidence_mode", "maybe")

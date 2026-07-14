@@ -26,6 +26,15 @@ The installer creates `~/.local/share/maldroid/venv`, installs MalDroid there, a
 `~/.local/bin/maldroid`. It never installs Python packages into the system interpreter. Preview
 all actions with `./install.sh --dry-run`.
 
+After installation, enable native shell completion and inspect the command map:
+
+```bash
+maldroid --install-completion
+maldroid --version
+maldroid --help
+maldroid help mcp serve
+```
+
 The first-use setup requests the local `llama-server` and GGUF paths. The supplied macOS default
 model is:
 
@@ -100,8 +109,17 @@ Configuration is stored at `~/.config/maldroid/config.toml`:
 ```bash
 maldroid config init
 maldroid config show
+maldroid config show --json
+maldroid config get mcp.preferred_port
 maldroid config set llama.temperature 0.1
+maldroid config validate
+maldroid config reset llama.temperature --yes
+maldroid config path
 ```
+
+`config show` groups every effective value by section, marks it as default or custom, and explains
+its purpose. Setters validate the complete configuration before performing an atomic save. Generate
+a ready-to-paste connector definition with `maldroid mcp client-config`.
 
 CLI options override configuration for one run. The preferred model port is 7575 and may fall back
 when configured as a default. The MCP port is fixed at 8765 by default and never falls back.
@@ -143,3 +161,17 @@ excerpts enter model context.
 
 Use `--debug` only when a traceback is needed. Uninstall safely with `./uninstall.sh`; cases and
 user knowledge are retained by default.
+
+## Distribution
+
+Maintainers can run the complete local release gate and build an installable wheel without manually
+activating Python:
+
+```bash
+./scripts/dev release-check
+./scripts/dev build
+```
+
+The wheel is written under `dist/` and can be installed into any supported isolated environment
+with `python3 -m pip install /path/to/maldroid-0.1.0-py3-none-any.whl`. See
+[`docs/CLI.md`](docs/CLI.md) for the command and automation-output reference.

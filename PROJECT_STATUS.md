@@ -19,6 +19,9 @@ Last updated: 2026-07-14
 - Static Native, Flutter, Unity, Cordova, and Cocos handlers with allowlisted adapters, artifact
   detection, bounded search/read operations, and explicit unsupported-format reporting.
 - macOS/Kali installer design, safe uninstaller, starter documentation, and synthetic tests.
+- Complete CLI discovery and automation surface: nested help, version/completion, explained config
+  tables, get/set/reset/validate/path, consistent JSON output, MCP connector generation, and a
+  reproducible wheel/release-check workflow.
 
 ## Partial or environment-gated
 

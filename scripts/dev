@@ -27,8 +27,13 @@ case "${COMMAND}" in
   doctor)
     exec "${ROOT_DIR}/.venv/bin/maldroid" doctor "$@"
     ;;
+  build)
+    exec "${ROOT_DIR}/scripts/build-release.sh" "$@"
+    ;;
+  release-check)
+    exec "${ROOT_DIR}/scripts/release-check.sh" "$@"
+    ;;
   help|*)
-    echo "Usage: ./scripts/dev {test|lint|format-check|maldroid|python|doctor} [args...]"
+    echo "Usage: ./scripts/dev {test|lint|format-check|maldroid|python|doctor|build|release-check} [args...]"
     ;;
 esac
-

@@ -14,3 +14,6 @@
 - Added a loopback-only MCP Streamable HTTP server for every MalDroid tool, dynamic port reporting,
   standalone `maldroid mcp serve`, official MCP client routing for chat tools, and protocol tests.
 - Made MCP port 8765 fixed by default; occupied ports now fail instead of silently falling back.
+- Added a polished CLI command hierarchy, nested help, version and shell completion, documented
+  configuration discovery/reset/validation, JSON automation output, MCP client-config generation,
+  and reproducible wheel/release-check commands.

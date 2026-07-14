@@ -5,7 +5,8 @@
    version and `/props` template behavior. Acceptance: structured array/object tool call and final
    response pass without built-in tools. Connect an external MCP client to the printed endpoint,
    confirm the saved fixed `http://127.0.0.1:8765/mcp` endpoint reconnects across runs, list tools,
-   and call `read_case_state`.
+   and call `read_case_state`. Install the generated wheel, enable zsh completion, and smoke-test
+   `--help`, `config validate`, `doctor --json`, and `mcp client-config`.
 2. `REL-002` — Run the full suite and installer lifecycle on Kali rolling and Apple Silicon.
 3. `COMPAT-001` — Expand benign multi-architecture ELF and versioned Blutter fixtures on target
    platforms and record exact external-tool versions.

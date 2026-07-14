@@ -102,4 +102,9 @@ if [ ! -f "${HOME}/.config/maldroid/config.toml" ]; then
   "${VENV_DIR}/bin/maldroid" config init
 fi
 "${VENV_DIR}/bin/maldroid" doctor
-echo "Installation complete. Start with: maldroid"
+echo "Installation complete."
+echo "Next steps:"
+echo "  maldroid --install-completion"
+echo "  maldroid config validate"
+echo "  maldroid mcp client-config"
+echo "  maldroid --help"

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -28,6 +29,73 @@ def test_typer_commands_are_not_consumed_as_paths(
     assert "read_file_range" in tools.stdout
 
 
+def test_polished_help_version_and_mcp_client_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("MALDROID_CONFIG_DIR", str(tmp_path / "config"))
+    monkeypatch.setenv("MALDROID_DATA_DIR", str(tmp_path / "data"))
+    runner = CliRunner()
+
+    version = runner.invoke(cli.app, ["--version"])
+    assert version.exit_code == 0
+    assert version.stdout.strip() == "MalDroid 0.1.0"
+
+    help_result = runner.invoke(cli.app, ["help", "mcp", "serve"])
+    assert help_result.exit_code == 0
+    assert "One-run fixed" in help_result.stdout
+    assert "--port" in help_result.stdout
+
+    client = runner.invoke(cli.app, ["mcp", "client-config"])
+    assert client.exit_code == 0
+    payload = json.loads(client.stdout)
+    assert payload["mcpServers"]["maldroid"]["url"] == "http://127.0.0.1:8765/mcp"
+
+    doctor = runner.invoke(cli.app, ["doctor", "--json"])
+    assert doctor.exit_code == 0
+    diagnostics = json.loads(doctor.stdout)
+    assert diagnostics["version"] == "0.1.0"
+    assert {item["name"] for item in diagnostics["checks"]} >= {
+        "Python",
+        "llama-server",
+        "MCP transport",
+    }
+
+    profiles = runner.invoke(cli.app, ["profiles", "--json"])
+    assert profiles.exit_code == 0
+    assert {item["name"] for item in json.loads(profiles.stdout)} >= {
+        "generic",
+        "react-native",
+    }
+
+
+def test_config_cli_discovery_set_validate_and_reset(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("MALDROID_CONFIG_DIR", str(tmp_path / "config"))
+    monkeypatch.setenv("MALDROID_DATA_DIR", str(tmp_path / "data"))
+    runner = CliRunner()
+
+    path_result = runner.invoke(cli.app, ["config", "path"])
+    assert path_result.exit_code == 0
+    assert path_result.stdout.strip().endswith("config.toml")
+
+    updated = runner.invoke(cli.app, ["config", "set", "mcp.preferred_port", "9000"])
+    assert updated.exit_code == 0
+    assert "mcp.preferred_port = 9000" in updated.stdout
+
+    fetched = runner.invoke(cli.app, ["config", "get", "mcp.preferred_port", "--json"])
+    assert fetched.exit_code == 0
+    assert json.loads(fetched.stdout)["value"] == 9000
+
+    valid = runner.invoke(cli.app, ["config", "validate"])
+    assert valid.exit_code == 0
+    assert "http://127.0.0.1:9000/mcp" in valid.stdout
+
+    reset = runner.invoke(cli.app, ["config", "reset", "mcp.preferred_port", "--yes"])
+    assert reset.exit_code == 0
+    assert "8765" in reset.stdout
+
+
 @pytest.mark.parametrize(
     ("arguments", "inserted"),
     [
@@ -36,6 +104,8 @@ def test_typer_commands_are_not_consumed_as_paths(
         (["-c", "8192"], "new"),
         (["doctor"], None),
         (["mcp", "--help"], None),
+        (["help", "config"], None),
+        (["--version"], None),
     ],
 )
 def test_entrypoint_rewrites_daily_syntax(
