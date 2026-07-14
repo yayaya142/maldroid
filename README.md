@@ -24,7 +24,13 @@ cd maldroid
 
 The installer creates `~/.local/share/maldroid/venv`, installs MalDroid there, and creates
 `~/.local/bin/maldroid`. It never installs Python packages into the system interpreter. Preview
-all actions with `./install.sh --dry-run`.
+all actions with `./install.sh --dry-run`. Installation uses public PyPI in isolated mode, so an
+unrelated global or corporate `pip` configuration cannot redirect MalDroid dependencies. An
+approved private mirror can be selected explicitly:
+
+```bash
+MALDROID_PIP_INDEX_URL="https://packages.example/simple" ./install.sh
+```
 
 After installation, enable native shell completion and inspect the command map:
 

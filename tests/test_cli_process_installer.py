@@ -221,6 +221,7 @@ def test_installer_dry_run_does_not_write(tmp_path: Path) -> None:
     environment = os.environ.copy()
     environment["HOME"] = str(tmp_path)
     environment["PYTHON"] = sys.executable
+    environment["PIP_INDEX_URL"] = "https://example.invalid/simple"
     completed = subprocess.run(
         [str(root / "install.sh"), "--dry-run"],
         cwd=root,
@@ -231,4 +232,5 @@ def test_installer_dry_run_does_not_write(tmp_path: Path) -> None:
     )
     assert completed.returncode == 0, completed.stderr
     assert "no files were changed" in completed.stdout
+    assert "public PyPI (isolated from user pip configuration)" in completed.stdout
     assert not (tmp_path / ".local" / "share" / "maldroid").exists()

@@ -30,3 +30,5 @@
 - Split process lifecycle and health-probe tests so macOS CI verifies both behaviors without relying
   on a nested test listener that runner networking can stall.
 - Validated the complete GitHub Actions pipeline on macOS and Kali rolling.
+- Made installation independent of inherited user `pip` indexes by using isolated public PyPI by
+  default, with an explicit `MALDROID_PIP_INDEX_URL` override for approved private mirrors.

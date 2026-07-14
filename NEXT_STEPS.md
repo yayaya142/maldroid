@@ -8,6 +8,8 @@
    and call `read_case_state`. Install the generated wheel, enable zsh completion, and smoke-test
    `--help`, `config validate`, `doctor --json`, and `mcp client-config`.
    Verify the public clone from `https://github.com/yayaya142/maldroid.git` in a clean directory.
+   Confirm installation succeeds despite unrelated global `pip` index configuration; use
+   `MALDROID_PIP_INDEX_URL` only when an approved private mirror is intentionally required.
 2. `REL-002` — Run the full suite and installer lifecycle on Kali rolling and Apple Silicon.
 3. `COMPAT-001` — Expand benign multi-architecture ELF and versioned Blutter fixtures on target
    platforms and record exact external-tool versions.

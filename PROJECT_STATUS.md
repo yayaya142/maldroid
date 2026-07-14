@@ -36,6 +36,8 @@ Last updated: 2026-07-14
   neither test depends on nested listener availability in hosted CI.
 - GitHub Actions passes on macOS 26 with Python 3.12 and Kali rolling, including lint, formatting,
   the complete test suite, and installer dry-run.
+- The installer uses an isolated, deterministic package index and cannot be redirected by ambient
+  user `pip` configuration; private mirrors require an explicit MalDroid-specific override.
 
 ## Partial or environment-gated
 

@@ -7,6 +7,8 @@ VENV_DIR="${INSTALL_ROOT}/venv"
 BIN_DIR="${HOME}/.local/bin"
 WRAPPER="${BIN_DIR}/maldroid"
 DRY_RUN=false
+DEFAULT_PACKAGE_INDEX="https://pypi.org/simple"
+PACKAGE_INDEX="${MALDROID_PIP_INDEX_URL:-${DEFAULT_PACKAGE_INDEX}}"
 
 if [ "${1:-}" = "--dry-run" ]; then
   DRY_RUN=true
@@ -68,6 +70,11 @@ echo "Executable: ${WRAPPER}"
 echo "Project: ${ROOT_DIR}"
 echo "ripgrep: $(command -v rg || echo 'not found (recommended)')"
 echo "llama-server: $(command -v llama-server || echo 'not found; configuration will request a path')"
+if [ "${PACKAGE_INDEX}" = "${DEFAULT_PACKAGE_INDEX}" ]; then
+  echo "Python packages: public PyPI (isolated from user pip configuration)"
+else
+  echo "Python packages: custom MALDROID_PIP_INDEX_URL (isolated from user pip configuration)"
+fi
 
 if ${DRY_RUN}; then
   echo "Dry run complete; no files were changed."
@@ -76,8 +83,18 @@ fi
 
 mkdir -p "${INSTALL_ROOT}" "${BIN_DIR}"
 "${PYTHON_BIN}" -m venv "${VENV_DIR}"
-"${VENV_DIR}/bin/python" -m pip install --upgrade pip
-"${VENV_DIR}/bin/python" -m pip install "${ROOT_DIR}"
+if ! "${VENV_DIR}/bin/python" -m pip --isolated install \
+  --index-url "${PACKAGE_INDEX}" --upgrade pip; then
+  echo "Failed to prepare pip from the configured MalDroid package index." >&2
+  echo "For an approved private mirror, set MALDROID_PIP_INDEX_URL and retry." >&2
+  exit 1
+fi
+if ! "${VENV_DIR}/bin/python" -m pip --isolated install \
+  --index-url "${PACKAGE_INDEX}" "${ROOT_DIR}"; then
+  echo "Failed to install MalDroid and its Python dependencies." >&2
+  echo "For an approved private mirror, set MALDROID_PIP_INDEX_URL and retry." >&2
+  exit 1
+fi
 
 printf '%s\n' '#!/usr/bin/env sh' "exec \"${VENV_DIR}/bin/maldroid\" \"\$@\"" > "${WRAPPER}"
 chmod 0755 "${WRAPPER}"

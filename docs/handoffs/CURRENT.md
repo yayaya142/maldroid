@@ -31,6 +31,9 @@ Run target-machine acceptance with the authorized Gemma 4 model and an external 
   macOS nested-listener stalls while retaining assertions for the exact health endpoint.
 - Public GitHub Actions run `29320731148` passed on macOS 26/Python 3.12 and Kali rolling, including
   lint, format checks, all tests, and installer dry-run.
+- Installation now uses public PyPI through pip isolated mode by default, preventing inherited
+  global indexes from breaking build dependency resolution. Approved private mirrors require the
+  explicit `MALDROID_PIP_INDEX_URL` override.
 
 ## Verification
 
