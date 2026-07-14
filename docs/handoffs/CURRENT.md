@@ -58,6 +58,10 @@ Run target-machine acceptance with the authorized Gemma 4 model and an external 
   `MalDroid_save_note`/finding checkpoint and automatically saves the draft when ignored.
 - Context compacts automatically at `limits.auto_compact_ratio=0.72`. A failed model summary falls
   back to findings, recent notes, open TODOs, active profile, and the previous durable summary.
+- Interactive chat is now a terminal workspace with persistent history, completion, multiline
+  input, keyboard shortcuts, Markdown responses, live model/tool/checkpoint events, response
+  timing, context remaining, and structured slash-command views. Non-TTY input retains the simple
+  prompt path.
 
 ## Verification
 
@@ -68,10 +72,11 @@ Verified in the local isolated Python 3.12 venv:
 ```
 
 Results: the consolidated release check passed. Ruff formatting and lint passed; mypy passed for 34
-source files; 57 tests passed with 70% line coverage. Project hygiene, installer dry-run, browser
+source files; 61 tests passed. Project hygiene, installer dry-run, browser
 MCP origin/CORS coverage, termination-signal cleanup, namespaced tool discovery, enforced and
-automatic checkpoints, compaction fallback, JSON parsing tests, protocol integration, and wheel
-build verification passed. The wheel is `dist/maldroid-0.1.0-py3-none-any.whl`.
+automatic checkpoints, compaction fallback, terminal completion/status/event coverage, JSON parsing
+tests, protocol integration, and wheel build verification passed. The wheel is
+`dist/maldroid-0.1.0-py3-none-any.whl`.
 
 ## Known limitations
 
@@ -86,5 +91,6 @@ build verification passed. The wheel is `dist/maldroid-0.1.0-py3-none-any.whl`.
 maldroid --help
 ```
 
-On the authorized macOS host, pull and reinstall MalDroid, start a normal case, then reconnect
-`http://127.0.0.1:8765/mcp` in the llama.cpp WebUI without launching `maldroid mcp serve` separately.
+On the authorized macOS host, pull and reinstall MalDroid, start a normal case, verify `/help` and
+the live context toolbar, then reconnect `http://127.0.0.1:8765/mcp` in the llama.cpp WebUI without
+launching `maldroid mcp serve` separately.

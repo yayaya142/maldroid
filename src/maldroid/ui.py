@@ -1,21 +1,80 @@
-"""Reliable line-oriented terminal chat and slash commands."""
+"""Polished terminal-first interactive chat for MalDroid."""
 
 from __future__ import annotations
 
-from rich.console import Console
+import json
+import os
+import sys
+import time
+from pathlib import Path
+from typing import Any
+
+from prompt_toolkit import PromptSession
+from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
+from prompt_toolkit.completion import Completer, Completion
+from prompt_toolkit.formatted_text import FormattedText
+from prompt_toolkit.history import FileHistory
+from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.styles import Style as PromptStyle
+from rich import box
+from rich.console import Console, Group
+from rich.markdown import Markdown
+from rich.padding import Padding
+from rich.panel import Panel
+from rich.status import Status
+from rich.table import Table
+from rich.text import Text
 
 from maldroid.agent import MalDroidAgent
 from maldroid.case_manager import Case, CaseManager
 from maldroid.investigation import InvestigationManager
 from maldroid.process_manager import LlamaServerProcess
-from maldroid.profiles import get_profile
+from maldroid.profiles import PROFILES, get_profile
 from maldroid.tools.dispatcher import ToolExecutor
 from maldroid.tools.models import mcp_tool_name
 from maldroid.tools.registry import ToolRegistry
 
-HELP = """/help, /exit, /status, /profile [NAME], /tools, /files, /findings,
-/todo [add|complete|reopen|remove VALUE], /note TEXT, /compact, /clear,
-/server, /knowledge"""
+COMMANDS: dict[str, str] = {
+    "/help": "Show commands and keyboard shortcuts",
+    "/status": "Show the complete workspace status",
+    "/context": "Show context usage and estimated capacity remaining",
+    "/profile": "Show or change the active analysis profile",
+    "/tools": "List tools available to the active profile",
+    "/files": "List registered case files",
+    "/findings": "Show durable investigation findings",
+    "/todo": "List or update TODO items",
+    "/note": "Save a durable progress note",
+    "/checkpoints": "Show recent durable notes and session summary",
+    "/history": "Show current session statistics",
+    "/compact": "Save a summary and reclaim context",
+    "/clear": "Clear chat context while preserving case state",
+    "/server": "Show llama.cpp and MCP connection information",
+    "/mcp": "Show the MCP endpoint and exposed tool count",
+    "/knowledge": "Search the local static-analysis knowledge base",
+    "/shortcuts": "Show terminal keyboard shortcuts",
+    "/exit": "Save progress and exit",
+    "/quit": "Alias for /exit",
+}
+
+
+class MalDroidCompleter(Completer):
+    """Complete slash commands and profile names without network access."""
+
+    def get_completions(self, document: Any, complete_event: Any) -> Any:
+        before = document.text_before_cursor
+        if not before.startswith("/"):
+            return
+        if before.startswith("/profile "):
+            fragment = before.removeprefix("/profile ").lower()
+            for profile in PROFILES:
+                if profile.startswith(fragment):
+                    yield Completion(profile, start_position=-len(fragment))
+            return
+        if " " in before:
+            return
+        for command, description in COMMANDS.items():
+            if command.startswith(before):
+                yield Completion(command, start_position=-len(before), display_meta=description)
 
 
 class InteractiveChat:
@@ -40,110 +99,495 @@ class InteractiveChat:
         self.registry = registry
         self.dispatcher = dispatcher
         self.mcp_endpoint = mcp_endpoint
+        self._status: Status | None = None
+        self._turn_tools = 0
+        self._prompt_session: PromptSession[str] | None = None
+        self.agent.event_handler = self._handle_agent_event
 
     def run(self) -> None:
-        self.console.print("\n[bold]MalDroid[/bold]\n")
-        self.console.print(f"Case: {self.case.metadata.name}")
-        self.console.print(f"Path: {self.case.root}")
-        self.console.print(f"Profile: {self.case.state.active_profile}")
-        self.console.print(f"Context: {self.case.state.context_size}")
-        self.console.print(f"MCP: {self.mcp_endpoint}")
-        self.console.print("\nType /help for available commands.\n")
+        self._show_welcome()
+        self._prompt_session = self._create_prompt_session()
         while True:
             try:
-                text = self.console.input("[bold cyan]>[/bold cyan] ").strip()
-            except (EOFError, KeyboardInterrupt):
-                self.console.print()
+                text = self._read_input().strip()
+            except EOFError:
+                self.console.print("\n[dim]End of input received. Closing MalDroid.[/dim]")
                 break
+            except KeyboardInterrupt:
+                self.console.print(
+                    "\n[dim]Input cancelled. Press Ctrl+D or use /exit to close.[/dim]"
+                )
+                continue
             if not text:
                 continue
             if text.startswith("/"):
                 if not self._slash(text):
                     break
                 continue
-            if self.agent.should_auto_compact():
-                self.console.print(
-                    "[yellow]Context checkpoint reached; compacting automatically.[/yellow]"
-                )
-                self.agent.compact()
-            self.console.print(self.agent.respond(text))
-            if self.agent.should_auto_compact():
-                self.console.print(
-                    "[yellow]Saving progress and compacting context automatically.[/yellow]"
-                )
-                self.agent.compact()
+            self._run_turn(text)
+
+    def _create_prompt_session(self) -> PromptSession[str] | None:
+        if (
+            not sys.stdin.isatty()
+            or not self.console.is_terminal
+            or os.environ.get("MALDROID_SIMPLE_INPUT") == "1"
+        ):
+            return None
+        history_path = self.case.internal / "input-history"
+        history_path.parent.mkdir(parents=True, exist_ok=True)
+        bindings = KeyBindings()
+
+        @bindings.add("enter")
+        def submit(event: Any) -> None:
+            event.current_buffer.validate_and_handle()
+
+        @bindings.add("escape", "enter")
+        def newline(event: Any) -> None:
+            event.current_buffer.insert_text("\n")
+
+        @bindings.add("c-l")
+        def clear_screen(event: Any) -> None:
+            event.app.renderer.clear()
+
+        style = PromptStyle.from_dict(
+            {
+                "prompt": "bold #5fd7ff",
+                "continuation": "#5f6b7a",
+                "bottom-toolbar": "bg:#20252d #d0d7de",
+                "toolbar.key": "bg:#20252d #5fd7ff bold",
+                "toolbar.warning": "bg:#20252d #ffaf5f bold",
+                "completion-menu.completion": "bg:#252b35 #d0d7de",
+                "completion-menu.completion.current": "bg:#005f87 #ffffff",
+                "completion-menu.meta.completion": "bg:#252b35 #8b949e",
+                "completion-menu.meta.completion.current": "bg:#005f87 #ffffff",
+            }
+        )
+        return PromptSession(
+            history=FileHistory(str(history_path)),
+            auto_suggest=AutoSuggestFromHistory(),
+            completer=MalDroidCompleter(),
+            complete_while_typing=False,
+            key_bindings=bindings,
+            style=style,
+        )
+
+    def _read_input(self) -> str:
+        if self._prompt_session is None:
+            return self.console.input("[bold cyan]❯[/bold cyan] ")
+        return self._prompt_session.prompt(
+            FormattedText([("class:prompt", "❯ ")]),
+            multiline=True,
+            prompt_continuation=FormattedText([("class:continuation", "│ ")]),
+            bottom_toolbar=self._bottom_toolbar,
+        )
+
+    def _run_turn(self, text: str) -> None:
+        self._turn_tools = 0
+        if self.agent.should_auto_compact():
+            self.console.print(
+                "[yellow]Context threshold reached — creating a checkpoint…[/yellow]"
+            )
+            self.agent.compact()
+        started = time.monotonic()
+        try:
+            with self.console.status("[bold cyan]Thinking…[/bold cyan]", spinner="dots") as status:
+                self._status = status
+                response = self.agent.respond(text)
+        except KeyboardInterrupt:
+            self.console.print("\n[yellow]Current response interrupted.[/yellow]")
+            return
+        finally:
+            self._status = None
+        elapsed = time.monotonic() - started
+        self.console.print()
+        self.console.print(Text("MalDroid", style="bold cyan"))
+        try:
+            self.console.print(Padding(Markdown(response), (0, 0, 0, 2)))
+        except Exception:
+            self.console.print(Padding(response, (0, 0, 0, 2)))
+        if self.agent.should_auto_compact():
+            self.console.print("[yellow]Saving progress and reclaiming context…[/yellow]")
+            self.agent.compact()
+        self._show_turn_footer(elapsed)
+
+    def _handle_agent_event(self, event: str, data: dict[str, Any]) -> None:
+        if event == "model_start":
+            self._update_status("Thinking…")
+        elif event == "tool_start":
+            self._turn_tools += 1
+            name = self._short_tool_name(str(data.get("name", "tool")))
+            preview = self._argument_preview(data.get("arguments"))
+            self._update_status(f"Running {name}…")
+            line = Text()
+            line.append("● ", style="cyan")
+            line.append(name, style="bold")
+            if preview:
+                line.append("  " + preview, style="dim")
+            self.console.print(line)
+        elif event == "tool_result":
+            status = str(data.get("status", "completed"))
+            name = self._short_tool_name(str(data.get("name", "tool")))
+            if status == "completed":
+                suffix = " · output saved" if data.get("output_file") else ""
+                if data.get("truncated"):
+                    suffix += " · preview truncated"
+                self.console.print(f"  [green]✓[/green] [dim]{name}{suffix}[/dim]")
+            else:
+                error = str(data.get("error") or "unknown error")
+                self.console.print(f"  [red]✗ {name}:[/red] {error}")
+        elif event == "checkpoint_required":
+            self._update_status("Saving a durable progress checkpoint…")
+            self.console.print("[yellow]◆ Ensuring progress is recorded before answering[/yellow]")
+        elif event == "automatic_checkpoint":
+            self.console.print("[yellow]◆ Automatic progress checkpoint saved[/yellow]")
+        elif event == "compaction_start":
+            self._update_status("Compacting context…")
+        elif event == "compaction_complete":
+            self.console.print(
+                "[green]✓ Context compacted; durable case state was preserved.[/green]"
+            )
+
+    def _update_status(self, message: str) -> None:
+        if self._status is not None:
+            self._status.update(f"[bold cyan]{message}[/bold cyan]")
+
+    def _show_welcome(self) -> None:
+        server_status = self.server.status()
+        model = Path(self.case.state.model_path).name or "not configured"
+        details = Table.grid(padding=(0, 2))
+        details.add_column(style="dim", no_wrap=True)
+        details.add_column()
+        details.add_row("Case", self.case.metadata.name)
+        details.add_row("Profile", self.case.state.active_profile)
+        details.add_row("Model", model)
+        details.add_row("llama.cpp", self._server_label(server_status))
+        details.add_row("MCP", self.mcp_endpoint)
+        details.add_row("Workspace", str(self.case.root))
+        title = Text("MalDroid", style="bold cyan")
+        subtitle = Text("Local Android static-analysis workspace", style="dim")
+        self.console.print()
+        self.console.print(
+            Panel(
+                Group(title, subtitle, Text(), details),
+                border_style="cyan",
+                padding=(1, 2),
+            )
+        )
+        self.console.print(
+            "[dim]Enter[/dim] send  [dim]Alt+Enter[/dim] newline  "
+            "[dim]Tab[/dim] complete  [dim]↑/↓[/dim] history  "
+            "[dim]Ctrl+D[/dim] exit  [cyan]/help[/cyan] commands\n"
+        )
+
+    def _bottom_toolbar(self) -> FormattedText:
+        used, total, remaining, percent = self._context_numbers()
+        style = "class:toolbar.warning" if percent >= 70 else "class:toolbar.key"
+        open_todos = sum(item.status == "open" for item in self.case.state.todos)
+        return FormattedText(
+            [
+                ("class:toolbar.key", f" {self.case.state.active_profile} "),
+                ("class:bottom-toolbar", "│ "),
+                (style, f"ctx {percent:.0f}% · ~{remaining:,} left"),
+                ("class:bottom-toolbar", " │ "),
+                ("class:toolbar.key", f"{len(self.case.state.findings)} findings"),
+                ("class:bottom-toolbar", " · "),
+                ("class:toolbar.key", f"{open_todos} todos"),
+                ("class:bottom-toolbar", " · "),
+                ("class:toolbar.key", f"{len(self.case.state.notes)} notes "),
+            ]
+        )
+
+    def _show_turn_footer(self, elapsed: float) -> None:
+        _, _, remaining, percent = self._context_numbers()
+        color = "yellow" if percent >= 70 else "dim"
+        self.console.print(
+            f"[{color}]── {elapsed:.1f}s · {self._turn_tools} tools · "
+            f"context {percent:.1f}% · ~{remaining:,} tokens left[/{color}]\n"
+        )
 
     def _slash(self, command: str) -> bool:
         name, _, rest = command.partition(" ")
+        name = name.lower()
         rest = rest.strip()
-        if name == "/exit":
+        if name in {"/exit", "/quit"}:
             return False
         if name == "/help":
-            self.console.print(HELP)
+            self._show_help()
+        elif name == "/shortcuts":
+            self._show_shortcuts()
         elif name == "/status":
-            self.console.print_json(
-                data={
-                    "case_id": self.case.metadata.case_id,
-                    "name": self.case.metadata.name,
-                    "path": str(self.case.root),
-                    "profile": self.case.state.active_profile,
-                    "model": self.case.state.model_path,
-                    "context_size": self.case.state.context_size,
-                    "server": self.server.status(),
-                    "mcp_endpoint": self.mcp_endpoint,
-                    "tool_count": len(self.registry.enabled(self.case.state.active_profile)),
-                    "findings": len(self.case.state.findings),
-                    "open_todos": sum(item.status == "open" for item in self.case.state.todos),
-                    "conversation_tokens_estimate": self.agent.estimate_tokens(),
-                }
-            )
+            self._show_status()
+        elif name == "/context":
+            self._show_context()
         elif name == "/profile":
-            if not rest:
-                self.console.print(self.case.state.active_profile)
-            else:
-                profile = get_profile(rest)
-                if profile.status != "implemented":
-                    self.console.print(f"Profile {rest} is documented but not implemented yet.")
-                else:
-                    self.agent.switch_profile(rest)
-                    self.case_manager.save(self.case)
-                    self.console.print(f"Active profile: {rest}")
+            self._profile(rest)
         elif name == "/tools":
-            self.console.print("\n".join(self.registry.names(self.case.state.active_profile)))
+            self._show_tools()
         elif name == "/files":
-            self.console.print_json(
-                data=self.dispatcher.execute(mcp_tool_name("list_case_files"), {}).model_dump()
-            )
+            self._render_tool_result(self.dispatcher.execute(mcp_tool_name("list_case_files"), {}))
         elif name == "/findings":
-            self.console.print_json(data=[item.model_dump() for item in self.case.state.findings])
+            self._show_findings()
         elif name == "/todo":
-            if rest:
-                action, _, value = rest.partition(" ")
-                result = self.investigation.update_todo(self.case, action, value)
-                self.console.print_json(data=result.model_dump() if result else {"removed": value})
-            else:
-                self.console.print_json(data=[item.model_dump() for item in self.case.state.todos])
+            self._todo(rest)
         elif name == "/note":
-            if not rest:
-                self.console.print("Usage: /note TEXT")
-            else:
-                note = self.investigation.save_note(self.case, rest)
-                self.console.print(f"Saved {note.id}")
+            self._note(rest)
+        elif name == "/checkpoints":
+            self._show_checkpoints()
+        elif name == "/history":
+            self._show_history()
         elif name == "/compact":
-            self.console.print(self.agent.compact())
+            with self.console.status("[cyan]Compacting context…[/cyan]", spinner="dots") as status:
+                self._status = status
+                summary = self.agent.compact()
+                self._status = None
+            self.console.print(
+                Panel(Markdown(summary), title="Session checkpoint", border_style="green")
+            )
         elif name == "/clear":
             self.agent.clear()
-            self.console.print("Active conversation context cleared; case state was preserved.")
-        elif name == "/server":
-            self.console.print_json(
-                data={"llama": self.server.status(), "mcp_endpoint": self.mcp_endpoint}
+            self.console.print(
+                "[green]✓[/green] Chat context cleared; durable case state was preserved."
             )
+        elif name in {"/server", "/mcp"}:
+            self._show_server(mcp_only=name == "/mcp")
         elif name == "/knowledge":
-            tool_result = self.dispatcher.execute(
-                mcp_tool_name("search_knowledge"),
-                {"query": rest or "Android static analysis"},
+            self._render_tool_result(
+                self.dispatcher.execute(
+                    mcp_tool_name("search_knowledge"),
+                    {"query": rest or "Android static analysis"},
+                )
             )
-            self.console.print_json(data=tool_result.model_dump())
         else:
-            self.console.print(f"Unknown command: {name}. Type /help.")
+            self.console.print(f"[red]Unknown command:[/red] {name}. Type [cyan]/help[/cyan].")
         return True
+
+    def _show_help(self) -> None:
+        table = Table(box=box.SIMPLE, show_header=False, padding=(0, 2))
+        table.add_column(style="bold cyan", no_wrap=True)
+        table.add_column()
+        for command, description in COMMANDS.items():
+            table.add_row(command, description)
+        self.console.print(Panel(table, title="Commands", border_style="cyan"))
+        self.console.print("[dim]Tip: type part of a slash command and press Tab.[/dim]")
+
+    def _show_shortcuts(self) -> None:
+        rows = [
+            ("Enter", "Send the current message"),
+            ("Alt+Enter / Esc then Enter", "Insert a newline"),
+            ("Tab", "Complete slash commands and profiles"),
+            ("↑ / ↓", "Navigate persistent input history"),
+            ("Ctrl+L", "Clear the terminal display"),
+            ("Ctrl+C", "Cancel current input or response"),
+            ("Ctrl+D", "Exit when the input is empty"),
+        ]
+        table = Table(box=box.SIMPLE, show_header=False, padding=(0, 2))
+        table.add_column(style="bold cyan")
+        table.add_column()
+        for key, action in rows:
+            table.add_row(key, action)
+        self.console.print(Panel(table, title="Keyboard shortcuts", border_style="cyan"))
+
+    def _show_status(self) -> None:
+        used, total, remaining, percent = self._context_numbers()
+        server = self.server.status()
+        rows = [
+            ("Case", self.case.metadata.name),
+            ("Case ID", self.case.metadata.case_id),
+            ("Workspace", str(self.case.root)),
+            ("Profile", self.case.state.active_profile),
+            ("Model", self.case.state.model_path or "not configured"),
+            ("Context", f"~{used:,} / {total:,} tokens ({percent:.1f}%)"),
+            ("Remaining", f"~{remaining:,} tokens"),
+            ("llama.cpp", self._server_label(server)),
+            ("MCP", self.mcp_endpoint),
+            ("Available tools", str(len(self.registry.enabled(self.case.state.active_profile)))),
+            ("Findings", str(len(self.case.state.findings))),
+            ("Open TODOs", str(sum(item.status == "open" for item in self.case.state.todos))),
+            ("Progress notes", str(len(self.case.state.notes))),
+        ]
+        if server.get("api_key_enabled"):
+            rows.insert(9, ("API key", str(server.get("api_key") or "unavailable")))
+        table = Table(box=box.SIMPLE, show_header=False, padding=(0, 2))
+        table.add_column(style="dim", no_wrap=True)
+        table.add_column()
+        for key, value in rows:
+            table.add_row(key, value)
+        self.console.print(Panel(table, title="Workspace status", border_style="cyan"))
+
+    def _show_context(self) -> None:
+        used, total, remaining, percent = self._context_numbers()
+        width = 36
+        filled = min(width, round(width * percent / 100))
+        meter = Text("█" * filled, style="yellow" if percent >= 70 else "cyan")
+        meter.append("░" * (width - filled), style="bright_black")
+        message = Text.assemble(
+            meter,
+            f"  {percent:.1f}%\n\n",
+            (f"~{used:,}", "bold"),
+            f" estimated tokens used\n~{remaining:,} estimated tokens remain\n",
+            (
+                f"Automatic compaction starts at {self.agent.config.limits.auto_compact_ratio:.0%}.",
+                "dim",
+            ),
+        )
+        self.console.print(Panel(message, title=f"Context · {total:,} tokens", border_style="cyan"))
+
+    def _profile(self, name: str) -> None:
+        if not name:
+            table = Table(box=box.SIMPLE, show_header=False, padding=(0, 2))
+            for profile in PROFILES.values():
+                marker = "●" if profile.name == self.case.state.active_profile else "○"
+                table.add_row(marker, profile.name, profile.instruction)
+            self.console.print(Panel(table, title="Analysis profiles", border_style="cyan"))
+            return
+        profile = get_profile(name)
+        if profile.status != "implemented":
+            self.console.print(
+                f"[yellow]Profile {name} is documented but not implemented yet.[/yellow]"
+            )
+            return
+        self.agent.switch_profile(name)
+        self.case_manager.save(self.case)
+        self.console.print(f"[green]✓[/green] Active profile: [bold]{name}[/bold]")
+
+    def _show_tools(self) -> None:
+        tools = self.registry.enabled(self.case.state.active_profile)
+        table = Table("Tool", "Scope", "Description", box=box.SIMPLE, padding=(0, 1))
+        for tool in tools:
+            table.add_row(tool.name, tool.profile, tool.description)
+        self.console.print(
+            Panel(
+                table,
+                title=f"Tools · {self.case.state.active_profile} · {len(tools)}",
+                border_style="cyan",
+            )
+        )
+
+    def _show_findings(self) -> None:
+        if not self.case.state.findings:
+            self.console.print("[dim]No findings have been recorded yet.[/dim]")
+            return
+        table = Table("ID", "Severity", "Status", "Finding", box=box.SIMPLE, padding=(0, 1))
+        for item in self.case.state.findings:
+            table.add_row(item.id, item.severity, item.status, item.title)
+        self.console.print(Panel(table, title="Findings", border_style="cyan"))
+
+    def _todo(self, rest: str) -> None:
+        if rest:
+            action, _, value = rest.partition(" ")
+            try:
+                result = self.investigation.update_todo(self.case, action, value)
+            except Exception as exc:
+                self.console.print(f"[red]TODO update failed:[/red] {exc}")
+                return
+            label = result.id if result else value
+            self.console.print(f"[green]✓[/green] TODO updated: {label}")
+            return
+        if not self.case.state.todos:
+            self.console.print("[dim]No TODO items have been recorded yet.[/dim]")
+            return
+        table = Table("", "ID", "Task", box=box.SIMPLE, padding=(0, 1))
+        for item in self.case.state.todos:
+            marker = "✓" if item.status == "completed" else "○"
+            style = "dim" if item.status == "completed" else ""
+            table.add_row(marker, item.id, Text(item.text, style=style))
+        self.console.print(Panel(table, title="TODO", border_style="cyan"))
+
+    def _note(self, text: str) -> None:
+        if not text:
+            self.console.print("Usage: [cyan]/note TEXT[/cyan]")
+            return
+        note = self.investigation.save_note(self.case, text)
+        self.console.print(f"[green]✓[/green] Durable note saved: [bold]{note.id}[/bold]")
+
+    def _show_checkpoints(self) -> None:
+        if not self.case.state.notes and not self.case.state.summary:
+            self.console.print("[dim]No progress checkpoints have been recorded yet.[/dim]")
+            return
+        blocks: list[Any] = []
+        if self.case.state.summary:
+            blocks.extend(
+                [
+                    Text("Latest session summary", style="bold cyan"),
+                    Markdown(self.case.state.summary),
+                ]
+            )
+        if self.case.state.notes:
+            blocks.append(Text("Recent durable notes", style="bold cyan"))
+            for note in self.case.state.notes[-5:]:
+                blocks.append(Text(f"{note.id} · {note.created_at}", style="dim"))
+                blocks.append(Text(note.text))
+        self.console.print(Panel(Group(*blocks), title="Checkpoints", border_style="cyan"))
+
+    def _show_history(self) -> None:
+        history_path = self.agent.sessions.history_path
+        counts: dict[str, int] = {}
+        if history_path.exists():
+            for line in history_path.read_text(encoding="utf-8", errors="replace").splitlines():
+                try:
+                    event = json.loads(line)
+                    event_type = str(event.get("type", "unknown"))
+                    counts[event_type] = counts.get(event_type, 0) + 1
+                except json.JSONDecodeError:
+                    counts["invalid"] = counts.get("invalid", 0) + 1
+        table = Table(box=box.SIMPLE, show_header=False, padding=(0, 2))
+        table.add_row("Session", str(self.agent.sessions.number))
+        table.add_row("Log", str(history_path))
+        table.add_row("Messages", str(counts.get("message", 0)))
+        table.add_row("Tool calls", str(counts.get("tool_call", 0)))
+        table.add_row("Compactions", str(counts.get("compaction", 0)))
+        self.console.print(Panel(table, title="Current session", border_style="cyan"))
+
+    def _show_server(self, mcp_only: bool = False) -> None:
+        table = Table(box=box.SIMPLE, show_header=False, padding=(0, 2))
+        if not mcp_only:
+            for key, value in self.server.status().items():
+                table.add_row("llama." + str(key), str(value))
+        table.add_row("mcp.endpoint", self.mcp_endpoint)
+        table.add_row("mcp.transport", "streamable-http")
+        table.add_row("mcp.tools", str(len(self.registry.enabled(self.case.state.active_profile))))
+        self.console.print(
+            Panel(table, title="MCP" if mcp_only else "Local servers", border_style="cyan")
+        )
+
+    def _render_tool_result(self, result: Any) -> None:
+        if result.status == "error":
+            message = result.error.message if result.error else "Unknown tool error"
+            self.console.print(f"[red]Tool failed:[/red] {message}")
+            return
+        payload = json.dumps(result.data, ensure_ascii=False, indent=2, default=str)
+        if len(payload) > 12000:
+            payload = payload[:12000] + "\n… output preview truncated"
+        self.console.print(Panel(payload, border_style="cyan"))
+        if result.output_file:
+            self.console.print(f"[dim]Full output: {result.output_file}[/dim]")
+
+    def _context_numbers(self) -> tuple[int, int, int, float]:
+        used = self.agent.estimate_tokens()
+        total = max(1, self.case.state.context_size)
+        remaining = max(0, total - used)
+        percent = min(100.0, used / total * 100)
+        return used, total, remaining, percent
+
+    @staticmethod
+    def _short_tool_name(name: str) -> str:
+        return name.removeprefix("MalDroid_")
+
+    @staticmethod
+    def _argument_preview(arguments: Any) -> str:
+        if not arguments:
+            return ""
+        if isinstance(arguments, str):
+            value = arguments
+        else:
+            value = json.dumps(arguments, ensure_ascii=False, default=str)
+        value = " ".join(value.split())
+        return value if len(value) <= 160 else value[:157] + "…"
+
+    @staticmethod
+    def _server_label(status: dict[str, Any]) -> str:
+        if not status.get("running"):
+            return "stopped"
+        port = status.get("port")
+        pid = status.get("pid")
+        return f"running · port {port} · pid {pid}"

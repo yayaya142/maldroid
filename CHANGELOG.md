@@ -54,3 +54,7 @@
   note or finding, and ignored checkpoint requests fall back to an automatic audited note.
 - Added configurable automatic context compaction at 72% usage and a deterministic durable-state
   summary fallback when the local model cannot summarize an exhausted context.
+- Rebuilt interactive chat as a polished terminal workspace with persistent history, slash/profile
+  completion, multiline editing, keyboard shortcuts, Markdown rendering, a live context-remaining
+  toolbar, visible MCP tool activity, response timing, structured status views, checkpoints, and a
+  non-TTY fallback.

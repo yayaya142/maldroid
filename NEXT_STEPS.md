@@ -20,6 +20,8 @@
    both directly and with the per-connection proxy enabled. Run one evidence-inspection turn and
    confirm a durable checkpoint appears even if the model initially omits `MalDroid_save_note`;
    lower `limits.auto_compact_ratio` temporarily and confirm automatic compaction resumes from it.
+   Exercise the terminal workspace in macOS Terminal: command/profile completion, Alt+Enter,
+   persistent history, Ctrl+C cancellation, live tool reporting, `/context`, and Ctrl+D cleanup.
 2. `REL-002` — Run the full suite and installer lifecycle on Kali rolling and Apple Silicon.
 3. `COMPAT-001` — Expand benign multi-architecture ELF and versioned Blutter fixtures on target
    platforms and record exact external-tool versions.

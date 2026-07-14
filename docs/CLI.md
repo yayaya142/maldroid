@@ -3,6 +3,33 @@
 MalDroid is designed for both interactive terminal use and predictable local automation. Human
 output uses Rich tables; commands that expose structured state provide `--json`.
 
+## Interactive terminal workspace
+
+A normal case opens a full-screen-aware terminal prompt without taking over the alternate screen.
+The bottom toolbar always shows the active profile, estimated context usage and tokens remaining,
+finding count, open TODO count, and durable note count. Context estimates include current messages
+and active tool schemas, using conservative character-based measurement rather than exact model
+tokenization.
+
+Model waits use a live spinner. Every MCP call appears as it starts and finishes, including errors,
+saved full-output paths, and truncation status. Assistant Markdown is rendered after the turn, then
+a footer reports elapsed time, tool count, and context remaining. Input history is persisted inside
+the case at `.maldroid/input-history`.
+
+Keyboard controls:
+
+- Enter sends the current message.
+- Alt+Enter, or Escape followed by Enter, inserts a newline.
+- Tab completes slash commands and profile names.
+- Up and Down navigate persistent input history.
+- Ctrl+L redraws the terminal.
+- Ctrl+C cancels the current input or response; Ctrl+D exits from an empty prompt.
+
+Use `/help` for the complete command table. The principal live views are `/status`, `/context`,
+`/tools`, `/findings`, `/todo`, `/checkpoints`, `/history`, `/server`, and `/mcp`. `/quit` is an
+alias for `/exit`. In non-interactive input or with `MALDROID_SIMPLE_INPUT=1`, MalDroid falls back
+to its reliable line-oriented prompt.
+
 ## Discovery and completion
 
 ```bash

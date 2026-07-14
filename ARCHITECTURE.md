@@ -79,6 +79,11 @@ not accepted until the model saves a note/finding checkpoint. If it ignores the 
 saves its draft response automatically through the audited MCP note tool. Prose that resembles a
 tool call is never executed.
 
+The terminal layer subscribes to bounded agent lifecycle events rather than parsing model prose.
+It renders model waits, tool start/result, checkpoint, and compaction activity while the agent and
+MCP dispatcher remain the source of execution truth. Prompt history and completion are local-only;
+the terminal UI has no additional network or filesystem authority.
+
 ## Context and retrieval
 
 Conversation size is conservatively estimated. At 72% usage by default, the UI automatically saves

@@ -58,6 +58,9 @@ Last updated: 2026-07-14
   local-model discipline.
 - Context automatically compacts at configurable 72% usage, with deterministic recovery from
   findings, recent notes, open TODOs, profile, and prior summary if model summarization fails.
+- Interactive chat now provides persistent case-local history, completion, multiline editing,
+  keyboard controls, rendered Markdown, live model/MCP activity, timing, context-used/remaining
+  estimates, and structured status, context, history, checkpoint, server, and MCP views.
 
 ## Partial or environment-gated
 

@@ -80,8 +80,12 @@ Opening an existing directory creates only `.maldroid/` initially. Opening a fil
 managed case and registers a symlink by default. No analysis starts merely because an artifact is
 detected.
 
-The chat supports `/help`, `/status`, `/profile`, `/tools`, `/files`, `/findings`, `/todo`, `/note`,
-`/compact`, `/clear`, `/server`, `/knowledge`, and `/exit`.
+The terminal workspace provides persistent input history, slash-command and profile completion,
+multiline input, rendered Markdown, live model/tool activity, elapsed time, and a bottom status bar
+with estimated context remaining, findings, TODOs, notes, and the active profile. Use Enter to send,
+Alt+Enter for a newline, Tab to complete, arrow keys for history, Ctrl+L to redraw, and Ctrl+D to
+exit. `/help` is the complete command index; `/context`, `/checkpoints`, `/history`, `/mcp`, and
+`/shortcuts` expose the most useful live views.
 
 MalDroid does not rely on the local model to remember progress voluntarily. After meaningful tool
 use, the agent requires a durable `MalDroid_save_note` or finding checkpoint before accepting the

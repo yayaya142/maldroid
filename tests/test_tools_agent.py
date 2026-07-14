@@ -136,6 +136,29 @@ def test_agent_tool_call_round_trip(app_config: AppConfig) -> None:
     assert {event["type"] for event in events} >= {"tool_call", "tool_result"}
 
 
+def test_agent_reports_live_model_and_tool_events(app_config: AppConfig) -> None:
+    manager, case, registry, dispatcher = make_dispatcher(app_config)
+    sessions = SessionManager(case, manager)
+    reported: list[tuple[str, dict]] = []
+    agent = MalDroidAgent(
+        app_config,
+        case,
+        FakeClient(),
+        registry,
+        dispatcher,
+        sessions,
+        event_handler=lambda event, data: reported.append((event, data)),
+    )
+
+    agent.respond("Inspect current state")
+
+    assert [event for event, _ in reported].count("model_start") == 2
+    assert any(event == "tool_start" for event, _ in reported)
+    result = next(data for event, data in reported if event == "tool_result")
+    assert result["name"] == "MalDroid_read_case_state"
+    assert result["status"] == "completed"
+
+
 class CheckpointingClient:
     def __init__(self) -> None:
         self.calls = 0

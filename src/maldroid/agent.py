@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from typing import Any
 
 from maldroid.case_manager import Case
@@ -30,6 +31,8 @@ CHECKPOINT_REMINDER = (
     "Do not rely on conversation history alone."
 )
 
+AgentEventHandler = Callable[[str, dict[str, Any]], None]
+
 
 class MalDroidAgent:
     def __init__(
@@ -41,6 +44,7 @@ class MalDroidAgent:
         dispatcher: ToolExecutor,
         sessions: SessionManager,
         previous_summary: str = "",
+        event_handler: AgentEventHandler | None = None,
     ):
         self.config = config
         self.case = case
@@ -48,8 +52,13 @@ class MalDroidAgent:
         self.registry = registry
         self.dispatcher = dispatcher
         self.sessions = sessions
+        self.event_handler = event_handler
         self.messages: list[dict[str, Any]] = []
         self._reset_messages(previous_summary)
+
+    def _emit(self, event: str, **data: Any) -> None:
+        if self.event_handler is not None:
+            self.event_handler(event, data)
 
     def _reset_messages(self, summary: str = "") -> None:
         self.messages = [
@@ -78,6 +87,7 @@ class MalDroidAgent:
         checkpoint_extension_used = False
         activity: list[str] = []
         while True:
+            self._emit("model_start", tool_round=tool_rounds)
             assistant = self.client.complete(self.messages, tools)
             history = assistant.as_history_message()
             self.messages.append(history)
@@ -87,6 +97,7 @@ class MalDroidAgent:
                     return "The model returned an empty response. Run maldroid doctor --model-tool-test."
                 if investigation_performed and not checkpoint_saved:
                     if not checkpoint_requested:
+                        self._emit("checkpoint_required")
                         self.messages.append({"role": "system", "content": CHECKPOINT_REMINDER})
                         self.sessions.record("checkpoint_required", content={})
                         checkpoint_requested = True
@@ -116,7 +127,16 @@ class MalDroidAgent:
                     role="assistant",
                     content={"id": call.id, "name": call.name, "arguments": call.arguments},
                 )
+                self._emit("tool_start", name=call.name, arguments=call.arguments)
                 result = self.dispatcher.execute(call.name, call.arguments)
+                self._emit(
+                    "tool_result",
+                    name=call.name,
+                    status=result.status,
+                    truncated=result.truncated,
+                    output_file=result.output_file,
+                    error=result.error.message if result.error else None,
+                )
                 activity.append(f"{call.name} ({result.status})")
                 if call.name in CHECKPOINT_TOOLS:
                     if result.status == "completed" and investigation_performed:
@@ -141,6 +161,7 @@ class MalDroidAgent:
         )
         text = text[:40000]
         result = self.dispatcher.execute(mcp_tool_name("save_note"), {"text": text})
+        self._emit("automatic_checkpoint", status=result.status)
         self.sessions.record(
             "automatic_checkpoint",
             content={
@@ -160,7 +181,13 @@ class MalDroidAgent:
         self.sessions.record("profile_change", content={"profile": profile})
 
     def estimate_tokens(self) -> int:
-        serialized = json.dumps(self.messages, ensure_ascii=False)
+        serialized = json.dumps(
+            {
+                "messages": self.messages,
+                "tools": self.registry.schemas(self.case.state.active_profile),
+            },
+            ensure_ascii=False,
+        )
         return max(1, len(serialized) // 4)
 
     def context_ratio(self) -> float:
@@ -170,6 +197,7 @@ class MalDroidAgent:
         return self.context_ratio() >= self.config.limits.auto_compact_ratio
 
     def compact(self) -> str:
+        self._emit("compaction_start")
         prompt = {
             "role": "user",
             "content": (
@@ -186,6 +214,7 @@ class MalDroidAgent:
         self.sessions.record("compaction", content={"summary": summary})
         self.sessions.save_summary(summary)
         self._reset_messages(summary)
+        self._emit("compaction_complete", summary_length=len(summary))
         return summary
 
     def _durable_fallback_summary(self, warning: str = "") -> str:
