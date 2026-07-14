@@ -163,6 +163,8 @@ HTTPServer(('127.0.0.1', port), Handler).serve_forever()
     process = LlamaServerProcess(config, case)
     process.start()
     assert process.status()["running"] is True
+    assert process.status()["port"] == process.command.port
+    assert process.base_url == f"http://127.0.0.1:{process.command.port}/v1"
     process.stop(graceful_seconds=1)
     assert process.status()["running"] is False
     assert (case / ".maldroid" / "logs" / "llama-server.stdout.log").is_file()

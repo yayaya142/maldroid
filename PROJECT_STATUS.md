@@ -24,8 +24,8 @@ Last updated: 2026-07-14
   reproducible wheel/release-check workflow.
 - Public distribution metadata targets `yayaya142/maldroid`; local defaults do not expose a macOS
   account name.
-- Loopback model health checks explicitly bypass environment proxies; CLI help assertions are
-  portable across ANSI behavior on Linux and macOS.
+- Loopback model health checks use direct HTTP connections without proxy routing; CLI help
+  assertions are portable across ANSI behavior on Linux and macOS.
 
 ## Partial or environment-gated
 

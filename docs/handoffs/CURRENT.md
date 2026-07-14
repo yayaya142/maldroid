@@ -20,7 +20,7 @@ Make the first public macOS and Kali GitHub Actions run pass after publishing th
 - README and package metadata point to the real GitHub repository. The model default is home-relative
   so it resolves to the authorized path without publishing the local macOS account name.
 - The initial CI failures were isolated to ANSI-decorated help output and proxy-sensitive loopback
-  health probes. Tests now normalize ANSI, and production health checks bypass environment proxies.
+  health probes. Tests now normalize ANSI, and production health checks use direct loopback HTTP.
 
 ## Verification
 

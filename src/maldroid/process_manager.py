@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import signal
 import subprocess
 import time
-import urllib.error
-import urllib.request
 from contextlib import suppress
 from pathlib import Path
 from typing import BinaryIO
@@ -67,9 +66,7 @@ class LlamaServerProcess:
         assert self.process is not None
         assert self.command is not None
         deadline = time.monotonic() + self.config.llama.startup_timeout_seconds
-        health = self.base_url + "/health"
-        # Loopback health checks must never leave the machine through inherited proxy settings.
-        local_opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        host = "127.0.0.1" if self.config.llama.host == "localhost" else self.config.llama.host
         while time.monotonic() < deadline:
             exit_code = self.process.poll()
             if exit_code is not None:
@@ -79,11 +76,16 @@ class LlamaServerProcess:
                     f"See: {self.case_root / '.maldroid/logs/llama-server.stderr.log'}"
                 )
             try:
-                with local_opener.open(health, timeout=2) as response:
+                connection = http.client.HTTPConnection(host, self.command.port, timeout=2)
+                try:
+                    connection.request("GET", "/v1/health")
+                    response = connection.getresponse()
                     payload = json.loads(response.read().decode("utf-8"))
                     if response.status == 200 and payload.get("status") == "ok":
                         return
-            except (OSError, ValueError, urllib.error.URLError):
+                finally:
+                    connection.close()
+            except (OSError, ValueError, http.client.HTTPException):
                 pass
             time.sleep(0.25)
         raise ServerError(

@@ -19,5 +19,5 @@
   and reproducible wheel/release-check commands.
 - Prepared public GitHub distribution metadata and replaced the user-specific model prefix with an
   equivalent home-relative default.
-- Fixed cross-platform CI by normalizing ANSI help output in tests and forcing loopback health
-  probes to bypass inherited HTTP proxy settings.
+- Fixed cross-platform CI by normalizing ANSI help output in tests and using direct loopback HTTP
+  connections that cannot inherit proxy routing.
