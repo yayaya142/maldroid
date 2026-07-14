@@ -67,7 +67,7 @@ def test_mcp_lists_profile_tools_and_executes_through_http(app_config: AppConfig
         server.stop()
 
 
-def test_mcp_explicit_busy_port_fails_and_default_falls_back(app_config: AppConfig) -> None:
+def test_mcp_fixed_busy_port_fails_without_fallback(app_config: AppConfig) -> None:
     occupied = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     occupied.bind(("127.0.0.1", 0))
     occupied.listen(1)
@@ -78,15 +78,12 @@ def test_mcp_explicit_busy_port_fails_and_default_falls_back(app_config: AppConf
     server, _ = make_server(config)
     try:
         try:
-            server.start(busy_port, explicit_port=True)
+            server.start()
         except McpServerError as exc:
-            assert "explicitly requested MCP port" in str(exc)
-        else:  # pragma: no cover - protects the port contract
-            raise AssertionError("An explicit busy MCP port must fail")
-
-        endpoint = server.start()
-        assert server.port != busy_port
-        assert endpoint.endswith("/mcp")
+            assert f"fixed MCP port {busy_port}" in str(exc)
+            assert "config set mcp.preferred_port" in str(exc)
+        else:  # pragma: no cover - protects the fixed-port contract
+            raise AssertionError("A busy configured MCP port must fail without fallback")
     finally:
         server.stop()
         occupied.close()

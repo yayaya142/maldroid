@@ -12,8 +12,9 @@ Last updated: 2026-07-14
   shutdown lifecycle.
 - Local normalized model client, reasoning-content preservation, bounded tool loop, and line chat.
 - Core tool registry/dispatcher, path enforcement, audit, truncation, large-text FTS5, and knowledge.
-- Loopback MCP Streamable HTTP discovery and execution for all tools, standalone serving, effective
-  port reporting, active-profile filtering, and internal chat routing through the official client.
+- Loopback MCP Streamable HTTP discovery and execution for all tools, standalone serving, fixed-port
+  reporting, active-profile filtering, and internal chat routing through the official client. Port
+  8765 is stable by default and collisions fail without fallback.
 - React Native inspection, Metro module indexing, bounded module reads, symbol search, and URLs.
 - Static Native, Flutter, Unity, Cordova, and Cocos handlers with allowlisted adapters, artifact
   detection, bounded search/read operations, and explicit unsupported-format reporting.

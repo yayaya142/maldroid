@@ -186,7 +186,7 @@ def mcp_serve(
             manager.save(case)
         registry, dispatcher = _build_tool_runtime(config, case, manager)
         server = MalDroidMcpServer(config, registry, dispatcher)
-        endpoint = server.start(port, explicit_port=port is not None)
+        endpoint = server.start(port)
         console = _console()
         if json_output:
             console.print_json(
@@ -400,7 +400,7 @@ def _run_case(
         registry, local_dispatcher = _build_tool_runtime(config, case, manager)
         investigation = local_dispatcher.context.investigation
         mcp_server = MalDroidMcpServer(config, registry, local_dispatcher)
-        mcp_endpoint = mcp_server.start(mcp_port, explicit_port=mcp_port is not None)
+        mcp_endpoint = mcp_server.start(mcp_port)
         console.print(f"MCP endpoint: {mcp_endpoint}")
         dispatcher = McpToolClient(
             mcp_endpoint, timeout_seconds=config.limits.command_timeout_seconds

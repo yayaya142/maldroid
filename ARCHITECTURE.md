@@ -50,8 +50,8 @@ and stderr. Exit, Ctrl+C, and SIGTERM terminate the process group gracefully, th
 after a timeout. The command is centralized and secrets are redacted.
 
 The Python MCP server binds `127.0.0.1` only, enables MCP transport DNS-rebinding protection, and
-uses a pre-bound socket. Its preferred port is 8765. Configured-port collisions select a free port;
-explicit-port collisions fail. Interactive chat owns the MCP lifecycle, while `maldroid mcp serve`
+uses a pre-bound socket. Its fixed default port is 8765. Every collision fails rather than changing
+the client endpoint silently. Interactive chat owns the MCP lifecycle, while `maldroid mcp serve`
 provides a model-independent foreground lifecycle. Both print the effective endpoint.
 
 ## Message and tool lifecycle

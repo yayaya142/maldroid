@@ -125,27 +125,26 @@ class MalDroidMcpServer:
             lifespan=lifespan,
         )
 
-    def _bind(self, requested_port: int | None, explicit_port: bool) -> socket.socket:
-        preferred = requested_port or self.config.mcp.preferred_port
+    def _bind(self, requested_port: int | None) -> socket.socket:
+        fixed_port = requested_port or self.config.mcp.preferred_port
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
-            sock.bind((self.host, preferred))
+            sock.bind((self.host, fixed_port))
         except OSError as exc:
-            if explicit_port:
-                sock.close()
-                raise McpServerError(
-                    f"The explicitly requested MCP port {preferred} is unavailable: {exc}"
-                ) from exc
-            sock.bind((self.host, 0))
+            sock.close()
+            raise McpServerError(
+                f"The fixed MCP port {fixed_port} is unavailable. Stop the process using it or "
+                "configure a different fixed port with 'maldroid config set mcp.preferred_port PORT'."
+            ) from exc
         sock.listen(128)
         self.port = int(sock.getsockname()[1])
         return sock
 
-    def start(self, port: int | None = None, *, explicit_port: bool = False) -> str:
+    def start(self, port: int | None = None) -> str:
         if self._thread and self._thread.is_alive():
             raise McpServerError("The MCP server is already running.")
-        self._socket = self._bind(port, explicit_port)
+        self._socket = self._bind(port)
         assert self.port is not None
         app = self._build_app(self.port)
         self._uvicorn = uvicorn.Server(
@@ -173,8 +172,8 @@ class MalDroidMcpServer:
         self.stop()
         raise McpServerError("MCP server did not become ready before the startup timeout.")
 
-    def serve_forever(self, port: int | None = None, *, explicit_port: bool = False) -> str:
-        endpoint = self.start(port, explicit_port=explicit_port)
+    def serve_forever(self, port: int | None = None) -> str:
+        endpoint = self.start(port)
         try:
             assert self._thread is not None
             while self._thread.is_alive():

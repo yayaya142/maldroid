@@ -17,14 +17,15 @@ the effective port and endpoint. Normal model tool calls use the official MCP cl
 server. The MCP call handler delegates to the existing serialized `ToolDispatcher`; it does not
 implement a second execution path.
 
-The preferred port is 8765. A collision on a configured default selects an ephemeral free port. A
-collision on an explicit CLI port is an error. The server publishes only core plus active-profile
-tools. llama.cpp built-in tools, agent mode, and MCP proxy remain forbidden.
+The fixed default port is 8765. A collision always fails; MalDroid never changes the MCP endpoint
+silently. Users may persist a different fixed port in configuration or provide a one-run CLI
+override. The server publishes only core plus active-profile tools. llama.cpp built-in tools, agent
+mode, and MCP proxy remain forbidden.
 
 ## Consequences
 
 - External MCP clients and the built-in chat share exactly the same schemas and policy checks.
-- The printed endpoint, rather than an assumed port, is the connection source of truth.
+- A saved client endpoint remains stable across runs unless the user changes configuration.
 - Local clients can invoke case tools for the lifetime of the server; researchers must not expose
   the loopback endpoint through tunnels or reverse proxies.
 - The official `mcp` SDK becomes a runtime dependency and its supported major version is pinned.

@@ -86,9 +86,10 @@ entry is:
 }
 ```
 
-The configured MCP port is only preferred. If it is occupied, MalDroid binds a free local port and
-prints it. An explicitly supplied occupied `--port` on `mcp serve`, or `--mcp-port` on normal chat,
-fails. Tool discovery always returns only core
+The MCP port is fixed. Its default is 8765, and MalDroid fails clearly if it is occupied rather
+than silently changing the endpoint. Set another persistent fixed port once with
+`maldroid config set mcp.preferred_port PORT`; `--port` on `mcp serve` and `--mcp-port` on normal
+chat are one-run overrides. Tool discovery always returns only core
 tools plus the case's active profile. The endpoint is intentionally not exposed beyond loopback;
 any local client connected to it can invoke case-scoped tools until the server stops.
 
@@ -102,9 +103,8 @@ maldroid config show
 maldroid config set llama.temperature 0.1
 ```
 
-CLI options override configuration for one run. The preferred model port is 7575 and the preferred
-MCP port is 8765. MalDroid selects a free local port if a configured preference is occupied. An
-explicitly requested occupied port is an error.
+CLI options override configuration for one run. The preferred model port is 7575 and may fall back
+when configured as a default. The MCP port is fixed at 8765 by default and never falls back.
 
 MalDroid rejects `--tools`, `--agent`, and MCP proxy flags in `extra_args`. Its MCP server is the
 Python security boundary; `llama-server` built-in tools and experimental MCP proxy remain disabled.
@@ -137,8 +137,8 @@ excerpts enter model context.
 - Tool call returned as prose: run `maldroid doctor --model-tool-test` and configure a compatible
   Jinja chat template.
 - Server startup failure: inspect `<case>/.maldroid/logs/llama-server.stderr.log`.
-- MCP connection failure: copy the endpoint printed by the current process; a fallback port may
-  differ from 8765.
+- MCP port unavailable: stop the process already using it, or persist another fixed value with
+  `maldroid config set mcp.preferred_port PORT` and update the MCP client once.
 - Python venv unavailable on Kali: install `python3-full` and `python3-venv`.
 
 Use `--debug` only when a traceback is needed. Uninstall safely with `./uninstall.sh`; cases and
