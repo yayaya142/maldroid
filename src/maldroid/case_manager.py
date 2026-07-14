@@ -86,9 +86,36 @@ class CaseManager:
         try:
             with metadata_path.open("rb") as handle:
                 metadata = CaseMetadata.model_validate(tomllib.load(handle))
-            state = CaseState.model_validate_json(state_path.read_text(encoding="utf-8"))
         except (OSError, ValueError, tomllib.TOMLDecodeError) as exc:
             raise CaseError(f"Cannot load case metadata from {root}: {exc}") from exc
+            
+        import json
+        try:
+            raw_state = json.loads(state_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise CaseError(f"Case state is truncated or corrupt: {exc}") from exc
+        except OSError as exc:
+            raise CaseError(f"Cannot read case state from {root}: {exc}") from exc
+
+        if raw_state.get("schema_version", 1) == 1:
+            for item in raw_state.get("findings", []):
+                item.setdefault("client_mutation_id", None)
+            for item in raw_state.get("notes", []):
+                item.setdefault("client_mutation_id", None)
+                item.setdefault("kind", "general")
+                item.setdefault("status", "active")
+                item.setdefault("updated_at", item.get("created_at"))
+            for item in raw_state.get("todos", []):
+                item.setdefault("client_mutation_id", None)
+                item.setdefault("priority", "medium")
+                item.setdefault("dependencies", [])
+                item.setdefault("owner", None)
+            raw_state["schema_version"] = 2
+
+        try:
+            state = CaseState.model_validate(raw_state)
+        except ValueError as exc:
+            raise CaseError(f"Case state schema validation failed: {exc}") from exc
         if Path(metadata.root).resolve() != root:
             metadata.root = str(root)
         metadata.last_opened_at = now_iso()
