@@ -153,6 +153,8 @@ class InvestigationManager:
         confidence: str = "medium",
         severity: str = "medium",
         status: str = "tentative",
+        verification_status: str = "unverified",
+        verifier_notes: str | None = None,
         evidence: list[EvidenceReference] | None = None,
         tags: list[str] | None = None,
         client_mutation_id: str | None = None,
@@ -175,6 +177,8 @@ class InvestigationManager:
             confidence=confidence,  # type: ignore[arg-type]
             severity=severity,  # type: ignore[arg-type]
             status=status,  # type: ignore[arg-type]
+            verification_status=verification_status, # type: ignore[arg-type]
+            verifier_notes=verifier_notes,
             evidence=evidence or [],
             tags=tags or [],
             client_mutation_id=client_mutation_id,
@@ -212,6 +216,8 @@ class InvestigationManager:
         confidence: str | None = None,
         severity: str | None = None,
         status: str | None = None,
+        verification_status: str | None = None,
+        verifier_notes: str | None = None,
         evidence: list[EvidenceReference] | None = None,
         tags: list[str] | None = None,
     ) -> Finding:
@@ -225,6 +231,8 @@ class InvestigationManager:
         if confidence is not None: changes["confidence"] = confidence
         if severity is not None: changes["severity"] = severity
         if status is not None: changes["status"] = status
+        if verification_status is not None: changes["verification_status"] = verification_status
+        if verifier_notes is not None: changes["verifier_notes"] = verifier_notes
         if evidence is not None: changes["evidence"] = evidence
         if tags is not None: changes["tags"] = tags
         updated = Finding.model_validate(
@@ -292,11 +300,16 @@ class InvestigationManager:
         if todos_changed is not None: changes["todos_changed"] = todos_changed
         if failed_approaches is not None: changes["failed_approaches"] = failed_approaches
         if unresolved_questions is not None: changes["unresolved_questions"] = unresolved_questions
-        if uncertainty is not None: changes["uncertainty"] = uncertainty
-        if next_action is not None: changes["next_action"] = next_action
-        if related_finding_ids is not None: changes["related_finding_ids"] = related_finding_ids
-        if related_todo_ids is not None: changes["related_todo_ids"] = related_todo_ids
-        if related_evidence_ids is not None: changes["related_evidence_ids"] = related_evidence_ids
+        if uncertainty is not None:
+            changes["uncertainty"] = uncertainty
+        if next_action is not None:
+            changes["next_action"] = next_action
+        if related_finding_ids is not None:
+            changes["related_finding_ids"] = related_finding_ids
+        if related_todo_ids is not None:
+            changes["related_todo_ids"] = related_todo_ids
+        if related_evidence_ids is not None:
+            changes["related_evidence_ids"] = related_evidence_ids
         
         updated = InvestigationNote.model_validate(
             {**note.model_dump(), **changes, "updated_at": now_iso()}
@@ -383,11 +396,16 @@ class InvestigationManager:
             raise CaseError(f"TODO item not found: {todo_id}")
             
         changes = {}
-        if text is not None: changes["text"] = text
-        if status is not None: changes["status"] = status
-        if priority is not None: changes["priority"] = priority
-        if dependencies is not None: changes["dependencies"] = dependencies
-        if owner is not None: changes["owner"] = owner
+        if text is not None:
+            changes["text"] = text
+        if status is not None:
+            changes["status"] = status
+        if priority is not None:
+            changes["priority"] = priority
+        if dependencies is not None:
+            changes["dependencies"] = dependencies
+        if owner is not None:
+            changes["owner"] = owner
         
         updated = TodoItem.model_validate(
             {**item.model_dump(), **changes, "updated_at": now_iso()}

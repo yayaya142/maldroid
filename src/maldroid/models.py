@@ -57,6 +57,8 @@ class Finding(BaseModel):
     confidence: Literal["low", "medium", "high"] = "medium"
     severity: Literal["informational", "low", "medium", "high", "critical"] = "medium"
     status: Literal["tentative", "confirmed", "rejected", "resolved"] = "tentative"
+    verification_status: Literal["unverified", "verified", "failed"] = "unverified"
+    verifier_notes: str | None = None
     evidence: list[EvidenceReference] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
     client_mutation_id: str | None = None

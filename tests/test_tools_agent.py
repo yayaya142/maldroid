@@ -36,8 +36,9 @@ def test_documented_system_prompt_matches_runtime_prompt() -> None:
     document = (Path(__file__).resolve().parents[1] / "SYSTEM_PROMPT.md").read_text(
         encoding="utf-8"
     )
-    assert SYSTEM_PROMPT.strip() in document
-    assert "MalDroid_read_case_state, then MalDroid_list_case_files" in SYSTEM_PROMPT
+    assert "You operate in three explicit states (PLANNER, WORKER, VERIFIER)" in SYSTEM_PROMPT
+    prompt_text = document.split("```text")[1].split("```")[0].strip()
+    assert prompt_text == SYSTEM_PROMPT.strip()
 
 
 def test_registry_profile_filtering(app_config: AppConfig) -> None:

@@ -113,6 +113,8 @@ class SaveFindingInput(Arguments):
     confidence: Literal["low", "medium", "high"] = "medium"
     severity: Literal["informational", "low", "medium", "high", "critical"] = "medium"
     status: Literal["tentative", "confirmed", "rejected", "resolved"] = "tentative"
+    verification_status: Literal["unverified", "verified", "failed"] = "unverified"
+    verifier_notes: str | None = None
     evidence: list[EvidenceReference] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
     client_mutation_id: str | None = Field(default=None, description="Optional ID for idempotent retries")
@@ -125,6 +127,8 @@ class UpdateFindingInput(Arguments):
     confidence: Literal["low", "medium", "high"] | None = None
     severity: Literal["informational", "low", "medium", "high", "critical"] | None = None
     status: Literal["tentative", "confirmed", "rejected", "resolved", "archived"] | None = None
+    verification_status: Literal["unverified", "verified", "failed"] | None = None
+    verifier_notes: str | None = None
     evidence: list[EvidenceReference] | None = None
     tags: list[str] | None = None
 
@@ -162,11 +166,14 @@ class SaveTodoInput(Arguments):
 class UpdateTodoInput(Arguments):
     todo_id: str
     text: str | None = Field(default=None, min_length=1, max_length=1000)
-    status: Literal["open", "completed", "blocked"] | None = None
-    priority: Literal["low", "medium", "high"] | None = None
+    status: Literal["open", "blocked", "completed"] | None = None
+    priority: Literal["low", "medium", "high", "critical"] | None = None
     dependencies: list[str] | None = None
     owner: str | None = None
 
+class TransitionStateInput(Arguments):
+    state: Literal["planner", "worker", "verifier"]
+    reason: str = Field(min_length=10, max_length=1000)
 
 class KnowledgeSearchInput(Arguments):
     query: str = Field(min_length=1, max_length=1000)
@@ -490,6 +497,8 @@ def save_finding(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
         values.confidence,
         values.severity,
         values.status,
+        values.verification_status,
+        values.verifier_notes,
         values.evidence,
         values.tags,
         values.client_mutation_id,
@@ -506,6 +515,8 @@ def update_finding(context: ToolContext, arguments: BaseModel) -> dict[str, Any]
         confidence=values.confidence,
         severity=values.severity,
         status=values.status,
+        verification_status=values.verification_status,
+        verifier_notes=values.verifier_notes,
         evidence=values.evidence,
         tags=values.tags,
     ).model_dump()
@@ -674,6 +685,11 @@ def validate_evidence_reference(context: ToolContext, arguments: BaseModel) -> d
             return {"valid": False, "error": f"end_offset ({values.end_offset}) is beyond file size ({file_size} bytes)"}
 
     return {"valid": True, "message": "Evidence reference is valid."}
+def transition_state(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
+    args = TransitionStateInput.model_validate(arguments)
+    # The agent handles the actual transition by hooking into this tool's response,
+    # or we can let the agent inspect the arguments.
+    return {"status": "transitioning", "state": args.state, "reason": args.reason}
 
 
 def register_core_tools(registry: ToolRegistry) -> None:
@@ -684,6 +700,12 @@ def register_core_tools(registry: ToolRegistry) -> None:
             "Inspect file metadata without reading its contents.",
             FileInfoInput,
             get_file_info,
+        ),
+        (
+            "transition_state",
+            "Transition the agent state between planner, worker, and verifier phases.",
+            TransitionStateInput,
+            transition_state,
         ),
         (
             "read_file_range",

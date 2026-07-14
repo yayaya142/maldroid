@@ -44,7 +44,14 @@ COMMANDS: dict[str, str] = {
     "/files": "List registered case files",
     "/findings": "Show durable investigation findings",
     "/todo": "List or update TODO items",
+    "/plan": "Alias for /todo to view the investigation plan",
+    "/skip-todo": "Mark a TODO item as completed/skipped",
+    "/mark-blocked": "Mark a TODO item as blocked",
     "/note": "Save a durable progress note",
+    "/explain": "Explain the agent's last decision",
+    "/pause": "Pause autonomous investigation (or use Ctrl+C)",
+    "/cancel": "Cancel the currently executing tool (or use Ctrl+C)",
+    "/continue": "Resume autonomous investigation",
     "/checkpoints": "Show recent durable notes and session summary",
     "/history": "Show current session statistics",
     "/compact": "Save a summary and reclaim context",
@@ -440,8 +447,26 @@ class InteractiveChat:
             self._render_tool_result(self.dispatcher.execute(mcp_tool_name("list_case_files"), {}))
         elif name == "/findings":
             self._show_findings()
-        elif name == "/todo":
+        elif name == "/todo" or name == "/plan":
             self._todo(rest)
+        elif name == "/skip-todo":
+            if not rest:
+                self.console.print("Usage: [cyan]/skip-todo TODO_ID[/cyan]")
+            else:
+                self._todo(f"{rest} status completed")
+        elif name == "/mark-blocked":
+            if not rest:
+                self.console.print("Usage: [cyan]/mark-blocked TODO_ID[/cyan]")
+            else:
+                self._todo(f"{rest} status blocked")
+        elif name == "/explain":
+            self.console.print("[dim]Generating explanation...[/dim]")
+            self.console.print("The agent's state is currently: " + self.agent.state.value)
+        elif name in {"/pause", "/cancel"}:
+            self.console.print("[yellow]To interrupt the agent or cancel a tool, use Ctrl+C.[/yellow]")
+        elif name == "/continue":
+            self.console.print("[green]Resuming investigation...[/green]")
+            return False # allow loop to run agent again
         elif name == "/note":
             self._note(rest)
         elif name == "/checkpoints":
