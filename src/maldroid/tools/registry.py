@@ -43,9 +43,13 @@ def build_registry() -> ToolRegistry:
     from maldroid.tools.profiles.frameworks import register_framework_tools
     from maldroid.tools.profiles.native import register_native_tools
     from maldroid.tools.profiles.react_native import register_react_native_tools
+    from maldroid.tools.core.scripts import register_script_tools
+    from maldroid.tools.core.transforms import register_transform_tools
 
     registry = ToolRegistry()
     register_core_tools(registry)
+    register_script_tools(registry)
+    register_transform_tools(registry)
     register_react_native_tools(registry)
     register_native_tools(registry)
     register_framework_tools(registry)
