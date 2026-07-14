@@ -25,6 +25,8 @@ Make the first public macOS and Kali GitHub Actions run pass after publishing th
   it no longer silently selects a preinstalled Homebrew Python 3.14.
 - The process lifecycle fixture now invokes its fake server with pytest's exact interpreter rather
   than resolving `python3` through the macOS runner PATH.
+- The workflow targets `macos-15` explicitly after GitHub migrated `macos-latest` to macOS 26 during
+  validation; future macOS image upgrades must be deliberate compatibility tasks.
 
 ## Verification
 

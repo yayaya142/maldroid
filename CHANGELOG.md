@@ -25,3 +25,5 @@
   unrelated preinstalled Homebrew interpreter, and upgraded Actions to their Node 24 releases.
 - Made the fake llama-server integration fixture use pytest's exact Python interpreter so process
   lifecycle tests do not depend on the macOS runner's shell PATH.
+- Pinned CI to the stable macOS 15 runner instead of the moving `macos-latest` label, which migrated
+  to macOS 26 during validation.

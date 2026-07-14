@@ -30,6 +30,8 @@ Last updated: 2026-07-14
   rolling distribution Python.
 - Cross-platform process lifecycle tests launch their fake server with pytest's exact interpreter,
   avoiding runner-specific `env python3` resolution.
+- GitHub Actions uses the stable macOS 15 image explicitly so OS upgrades are deliberate and the
+  target-platform signal remains reproducible.
 
 ## Partial or environment-gated
 
