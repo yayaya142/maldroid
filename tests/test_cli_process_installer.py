@@ -12,8 +12,10 @@ from rich.text import Text
 from typer.testing import CliRunner
 
 import maldroid.cli as cli
+import maldroid.process_manager as process_manager_module
 from maldroid.config import AppConfig
 from maldroid.exceptions import ServerError
+from maldroid.llama_adapter import ServerCommand
 from maldroid.process_manager import LlamaServerProcess
 
 
@@ -128,29 +130,12 @@ def test_entrypoint_rewrites_daily_syntax(
         assert captured == arguments
 
 
-def test_process_manager_health_and_shutdown(
+def test_process_manager_start_and_shutdown(
     tmp_path: Path, app_config: AppConfig, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("http_proxy", "http://127.0.0.1:9")
-    monkeypatch.setenv("HTTP_PROXY", "http://127.0.0.1:9")
-    monkeypatch.setenv("no_proxy", "")
-    monkeypatch.setenv("NO_PROXY", "")
     server_module = tmp_path / "fake_llama_server.py"
     server_module.write_text(
-        """import json, sys
-from http.server import BaseHTTPRequestHandler, HTTPServer
-port = int(sys.argv[sys.argv.index('--port') + 1])
-class Handler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        if self.path in ('/health', '/v1/health'):
-            body = json.dumps({'status':'ok'}).encode()
-            self.send_response(200); self.send_header('Content-Length', str(len(body)))
-            self.end_headers(); self.wfile.write(body)
-        else:
-            self.send_response(404); self.end_headers()
-    def log_message(self, *args): pass
-HTTPServer(('127.0.0.1', port), Handler).serve_forever()
-""",
+        "import time\ntime.sleep(60)\n",
         encoding="utf-8",
     )
     server_script = tmp_path / "fake-llama-server"
@@ -166,6 +151,7 @@ HTTPServer(('127.0.0.1', port), Handler).serve_forever()
     case = tmp_path / "case"
     case.mkdir()
     process = LlamaServerProcess(config, case)
+    monkeypatch.setattr(process, "_wait_until_ready", lambda: None)
     process.start()
     assert process.status()["running"] is True
     assert process.status()["port"] == process.command.port
@@ -173,6 +159,53 @@ HTTPServer(('127.0.0.1', port), Handler).serve_forever()
     process.stop(graceful_seconds=1)
     assert process.status()["running"] is False
     assert (case / ".maldroid" / "logs" / "llama-server.stdout.log").is_file()
+
+
+def test_process_manager_health_uses_direct_loopback_http(
+    tmp_path: Path, app_config: AppConfig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    requests: list[tuple[object, ...]] = []
+
+    class FakeResponse:
+        status = 200
+
+        @staticmethod
+        def read() -> bytes:
+            return b'{"status":"ok"}'
+
+    class FakeConnection:
+        def __init__(self, host: str, port: int, timeout: int):
+            requests.append(("connect", host, port, timeout))
+
+        def request(self, method: str, path: str) -> None:
+            requests.append(("request", method, path))
+
+        @staticmethod
+        def getresponse() -> FakeResponse:
+            return FakeResponse()
+
+        def close(self) -> None:
+            requests.append(("close",))
+
+    class RunningProcess:
+        @staticmethod
+        def poll() -> None:
+            return None
+
+    monkeypatch.setenv("HTTP_PROXY", "http://127.0.0.1:9")
+    monkeypatch.setenv("NO_PROXY", "")
+    monkeypatch.setattr(process_manager_module.http.client, "HTTPConnection", FakeConnection)
+    process = LlamaServerProcess(app_config, tmp_path)
+    process.process = RunningProcess()  # type: ignore[assignment]
+    process.command = ServerCommand(arguments=[], port=45678, api_key="test-only")
+
+    process._wait_until_ready()
+
+    assert requests == [
+        ("connect", "127.0.0.1", 45678, 2),
+        ("request", "GET", "/v1/health"),
+        ("close",),
+    ]
 
 
 def test_process_manager_detects_early_exit(tmp_path: Path, app_config: AppConfig) -> None:

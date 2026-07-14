@@ -27,6 +27,8 @@ Make the first public macOS and Kali GitHub Actions run pass after publishing th
   than resolving `python3` through the macOS runner PATH.
 - The workflow targets `macos-15` explicitly after GitHub migrated `macos-latest` to macOS 26 during
   validation; future macOS image upgrades must be deliberate compatibility tasks.
+- Process lifecycle and direct loopback health checks are tested independently to avoid hosted
+  macOS nested-listener stalls while retaining assertions for the exact health endpoint.
 
 ## Verification
 
@@ -40,7 +42,7 @@ PYTHON="$PWD/.venv/bin/python" ./install.sh --dry-run
 ```
 
 Results: the consolidated `./scripts/dev release-check` passed. Ruff formatting and lint passed;
-mypy passed for 34 source files; 42 tests passed with 67% line coverage. Project hygiene,
+mypy passed for 34 source files; 43 tests passed with 67% line coverage. Project hygiene,
 installer dry-run, JSON parsing tests, nested help/version/config UX, MCP protocol integration, and
 wheel build/archive verification passed. The wheel is `dist/maldroid-0.1.0-py3-none-any.whl`.
 

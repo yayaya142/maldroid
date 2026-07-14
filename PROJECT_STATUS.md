@@ -32,6 +32,8 @@ Last updated: 2026-07-14
   avoiding runner-specific `env python3` resolution.
 - GitHub Actions uses the stable macOS 15 image explicitly so OS upgrades are deliberate and the
   target-platform signal remains reproducible.
+- Process termination and direct loopback health behavior have independent deterministic tests;
+  neither test depends on nested listener availability in hosted CI.
 
 ## Partial or environment-gated
 

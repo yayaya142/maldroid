@@ -27,3 +27,5 @@
   lifecycle tests do not depend on the macOS runner's shell PATH.
 - Pinned CI to the stable macOS 15 runner instead of the moving `macos-latest` label, which migrated
   to macOS 26 during validation.
+- Split process lifecycle and health-probe tests so macOS CI verifies both behaviors without relying
+  on a nested test listener that runner networking can stall.
