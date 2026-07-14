@@ -75,8 +75,9 @@ Each returned call is sent through the official MCP client, validated by both MC
 the dispatcher, executed serially, serialized as a `tool` role message, persisted, and sent back.
 Eight investigation tool rounds form one autonomous phase rather than a terminal limit. At a phase
 boundary the controller saves an MCP checkpoint, compacts context, restores the original objective,
-and continues without user input. The default 16-phase ceiling permits 128 rounds while retaining a
-finite runaway guard. Transient model calls use bounded retries. After meaningful investigation activity, a final response is
+and continues without user input. A context-threshold crossing triggers the same rollover inside
+the active phase. Phases are unlimited; the legacy ceiling key is accepted only for configuration
+compatibility and is not enforced. Transient model calls use bounded retries. After meaningful investigation activity, a final response is
 not accepted until the model saves a note/finding checkpoint. If it ignores the reminder, the agent
 saves its draft response automatically through the audited MCP note tool. Prose that resembles a
 tool call is never executed.

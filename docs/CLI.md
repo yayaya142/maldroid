@@ -24,14 +24,19 @@ the display is explicitly approximate. Input history is persisted inside the cas
 
 A user request is not stopped merely because one tool window is exhausted. The default controller
 runs eight tool rounds per phase, writes a durable MCP checkpoint, compacts the conversation, then
-continues the original objective automatically. Sixteen phases are available by default, providing
-a 128-round safety ceiling. At that ceiling the agent saves state and produces a useful partial
-result instead of losing work.
+continues the original objective automatically. Phases are unlimited by default, allowing a task to
+run for as long as completion requires. The same rollover happens early when context reaches the
+configured compaction threshold, so context exhaustion is handled inside the active task rather
+than after it returns to the prompt. The legacy `limits.max_task_phases` key remains accepted for
+configuration compatibility but no longer stops the controller, including in existing installs
+that previously saved the old value of `16`.
 
 Transient model-request failures are retried three times with bounded backoff. Individual tool
 errors are returned to the model so it can correct arguments or choose a safe alternative. MCP
 error responses are normalized from structured, wrapped, and plain-text result variants, avoiding
 the unhelpful generic “no ToolResult payload” failure when the server supplied an error message.
+If all retries fail, the turn pauses with a clear external-dependency panel while the CLI and case
+remain open; it does not terminate the session or discard durable work.
 
 Controller settings are validated and discoverable:
 

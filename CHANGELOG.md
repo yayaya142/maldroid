@@ -62,8 +62,12 @@
   balanced `medium` default, native per-request llama.cpp thinking budgets, toolbar/status display,
   slash completion, persistent configuration, and audited session changes.
 - Replaced the eight-round terminal stop with an autonomous multi-phase controller that saves MCP
-  checkpoints, compacts context, restores the original objective, and continues for up to 128 tool
-  rounds by default; transient model requests now retry with bounded backoff.
+  checkpoints, compacts context, restores the original objective, and continues through unlimited
+  phases by default; context-threshold rollover also occurs inside active tasks and transient model
+  requests retry with bounded backoff without terminating the CLI.
+- Removed enforcement of the legacy phase ceiling, including for existing configurations that had
+  persisted the former value of 16; long tasks now stop only on completion, user interruption, or a
+  genuine external dependency.
 - Added streamed reasoning/content/tool-call reconstruction and live in-progress telemetry for
   generated tokens, context consumption, time, phase, tools, errors, and estimated capacity left.
 - Hardened MCP result normalization so structured, wrapped, and plain-text error responses preserve

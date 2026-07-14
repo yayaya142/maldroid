@@ -25,7 +25,8 @@
    and Ctrl+D cleanup. Confirm Gemma 4 returns separated `reasoning_content` at medium and high.
    Run an investigation exceeding eight tool rounds and verify it visibly rolls into phase 2 without
    returning to the prompt. Confirm streamed token/context telemetry moves during generation and a
-   deliberately invalid evidence path exposes the real MCP tool error.
+   deliberately invalid evidence path exposes the real MCP tool error. Lower the context threshold
+   and verify an active task compacts and continues before its eight-round window completes.
 2. `REL-002` — Run the full suite and installer lifecycle on Kali rolling and Apple Silicon.
 3. `COMPAT-001` — Expand benign multi-architecture ELF and versioned Blutter fixtures on target
    platforms and record exact external-tool versions.

@@ -106,7 +106,7 @@ CONFIG_DESCRIPTIONS = {
     "limits.max_file_tree_entries": "Global upper bound for file-tree results.",
     "limits.command_timeout_seconds": "Timeout for external tools and MCP calls.",
     "limits.max_tool_rounds": "Tool rounds per autonomous phase before checkpoint rollover.",
-    "limits.max_task_phases": "Maximum autonomous phases in one user request.",
+    "limits.max_task_phases": "Deprecated compatibility setting; phases are unlimited.",
     "limits.model_retry_attempts": "Transient model-request attempts before failing the turn.",
     "limits.auto_compact_ratio": "Context usage ratio that triggers automatic compaction.",
     "external_tools.blutter": "Optional path to an explicitly configured Blutter adapter.",

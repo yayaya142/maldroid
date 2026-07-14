@@ -346,7 +346,7 @@ def test_agent_rolls_long_task_into_next_phase_without_stopping(
 ) -> None:
     data = app_config.model_dump()
     data["limits"]["max_tool_rounds"] = 2
-    data["limits"]["max_task_phases"] = 3
+    data["limits"]["max_task_phases"] = 0
     config = AppConfig.model_validate(data)
     manager, case, registry, dispatcher = make_dispatcher(config)
     (case.root / "sample.txt").write_text("evidence\n", encoding="utf-8")
@@ -370,6 +370,60 @@ def test_agent_rolls_long_task_into_next_phase_without_stopping(
     assert client.compactions == 1
     assert any(event == "phase_rollover" for event, _ in reported)
     assert any(note.text.startswith("Autonomous phase 1 checkpoint") for note in case.state.notes)
+
+
+def test_agent_compacts_inside_active_task_when_context_threshold_is_reached(
+    app_config: AppConfig,
+) -> None:
+    data = app_config.model_dump()
+    data["limits"]["max_tool_rounds"] = 8
+    data["limits"]["max_task_phases"] = 0
+    config = AppConfig.model_validate(data)
+    manager, case, registry, dispatcher = make_dispatcher(config)
+    (case.root / "sample.txt").write_text("evidence\n", encoding="utf-8")
+    sessions = SessionManager(case, manager)
+    client = LongTaskClient()
+    reported = []
+    agent = MalDroidAgent(
+        config,
+        case,
+        client,
+        registry,
+        dispatcher,
+        sessions,
+        event_handler=lambda event, details: reported.append((event, details)),
+    )
+
+    response = agent.respond("Investigate fully. " + "context " * 24000)
+
+    assert response == "The long investigation is complete."
+    rollover = next(details for event, details in reported if event == "phase_rollover")
+    assert rollover["reason"] == "context_threshold"
+    assert client.compactions >= 1
+
+
+def test_legacy_saved_phase_ceiling_no_longer_stops_agent(app_config: AppConfig) -> None:
+    data = app_config.model_dump()
+    data["limits"]["max_tool_rounds"] = 1
+    data["limits"]["max_task_phases"] = 2
+    config = AppConfig.model_validate(data)
+    manager, case, registry, dispatcher = make_dispatcher(config)
+    (case.root / "sample.txt").write_text("evidence\n", encoding="utf-8")
+    client = LongTaskClient()
+    agent = MalDroidAgent(
+        config,
+        case,
+        client,
+        registry,
+        dispatcher,
+        SessionManager(case, manager),
+    )
+
+    response = agent.respond("Continue beyond the legacy phase limit")
+
+    assert response == "The long investigation is complete."
+    assert client.tool_turns == 3
+    assert client.compactions == 3
 
 
 class FlakyClient:

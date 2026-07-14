@@ -152,14 +152,16 @@ class MalDroidAgent:
                 tool_message = {"role": "tool", "tool_call_id": call.id, "content": serialized}
                 self.messages.append(tool_message)
                 self.sessions.record("tool_result", role="tool", content=tool_message)
-            if phase_tool_rounds >= self.config.limits.max_tool_rounds:
+            round_rollover = phase_tool_rounds >= self.config.limits.max_tool_rounds
+            context_rollover = self.should_auto_compact()
+            if round_rollover or context_rollover:
                 self._save_phase_checkpoint(text, activity, phase, total_tool_rounds)
-                if phase >= self.config.limits.max_task_phases:
-                    return self._finish_at_safety_ceiling(text, total_tool_rounds)
+                rollover_reason = "context_threshold" if context_rollover else "tool_window"
                 self._emit(
                     "phase_rollover",
                     completed_phase=phase,
                     total_tool_rounds=total_tool_rounds,
+                    reason=rollover_reason,
                 )
                 self.compact()
                 phase += 1
@@ -236,28 +238,6 @@ class MalDroidAgent:
             phase=phase,
             total_tool_rounds=total_tool_rounds,
             status=result.status,
-        )
-
-    def _finish_at_safety_ceiling(self, objective: str, total_tool_rounds: int) -> str:
-        self.messages.append(
-            {
-                "role": "system",
-                "content": (
-                    "The autonomous safety ceiling has been reached after "
-                    f"{total_tool_rounds} tool rounds. Do not call more tools. Provide a useful "
-                    "current result: completed work, evidence, remaining uncertainty, and the exact "
-                    "external blocker or next action. Original objective:\n" + objective[:12000]
-                ),
-            }
-        )
-        self._emit("safety_ceiling", total_tool_rounds=total_tool_rounds)
-        assistant = self._complete_with_retries(self.messages, [])
-        history = assistant.as_history_message()
-        self.messages.append(history)
-        self.sessions.record("message", role="assistant", content=history)
-        return assistant.content or (
-            "The autonomous safety ceiling was reached. Progress is preserved in the case "
-            "checkpoint and session log."
         )
 
     def _save_automatic_checkpoint(self, draft: str, activity: list[str] | None = None) -> None:

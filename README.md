@@ -90,9 +90,11 @@ all levels and `/reasoning high` changes the budget immediately without restarti
 
 Long investigations run through an autonomous phase controller. Every configured tool-round window
 creates a durable checkpoint, compacts context, and continues the same objective without returning
-to the prompt. The default ceiling is 16 phases of 8 tool rounds (128 rounds), with three automatic
-retries for transient model-server failures. During streaming generation, the active status line
-shows elapsed time, generated tokens, context consumption, and estimated tokens remaining.
+to the prompt. Phases are unlimited, with three automatic retries for transient
+model-server failures. If context reaches its compaction threshold in the middle of a phase, the
+same checkpoint/compact/continue sequence runs immediately. During streaming generation, the
+active status line shows elapsed time, generated tokens, context consumption, and estimated tokens
+remaining.
 
 MalDroid does not rely on the local model to remember progress voluntarily. After meaningful tool
 use, the agent requires a durable `MalDroid_save_note` or finding checkpoint before accepting the

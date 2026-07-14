@@ -213,6 +213,25 @@ class InteractiveChat:
         except KeyboardInterrupt:
             self.console.print("\n[yellow]Current response interrupted.[/yellow]")
             return
+        except Exception as exc:
+            self.console.print()
+            self.console.print(
+                Panel(
+                    Text.assemble(
+                        ("The active turn paused after automatic retries.\n", "bold yellow"),
+                        str(exc),
+                        "\n\n",
+                        (
+                            "The CLI is still running and durable case state is preserved. "
+                            "Check /server, then retry when the local dependency is available.",
+                            "dim",
+                        ),
+                    ),
+                    title="External dependency required",
+                    border_style="yellow",
+                )
+            )
+            return
         finally:
             self._status = None
         elapsed = time.monotonic() - started
@@ -281,9 +300,16 @@ class InteractiveChat:
             )
         elif event == "phase_rollover":
             phase = int(data.get("completed_phase", 1)) + 1
+            reason = str(data.get("reason", "tool_window"))
             self._update_status(f"Preparing autonomous phase {phase}…")
+            reason_text = (
+                "context threshold reached"
+                if reason == "context_threshold"
+                else "tool window completed"
+            )
             self.console.print(
-                f"[cyan]↻ Continuing automatically in phase {phase}; no input required.[/cyan]"
+                f"[cyan]↻ {reason_text}; continuing automatically in phase {phase}. "
+                "No input required.[/cyan]"
             )
         elif event == "model_retry":
             attempt = int(data.get("attempt", 1)) + 1
@@ -293,10 +319,6 @@ class InteractiveChat:
             self.console.print(
                 f"[yellow]↻ Model request interrupted; retrying {attempt}/{maximum} "
                 f"in {delay:g}s.[/yellow]"
-            )
-        elif event == "safety_ceiling":
-            self.console.print(
-                "[yellow]◆ Autonomous safety ceiling reached; preparing a durable result.[/yellow]"
             )
         elif event == "compaction_start":
             self._update_status("Compacting context…")

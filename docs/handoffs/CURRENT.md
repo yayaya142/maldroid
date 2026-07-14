@@ -67,7 +67,9 @@ Run target-machine acceptance with the authorized Gemma 4 model and an external 
   level; session logs record changes and persistent defaults use `llama.reasoning_level`.
 - The former eight-round stop is now an autonomous phase rollover: an MCP note and compacted summary
   preserve state, the original objective is restored, and work continues without user input. The
-  default guard is 16 phases/128 rounds, plus three bounded retries for transient model failures.
+  default is unlimited phases (`limits.max_task_phases=0`), plus three bounded retries for transient
+  model failures. Context threshold crossings trigger the same rollover during an active phase.
+  The prior saved value of 16 is accepted but no longer enforced, so upgrades need no manual edit.
 - Local model responses stream structured content, reasoning, tool-call fragments, and usage into
   the agent. The active status line displays elapsed time, generated tokens, context usage, and
   remaining capacity while the model is working.
@@ -84,7 +86,7 @@ Verified in the local isolated Python 3.12 venv:
 ```
 
 Results: the consolidated release check passed. Ruff formatting and lint passed; mypy passed for 34
-source files; 73 tests passed. Project hygiene, installer dry-run, browser
+source files; 75 tests passed. Project hygiene, installer dry-run, browser
 MCP origin/CORS coverage, termination-signal cleanup, namespaced tool discovery, enforced and
 automatic and phase checkpoints, autonomous continuation, model retry, compaction fallback,
 streaming token/tool reconstruction, live terminal telemetry, dynamic reasoning-budget request

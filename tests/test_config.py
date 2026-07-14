@@ -32,7 +32,7 @@ def test_default_model_performance_settings() -> None:
     assert config.llama.reasoning_level == "medium"
     assert config.limits.auto_compact_ratio == 0.72
     assert config.limits.max_tool_rounds == 8
-    assert config.limits.max_task_phases == 16
+    assert config.limits.max_task_phases == 0
     assert config.limits.model_retry_attempts == 3
 
 
@@ -74,3 +74,4 @@ def test_config_get_reset_and_invalid_values() -> None:
         set_config_value(AppConfig(), "general.evidence_mode", "maybe")
     with pytest.raises(Exception, match="Invalid value"):
         set_config_value(AppConfig(), "llama.reasoning_level", "extreme")
+    assert set_config_value(AppConfig(), "limits.max_task_phases", "0").limits.max_task_phases == 0

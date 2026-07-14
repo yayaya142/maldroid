@@ -65,8 +65,9 @@ Last updated: 2026-07-14
   toolbar/status, persists through `llama.reasoning_level`, and uses llama.cpp's native dynamic
   `thinking_budget_tokens` request field without requiring a server restart.
 - Long requests use autonomous checkpoint/compact/continue phases instead of stopping after eight
-  tools. Defaults provide 128 total tool rounds, durable phase notes, original-objective recovery,
-  bounded model retries, and a final safety-ceiling report without discarded progress.
+  tools. Phases are unlimited by default, with durable phase notes, original-objective recovery,
+  mid-task context-threshold rollover and bounded model retries. The legacy phase-ceiling config
+  value is ignored so existing installations also become unlimited automatically.
 - llama.cpp responses stream into a structured accumulator for content, reasoning, tool-call
   fragments, and final token usage. The active terminal line shows live generation/context totals.
 - MCP client result handling preserves structured, wrapped, and plain-text errors; case-local
