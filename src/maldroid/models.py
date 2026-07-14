@@ -68,7 +68,10 @@ class TodoItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
     id: str
     text: str
-    status: Literal["open", "completed"] = "open"
+    status: Literal["open", "completed", "blocked"] = "open"
+    priority: Literal["low", "medium", "high"] = "medium"
+    dependencies: list[str] = Field(default_factory=list, description="IDs of blocking TODOs")
+    owner: str | None = None
     client_mutation_id: str | None = None
     created_at: str = Field(default_factory=now_iso)
     updated_at: str = Field(default_factory=now_iso)
@@ -79,8 +82,11 @@ class InvestigationNote(BaseModel):
     id: str
     text: str
     evidence: list[EvidenceReference] = Field(default_factory=list)
+    kind: Literal["general", "checkpoint", "decision"] = "general"
+    status: Literal["active", "archived"] = "active"
     client_mutation_id: str | None = None
     created_at: str = Field(default_factory=now_iso)
+    updated_at: str = Field(default_factory=now_iso)
 
 
 class CaseMetadata(BaseModel):

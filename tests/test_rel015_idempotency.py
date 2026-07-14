@@ -47,12 +47,12 @@ def test_update_todo_idempotency(tmp_path):
     case = manager.create("case3")
     inv = InvestigationManager(manager)
 
-    t1 = inv.update_todo(case, "add", "Do this", client_mutation_id="todo-mut")
+    t1 = inv.save_todo(case, "Do this", client_mutation_id="todo-mut")
     assert len(case.state.todos) == 1
 
-    t2 = inv.update_todo(case, "add", "Do this", client_mutation_id="todo-mut")
+    t2 = inv.save_todo(case, "Do this", client_mutation_id="todo-mut")
     assert t2.id == t1.id
     assert len(case.state.todos) == 1
 
     with pytest.raises(CaseError, match="Duplicate TODO detected"):
-        inv.update_todo(case, "add", "Do this", client_mutation_id="todo-mut-2")
+        inv.save_todo(case, "Do this", client_mutation_id="todo-mut-2")

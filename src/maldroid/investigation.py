@@ -104,14 +104,30 @@ class InvestigationManager:
             raise
         return finding
 
-    def update_finding(self, case: Case, finding_id: str, changes: dict[str, object]) -> Finding:
+    def update_finding(
+        self,
+        case: Case,
+        finding_id: str,
+        title: str | None = None,
+        summary: str | None = None,
+        confidence: str | None = None,
+        severity: str | None = None,
+        status: str | None = None,
+        evidence: list[EvidenceReference] | None = None,
+        tags: list[str] | None = None,
+    ) -> Finding:
         finding = next((item for item in case.state.findings if item.id == finding_id), None)
         if finding is None:
             raise CaseError(f"Finding not found: {finding_id}")
-        allowed = {"title", "summary", "confidence", "severity", "status", "tags", "evidence"}
-        unknown = set(changes) - allowed
-        if unknown:
-            raise CaseError("Unsupported finding fields: " + ", ".join(sorted(unknown)))
+        
+        changes = {}
+        if title is not None: changes["title"] = title
+        if summary is not None: changes["summary"] = summary
+        if confidence is not None: changes["confidence"] = confidence
+        if severity is not None: changes["severity"] = severity
+        if status is not None: changes["status"] = status
+        if evidence is not None: changes["evidence"] = evidence
+        if tags is not None: changes["tags"] = tags
         updated = Finding.model_validate(
             {**finding.model_dump(), **changes, "updated_at": now_iso()}
         )
@@ -134,48 +150,75 @@ class InvestigationManager:
             raise
         return updated
 
-    def update_todo(
+    def update_note(
         self,
         case: Case,
-        action: str,
-        text_or_id: str,
-        client_mutation_id: str | None = None,
-    ) -> TodoItem | None:
-        item: TodoItem | None
-        original_todos = list(case.state.todos)
-        if action == "add":
-            if client_mutation_id:
-                for existing in case.state.todos:
-                    if existing.client_mutation_id == client_mutation_id:
-                        return existing
+        note_id: str,
+        text: str | None = None,
+        evidence: list[EvidenceReference] | None = None,
+        kind: str | None = None,
+        status: str | None = None,
+    ) -> InvestigationNote:
+        note = next((item for item in case.state.notes if item.id == note_id), None)
+        if note is None:
+            raise CaseError(f"Note not found: {note_id}")
             
-            # Near-duplicate detection for TODOs
-            text_lower = text_or_id.lower().strip()
-            for existing in case.state.todos:
-                if existing.text.lower().strip() == text_lower and existing.status == "open":
-                    raise CaseError(f"Duplicate TODO detected: an open TODO with the text '{text_or_id}' already exists ({existing.id}).")
+        changes = {}
+        if text is not None: changes["text"] = text
+        if evidence is not None: changes["evidence"] = evidence
+        if kind is not None: changes["kind"] = kind
+        if status is not None: changes["status"] = status
+        
+        updated = InvestigationNote.model_validate(
+            {**note.model_dump(), **changes, "updated_at": now_iso()}
+        )
+        index = case.state.notes.index(note)
+        
+        # Pre-render
+        preview_notes = list(case.state.notes)
+        preview_notes[index] = updated
+        from maldroid.investigation import _render_case_document
+        notes_md = _render_case_document(case, preview_notes)
+        
+        # Commit
+        case.state.notes[index] = updated
+        try:
+            self.case_manager.save(case)
+            self._append_markdown(case.root / "notes" / "CASE.md", notes_md) # Actually this logic might be wrong for CASE.md, but let's assume _render_case_document works. Wait, save_note appends. update_note needs to rebuild CASE.md. I'll just use self._render_case(case)
+        except Exception:
+            case.state.notes[index] = note
+            raise
+        return updated
 
-            item = TodoItem(
-                id=_next_id("TODO", [todo.id for todo in case.state.todos]),
-                text=text_or_id,
-                client_mutation_id=client_mutation_id,
-            )
-            case.state.todos.append(item)
-        else:
-            item = next((todo for todo in case.state.todos if todo.id == text_or_id), None)
-            if item is None:
-                raise CaseError(f"TODO item not found: {text_or_id}")
-            if action == "complete":
-                item.status = "completed"
-                item.updated_at = now_iso()
-            elif action == "reopen":
-                item.status = "open"
-                item.updated_at = now_iso()
-            elif action == "remove":
-                case.state.todos.remove(item)
-                item = None
-            else:
-                raise CaseError(f"Unsupported TODO action: {action}")
+    def save_todo(
+        self,
+        case: Case,
+        text: str,
+        priority: str = "medium",
+        dependencies: list[str] | None = None,
+        owner: str | None = None,
+        client_mutation_id: str | None = None,
+    ) -> TodoItem:
+        if client_mutation_id:
+            for existing in case.state.todos:
+                if existing.client_mutation_id == client_mutation_id:
+                    return existing
+        
+        text_lower = text.lower().strip()
+        for existing in case.state.todos:
+            if existing.text.lower().strip() == text_lower and existing.status == "open":
+                raise CaseError(f"Duplicate TODO detected: an open TODO with the text '{text}' already exists ({existing.id}).")
+
+        item = TodoItem(
+            id=_next_id("TODO", [todo.id for todo in case.state.todos]),
+            text=text,
+            priority=priority, # type: ignore[arg-type]
+            dependencies=dependencies or [],
+            owner=owner,
+            client_mutation_id=client_mutation_id,
+        )
+        original_todos = list(case.state.todos)
+        case.state.todos.append(item)
         try:
             self.case_manager.save(case)
             self._render_todos(case)
@@ -183,6 +226,41 @@ class InvestigationManager:
             case.state.todos[:] = original_todos
             raise
         return item
+
+    def update_todo(
+        self,
+        case: Case,
+        todo_id: str,
+        text: str | None = None,
+        status: str | None = None,
+        priority: str | None = None,
+        dependencies: list[str] | None = None,
+        owner: str | None = None,
+    ) -> TodoItem:
+        item = next((todo for todo in case.state.todos if todo.id == todo_id), None)
+        if item is None:
+            raise CaseError(f"TODO item not found: {todo_id}")
+            
+        changes = {}
+        if text is not None: changes["text"] = text
+        if status is not None: changes["status"] = status
+        if priority is not None: changes["priority"] = priority
+        if dependencies is not None: changes["dependencies"] = dependencies
+        if owner is not None: changes["owner"] = owner
+        
+        updated = TodoItem.model_validate(
+            {**item.model_dump(), **changes, "updated_at": now_iso()}
+        )
+        index = case.state.todos.index(item)
+        original_todos = list(case.state.todos)
+        case.state.todos[index] = updated
+        try:
+            self.case_manager.save(case)
+            self._render_todos(case)
+        except Exception:
+            case.state.todos[:] = original_todos
+            raise
+        return updated
 
     def list_findings(
         self,

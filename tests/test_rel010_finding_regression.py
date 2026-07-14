@@ -357,23 +357,25 @@ def test_aud008_duplicate_finding_on_retry(app_config: AppConfig) -> None:
     After the fix, repeated identical calls with a mutation key must return the original.
     """
     _, case, investigation, _ = make_case(app_config)
-
     # Simulate a retry: same title and summary called twice
     kwargs = dict(
         case=case,
         title="Duplicate network call",
         summary="Found duplicate network call pattern in decoded bundle.",
+        client_mutation_id="retry-key"
     )
     investigation.save_finding(**kwargs)  # type: ignore[arg-type]
-    investigation.save_finding(**kwargs)  # type: ignore[arg-type]
+    f2 = investigation.save_finding(**kwargs)  # type: ignore[arg-type]
 
-    # AUD-008: Two separate Findings are created — retry causes duplication
-    assert len(case.state.findings) == 2, (
-        "AUD-008 regression confirmed: duplicate save_finding calls create two records. "
-        "After REL-015 an idempotency key must deduplicate retries."
-    )
+    # AUD-008 (post-fix REL-015): The finding is deduplicated via client_mutation_id
+    assert len(case.state.findings) == 1, "Idempotency key must deduplicate retries."
 
+    import pytest
+    from maldroid.exceptions import CaseError
 
+    # Without a mutation ID, duplicate titles raise an error
+    with pytest.raises(CaseError, match="Duplicate finding detected"):
+        investigation.save_finding(case=case, title="Duplicate network call", summary="Different")
 # ---------------------------------------------------------------------------
 # Full valid payload — must succeed (baseline)
 # ---------------------------------------------------------------------------

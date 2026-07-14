@@ -399,8 +399,8 @@ class StructuredStateClient:
                 tool_calls=[
                     ToolCall(
                         id="todo-add",
-                        name=mcp_tool_name("update_todo"),
-                        arguments='{"action":"add","text_or_id":"Inspect sample metadata"}',
+                        name=mcp_tool_name("save_todo"),
+                        arguments='{"text":"Inspect sample metadata"}',
                     )
                 ],
             )
@@ -428,7 +428,7 @@ class StructuredStateClient:
                     ToolCall(
                         id="todo-complete",
                         name=mcp_tool_name("update_todo"),
-                        arguments='{"action":"complete","text_or_id":"TODO-0001"}',
+                        arguments='{"todo_id":"TODO-0001", "status":"completed"}',
                     )
                 ],
             )

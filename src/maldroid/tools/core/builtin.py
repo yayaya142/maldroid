@@ -101,13 +101,38 @@ class SaveFindingInput(Arguments):
 
 class UpdateFindingInput(Arguments):
     finding_id: str
-    changes: dict[str, Any]
+    title: str | None = Field(default=None, min_length=1, max_length=300)
+    summary: str | None = Field(default=None, min_length=1, max_length=20000)
+    confidence: Literal["low", "medium", "high"] | None = None
+    severity: Literal["informational", "low", "medium", "high", "critical"] | None = None
+    status: Literal["tentative", "confirmed", "rejected", "resolved", "archived"] | None = None
+    evidence: list[EvidenceReference] | None = None
+    tags: list[str] | None = None
+
+
+class UpdateNoteInput(Arguments):
+    note_id: str
+    text: str | None = Field(default=None, min_length=1, max_length=50000)
+    evidence: list[EvidenceReference] | None = None
+    kind: Literal["general", "checkpoint", "decision"] | None = None
+    status: Literal["active", "archived"] | None = None
+
+
+class SaveTodoInput(Arguments):
+    text: str = Field(min_length=1, max_length=1000)
+    priority: Literal["low", "medium", "high"] = "medium"
+    dependencies: list[str] = Field(default_factory=list)
+    owner: str | None = None
+    client_mutation_id: str | None = Field(default=None, description="Optional ID for idempotent retries")
 
 
 class UpdateTodoInput(Arguments):
-    action: Literal["add", "complete", "reopen", "remove"]
-    text_or_id: str
-    client_mutation_id: str | None = Field(default=None, description="Optional ID for idempotent retries")
+    todo_id: str
+    text: str | None = Field(default=None, min_length=1, max_length=1000)
+    status: Literal["open", "completed", "blocked"] | None = None
+    priority: Literal["low", "medium", "high"] | None = None
+    dependencies: list[str] | None = None
+    owner: str | None = None
 
 
 class KnowledgeSearchInput(Arguments):
@@ -414,16 +439,53 @@ def save_finding(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
 def update_finding(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
     values = UpdateFindingInput.model_validate(arguments)
     return context.investigation.update_finding(
-        context.case, values.finding_id, values.changes
+        context.case,
+        values.finding_id,
+        title=values.title,
+        summary=values.summary,
+        confidence=values.confidence,
+        severity=values.severity,
+        status=values.status,
+        evidence=values.evidence,
+        tags=values.tags,
     ).model_dump()
 
 
-def update_todo(context: ToolContext, arguments: BaseModel) -> dict[str, Any] | None:
+def update_note(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
+    values = UpdateNoteInput.model_validate(arguments)
+    return context.investigation.update_note(
+        context.case,
+        values.note_id,
+        text=values.text,
+        evidence=values.evidence,
+        kind=values.kind,
+        status=values.status,
+    ).model_dump()
+
+
+def save_todo(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
+    values = SaveTodoInput.model_validate(arguments)
+    return context.investigation.save_todo(
+        context.case,
+        values.text,
+        priority=values.priority,
+        dependencies=values.dependencies,
+        owner=values.owner,
+        client_mutation_id=values.client_mutation_id,
+    ).model_dump()
+
+
+def update_todo(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
     values = UpdateTodoInput.model_validate(arguments)
-    result = context.investigation.update_todo(
-        context.case, values.action, values.text_or_id, values.client_mutation_id
-    )
-    return result.model_dump() if result else None
+    return context.investigation.update_todo(
+        context.case,
+        values.todo_id,
+        text=values.text,
+        status=values.status,
+        priority=values.priority,
+        dependencies=values.dependencies,
+        owner=values.owner,
+    ).model_dump()
 
 
 def search_knowledge(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
@@ -605,25 +667,6 @@ def register_core_tools(registry: ToolRegistry) -> None:
             Arguments,
             read_case_state,
         ),
-        ("save_note", "Save a persistent investigation note.", SaveNoteInput, save_note),
-        (
-            "save_finding",
-            "Save a structured evidence-backed finding.",
-            SaveFindingInput,
-            save_finding,
-        ),
-        (
-            "update_finding",
-            "Update an existing structured finding.",
-            UpdateFindingInput,
-            update_finding,
-        ),
-        (
-            "update_todo",
-            "Add, complete, reopen, or remove an investigation TODO.",
-            UpdateTodoInput,
-            update_todo,
-        ),
         (
             "search_knowledge",
             "Search bounded local research playbooks.",
@@ -660,20 +703,16 @@ def register_core_tools(registry: ToolRegistry) -> None:
             ListFindingsInput,
             list_findings,
         ),
-        (
-            "get_finding",
-            "Get a single finding by ID including all evidence and tags.",
-            GetFindingInput,
-            get_finding,
-        ),
-        ("list_notes", "List investigation notes with pagination.", ListNotesInput, list_notes),
-        ("get_note", "Get a single investigation note by ID.", GetNoteInput, get_note),
-        (
-            "list_todos",
-            "List TODO items with optional completed items.",
-            ListTodosInput,
-            list_todos,
-        ),
+        ("get_finding", "Get a single finding by ID.", GetFindingInput, get_finding),
+        ("save_finding", "Save a new finding.", SaveFindingInput, save_finding),
+        ("update_finding", "Update an existing finding.", UpdateFindingInput, update_finding),
+        ("list_notes", "List investigation notes.", ListNotesInput, list_notes),
+        ("get_note", "Get a single investigation note.", GetNoteInput, get_note),
+        ("save_note", "Save an investigation note.", SaveNoteInput, save_note),
+        ("update_note", "Update an investigation note.", UpdateNoteInput, update_note),
+        ("list_todos", "List TODO items.", ListTodosInput, list_todos),
+        ("save_todo", "Save a new TODO item.", SaveTodoInput, save_todo),
+        ("update_todo", "Update an existing TODO item.", UpdateTodoInput, update_todo),
         (
             "validate_evidence_reference",
             "Validate an evidence reference before saving it.",
