@@ -756,7 +756,12 @@ def _run_case(
         )
         registry, local_dispatcher = _build_tool_runtime(config, case, manager)
         investigation = local_dispatcher.context.investigation
-        mcp_server = MalDroidMcpServer(config, registry, local_dispatcher)
+        mcp_server = MalDroidMcpServer(
+            config,
+            registry,
+            local_dispatcher,
+            model_server_port=command.port,
+        )
         mcp_endpoint = mcp_server.start(mcp_port)
         console.print(f"MCP endpoint: {mcp_endpoint}")
         dispatcher = McpToolClient(

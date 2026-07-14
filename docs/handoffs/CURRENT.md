@@ -45,27 +45,31 @@ Run target-machine acceptance with the authorized Gemma 4 model and an external 
 - By explicit owner decision, llama.cpp starts with `--ui --ui-mcp-proxy --tools all`. Built-in
   WebUI shell/file tools run with host permissions outside MalDroid case policy; managed chat tools
   still use the case-scoped Python MCP dispatcher.
+- The user's macOS test confirmed that the normal command already owns the port 8765 listener.
+  Browser initialization failed because MCP transport security allowed no `Origin` header. The
+  server now allows only origins on the active loopback llama-server port and emits CORS headers;
+  `/mcp` remains the correct Streamable HTTP endpoint and no second terminal is required.
 
 ## Verification
 
 Verified in the local isolated Python 3.12 venv:
 
 ```bash
-./scripts/dev format-check
-./scripts/dev lint
-./scripts/dev test --cov=maldroid
-PYTHON="$PWD/.venv/bin/python" ./install.sh --dry-run
+./scripts/dev release-check
 ```
 
-Results: the consolidated `./scripts/dev release-check` passed. Ruff formatting and lint passed;
-mypy passed for 34 source files; 50 tests passed with 68% line coverage. Project hygiene,
-installer dry-run, JSON parsing tests, nested help/version/config UX, MCP protocol integration, and
-wheel build/archive verification passed. The wheel is `dist/maldroid-0.1.0-py3-none-any.whl`.
+Results: the consolidated release check passed. Ruff formatting and lint passed; mypy passed for 34
+source files; 52 tests passed with 68% line coverage. Project hygiene, installer dry-run, browser
+MCP origin/CORS coverage, JSON parsing tests, nested help/version/config UX, protocol integration,
+and wheel build/archive verification passed. The wheel is
+`dist/maldroid-0.1.0-py3-none-any.whl`.
 
 ## Known limitations
 
 - Target-platform and real-model acceptance are pending.
-- An external desktop MCP client has not been available in this Linux workspace for UI acceptance.
+- The browser-origin behavior is covered with an MCP handshake, CORS preflight, and hostile-origin
+  rejection tests. Final visual reconnection in the user's macOS llama.cpp WebUI is pending after
+  reinstalling the updated package.
 - Version-specific Blutter and multi-architecture external-tool fixtures need expansion.
 
 ## Next command
@@ -74,5 +78,5 @@ wheel build/archive verification passed. The wheel is `dist/maldroid-0.1.0-py3-n
 maldroid --help
 ```
 
-On the authorized macOS host, install the wheel, enable completion, run `config validate`, and
-continue `REL-001` with the real model and external MCP client.
+On the authorized macOS host, pull and reinstall MalDroid, start a normal case, then reconnect
+`http://127.0.0.1:8765/mcp` in the llama.cpp WebUI without launching `maldroid mcp serve` separately.

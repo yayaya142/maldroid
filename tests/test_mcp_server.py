@@ -3,6 +3,7 @@ from __future__ import annotations
 import socket
 
 import anyio
+import httpx
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
@@ -47,6 +48,21 @@ async def list_tool_names(endpoint: str) -> set[str]:
         return {tool.name for tool in result.tools}
 
 
+async def list_tool_names_from_browser(endpoint: str, origin: str) -> set[str]:
+    async with (
+        httpx.AsyncClient(headers={"Origin": origin}) as http_client,
+        streamable_http_client(endpoint, http_client=http_client) as (
+            read,
+            write,
+            _session_id,
+        ),
+        ClientSession(read, write) as session,
+    ):
+        await session.initialize()
+        result = await session.list_tools()
+        return {tool.name for tool in result.tools}
+
+
 def test_mcp_lists_profile_tools_and_executes_through_http(app_config: AppConfig) -> None:
     server, dispatcher = make_server(app_config)
     endpoint = server.start()
@@ -63,6 +79,55 @@ def test_mcp_lists_profile_tools_and_executes_through_http(app_config: AppConfig
         dispatcher.context.case.state.active_profile = "react-native"
         names = anyio.run(list_tool_names, endpoint)
         assert "inspect_javascript_bundle" in names
+    finally:
+        server.stop()
+
+
+def test_mcp_accepts_llama_webui_origin_and_cors_preflight(app_config: AppConfig) -> None:
+    server, _dispatcher = make_server(app_config)
+    endpoint = server.start()
+    origin = f"http://127.0.0.1:{app_config.llama.preferred_port}"
+    try:
+        names = anyio.run(list_tool_names_from_browser, endpoint, origin)
+        assert "read_case_state" in names
+
+        response = httpx.options(
+            endpoint,
+            headers={
+                "Origin": origin,
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "content-type,mcp-protocol-version",
+            },
+        )
+        assert response.status_code == 200
+        assert response.headers["access-control-allow-origin"] == origin
+    finally:
+        server.stop()
+
+
+def test_mcp_rejects_non_llama_browser_origin(app_config: AppConfig) -> None:
+    server, _dispatcher = make_server(app_config)
+    endpoint = server.start()
+    try:
+        response = httpx.post(
+            endpoint,
+            headers={
+                "Origin": "https://untrusted.example",
+                "Content-Type": "application/json",
+                "Accept": "application/json, text/event-stream",
+            },
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-06-18",
+                    "capabilities": {},
+                    "clientInfo": {"name": "untrusted", "version": "1"},
+                },
+            },
+        )
+        assert response.status_code == 403
     finally:
         server.stop()
 

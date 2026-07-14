@@ -15,7 +15,9 @@
    Confirm the llama.cpp UI connects without an API key under the default configuration, then
    enable `llama.api_key_enabled` once and verify the authenticated managed-client path.
    In WebUI, verify the owner can select built-in tools and that `doctor` labels their host-level
-   shell and file authority clearly.
+   shell and file authority clearly. After upgrading the installed package, verify that the
+   automatically started MCP endpoint connects from the WebUI at `/mcp` with no second terminal,
+   both directly and with the per-connection proxy enabled.
 2. `REL-002` — Run the full suite and installer lifecycle on Kali rolling and Apple Silicon.
 3. `COMPAT-001` — Expand benign multi-architecture ELF and versioned Blutter fixtures on target
    platforms and record exact external-tool versions.

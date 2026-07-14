@@ -19,6 +19,7 @@ from mcp.server.lowlevel import Server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.server.transport_security import TransportSecuritySettings
 from starlette.applications import Starlette
+from starlette.middleware.cors import CORSMiddleware
 from starlette.routing import Route
 from starlette.types import Receive, Scope, Send
 
@@ -45,11 +46,13 @@ class MalDroidMcpServer:
         config: AppConfig,
         registry: ToolRegistry,
         dispatcher: ToolDispatcher,
+        model_server_port: int | None = None,
     ) -> None:
         self.config = config
         self.registry = registry
         self.dispatcher = dispatcher
         self.host = config.mcp.host
+        self.model_server_port = model_server_port or config.llama.preferred_port
         self.port: int | None = None
         self._uvicorn: uvicorn.Server | None = None
         self._thread: threading.Thread | None = None
@@ -102,10 +105,15 @@ class MalDroidMcpServer:
                 isError=result.status == "error",
             )
 
+        browser_origins = [
+            f"http://127.0.0.1:{self.model_server_port}",
+            f"http://localhost:{self.model_server_port}",
+            f"http://[::1]:{self.model_server_port}",
+        ]
         security = TransportSecuritySettings(
             enable_dns_rebinding_protection=True,
             allowed_hosts=[f"127.0.0.1:{port}", f"localhost:{port}"],
-            allowed_origins=[],
+            allowed_origins=browser_origins,
         )
         manager = StreamableHTTPSessionManager(
             app=server,
@@ -120,10 +128,18 @@ class MalDroidMcpServer:
             async with manager.run():
                 yield
 
-        return Starlette(
+        app = Starlette(
             routes=[Route("/mcp", endpoint=handler, methods=["GET", "POST", "DELETE"])],
             lifespan=lifespan,
         )
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=browser_origins,
+            allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+            allow_headers=["*"],
+            expose_headers=["Mcp-Session-Id"],
+        )
+        return app
 
     def _bind(self, requested_port: int | None) -> socket.socket:
         fixed_port = requested_port or self.config.mcp.preferred_port

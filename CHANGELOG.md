@@ -44,3 +44,5 @@
   through `/status` and `/server` only when authentication is enabled.
 - Added explicit defaults for `--ui --ui-mcp-proxy --tools all`, with doctor warnings that built-in
   shell and file operations run outside MalDroid case policy.
+- Fixed llama.cpp WebUI MCP connections by allowing only the managed loopback WebUI origins through
+  MCP DNS-rebinding checks and adding standards-compliant CORS preflight/response headers.

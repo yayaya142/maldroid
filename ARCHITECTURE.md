@@ -58,7 +58,9 @@ active profile schemas and execute them through the separate Python MCP dispatch
 The Python MCP server binds `127.0.0.1` only, enables MCP transport DNS-rebinding protection, and
 uses a pre-bound socket. Its fixed default port is 8765. Every collision fails rather than changing
 the client endpoint silently. Interactive chat owns the MCP lifecycle, while `maldroid mcp serve`
-provides a model-independent foreground lifecycle. Both print the effective endpoint.
+provides a model-independent foreground lifecycle. Both print the effective endpoint. The MCP
+transport accepts browser origins only from the managed loopback llama-server port and emits the
+CORS headers required by the llama.cpp WebUI. Other browser origins remain rejected.
 
 ## Message and tool lifecycle
 

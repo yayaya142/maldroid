@@ -46,12 +46,16 @@ Last updated: 2026-07-14
   active per-run key only when the user has explicitly enabled authentication.
 - Owner-controlled llama.cpp WebUI, MCP proxy, and all built-in host tools are enabled by default on
   loopback. They are explicitly documented as outside MalDroid case path and audit policy.
+- The managed MCP server accepts only the active local llama.cpp WebUI origins and supplies complete
+  CORS preflight/response handling, so the normal one-command workflow connects at `/mcp` without a
+  second terminal.
 
 ## Partial or environment-gated
 
 - Real Gemma 4 tool-call verification requires the supplied macOS model and local llama-server.
 - A physical Apple Silicon smoke test remains pending; hosted macOS 26 is the current CI target.
-- External-client MCP acceptance on the user's macOS client remains environment-gated.
+- External-client MCP protocol acceptance passes on the user's macOS listener; final WebUI
+  reconnection after installing the browser-origin fix remains to be confirmed.
 - Installer dry-run passes in hosted macOS and Kali; real install/uninstall smoke tests remain
   required on the user's target machines.
 

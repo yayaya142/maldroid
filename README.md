@@ -109,6 +109,12 @@ entry is:
 }
 ```
 
+The normal `maldroid` command starts this MCP server in the background inside the same Python
+process; a second terminal is not required. The endpoint uses modern MCP Streamable HTTP, so its
+path is `/mcp`, not the legacy SSE path `/sse`. MalDroid permits browser requests only from the
+active loopback llama.cpp WebUI port and includes the required CORS response headers. The WebUI may
+connect directly or through its per-connection `Use llama-server proxy` option.
+
 The MCP port is fixed. Its default is 8765, and MalDroid fails clearly if it is occupied rather
 than silently changing the endpoint. Set another persistent fixed port once with
 `maldroid config set mcp.preferred_port PORT`; `--port` on `mcp serve` and `--mcp-port` on normal
@@ -180,6 +186,9 @@ excerpts enter model context.
 - Server startup failure: inspect `<case>/.maldroid/logs/llama-server.stderr.log`.
 - MCP port unavailable: stop the process already using it, or persist another fixed value with
   `maldroid config set mcp.preferred_port PORT` and update the MCP client once.
+- WebUI MCP `Failed to fetch`: use the exact URL `http://127.0.0.1:8765/mcp`, confirm the normal
+  MalDroid session is still open, and reinstall or upgrade MalDroid if the browser-origin fix is
+  not present. `/sse` is only for legacy MCP servers.
 - Python venv unavailable on Kali: install `python3-full` and `python3-venv`.
 
 Use `--debug` only when a traceback is needed. Uninstall safely with `./uninstall.sh`; cases and

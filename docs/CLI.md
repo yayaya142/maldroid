@@ -77,6 +77,12 @@ maldroid mcp serve /path/to/case --json
 The connector URL is fixed at `http://127.0.0.1:8765/mcp` unless configuration changes it. A port
 collision is an error. `client-config` prints a ready-to-paste JSON connector definition.
 
+Normal case commands start the MCP listener in a background thread inside the MalDroid process, so
+do not run `maldroid mcp serve` in a second terminal. `/mcp` is the Streamable HTTP endpoint;
+`/sse` is a legacy transport path used by some unrelated servers. Browser access is limited to the
+active loopback llama.cpp WebUI origin, with direct CORS and the optional llama-server proxy both
+supported.
+
 ## Diagnostics and inventory
 
 ```bash
