@@ -68,6 +68,8 @@ class LlamaServerProcess:
         assert self.command is not None
         deadline = time.monotonic() + self.config.llama.startup_timeout_seconds
         health = self.base_url + "/health"
+        # Loopback health checks must never leave the machine through inherited proxy settings.
+        local_opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         while time.monotonic() < deadline:
             exit_code = self.process.poll()
             if exit_code is not None:
@@ -77,7 +79,7 @@ class LlamaServerProcess:
                     f"See: {self.case_root / '.maldroid/logs/llama-server.stderr.log'}"
                 )
             try:
-                with urllib.request.urlopen(health, timeout=2) as response:
+                with local_opener.open(health, timeout=2) as response:
                     payload = json.loads(response.read().decode("utf-8"))
                     if response.status == 200 and payload.get("status") == "ok":
                         return

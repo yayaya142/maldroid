@@ -1,10 +1,10 @@
 # Current Handoff
 
-Task: `PUBLISH-001`
+Task: `CI-001`
 
 ## Goal
 
-Prepare and publish the clean local history to the new public `yayaya142/maldroid` repository.
+Make the first public macOS and Kali GitHub Actions run pass after publishing the repository.
 
 ## State
 
@@ -19,6 +19,8 @@ Prepare and publish the clean local history to the new public `yayaya142/maldroi
   discovery/reset/validation, MCP connector generation, and release build scripts are implemented.
 - README and package metadata point to the real GitHub repository. The model default is home-relative
   so it resolves to the authorized path without publishing the local macOS account name.
+- The initial CI failures were isolated to ANSI-decorated help output and proxy-sensitive loopback
+  health probes. Tests now normalize ANSI, and production health checks bypass environment proxies.
 
 ## Verification
 

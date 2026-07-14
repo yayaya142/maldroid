@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from rich.text import Text
 from typer.testing import CliRunner
 
 import maldroid.cli as cli
@@ -42,8 +43,9 @@ def test_polished_help_version_and_mcp_client_config(
 
     help_result = runner.invoke(cli.app, ["help", "mcp", "serve"])
     assert help_result.exit_code == 0
-    assert "One-run fixed" in help_result.stdout
-    assert "--port" in help_result.stdout
+    plain_help = Text.from_ansi(help_result.stdout).plain
+    assert "One-run fixed" in plain_help
+    assert "--port" in plain_help
 
     client = runner.invoke(cli.app, ["mcp", "client-config"])
     assert client.exit_code == 0
@@ -125,7 +127,13 @@ def test_entrypoint_rewrites_daily_syntax(
         assert captured == arguments
 
 
-def test_process_manager_health_and_shutdown(tmp_path: Path, app_config: AppConfig) -> None:
+def test_process_manager_health_and_shutdown(
+    tmp_path: Path, app_config: AppConfig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("http_proxy", "http://127.0.0.1:9")
+    monkeypatch.setenv("HTTP_PROXY", "http://127.0.0.1:9")
+    monkeypatch.setenv("no_proxy", "")
+    monkeypatch.setenv("NO_PROXY", "")
     server_script = tmp_path / "fake-llama-server"
     server_script.write_text(
         """#!/usr/bin/env python3
