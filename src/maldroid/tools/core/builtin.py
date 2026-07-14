@@ -167,6 +167,16 @@ class ListTodosInput(Arguments):
     page_size: int = Field(default=50, ge=1, le=100)
 
 
+class ValidateEvidenceReferenceInput(Arguments):
+    """REL-014: Validate an evidence reference before saving it in a Finding or Note."""
+
+    path: str = Field(description="Case-relative path to validate")
+    start_line: int | None = Field(default=None, ge=1, description="First line (1-indexed)")
+    end_line: int | None = Field(default=None, ge=1, description="Last line (inclusive)")
+    start_offset: int | None = Field(default=None, ge=0, description="Start byte offset")
+    end_offset: int | None = Field(default=None, ge=0, description="End byte offset")
+
+
 def list_case_files(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
     values = ListFilesInput.model_validate(arguments)
     root = context.read_path(values.path)
@@ -488,6 +498,42 @@ def list_todos(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
     )
 
 
+def validate_evidence_reference(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
+    values = ValidateEvidenceReferenceInput.model_validate(arguments)
+    try:
+        path = context.read_path(values.path)
+    except Exception as e:
+        return {"valid": False, "error": str(e)}
+        
+    if not path.is_file():
+        return {"valid": False, "error": f"File not found or is not a regular file: {values.path}"}
+
+    if values.start_line is not None and values.end_line is not None:
+        if values.end_line < values.start_line:
+            return {"valid": False, "error": f"end_line ({values.end_line}) cannot be less than start_line ({values.start_line})"}
+        
+        try:
+            line_count = sum(1 for _ in path.open("r", encoding="utf-8", errors="ignore"))
+            if values.start_line > line_count:
+                return {"valid": False, "error": f"start_line ({values.start_line}) is beyond file length ({line_count} lines)"}
+            if values.end_line > line_count:
+                return {"valid": False, "error": f"end_line ({values.end_line}) is beyond file length ({line_count} lines)"}
+        except Exception as e:
+            return {"valid": False, "error": f"Error counting lines: {e}"}
+
+    if values.start_offset is not None and values.end_offset is not None:
+        if values.end_offset < values.start_offset:
+            return {"valid": False, "error": f"end_offset ({values.end_offset}) cannot be less than start_offset ({values.start_offset})"}
+        
+        file_size = path.stat().st_size
+        if values.start_offset > file_size:
+            return {"valid": False, "error": f"start_offset ({values.start_offset}) is beyond file size ({file_size} bytes)"}
+        if values.end_offset > file_size:
+            return {"valid": False, "error": f"end_offset ({values.end_offset}) is beyond file size ({file_size} bytes)"}
+
+    return {"valid": True, "message": "Evidence reference is valid."}
+
+
 def register_core_tools(registry: ToolRegistry) -> None:
     definitions: list[tuple[str, str, type[BaseModel], ToolHandler]] = [
         ("list_case_files", "List a bounded case file tree.", ListFilesInput, list_case_files),
@@ -619,6 +665,12 @@ def register_core_tools(registry: ToolRegistry) -> None:
             "List TODO items with optional completed items.",
             ListTodosInput,
             list_todos,
+        ),
+        (
+            "validate_evidence_reference",
+            "Validate an evidence reference before saving it.",
+            ValidateEvidenceReferenceInput,
+            validate_evidence_reference,
         ),
     ]
     for name, description, model, handler in definitions:
