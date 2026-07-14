@@ -83,6 +83,9 @@ do not run `maldroid mcp serve` in a second terminal. `/mcp` is the Streamable H
 active loopback llama.cpp WebUI origin, with direct CORS and the optional llama-server proxy both
 supported.
 
+All names returned by MCP `tools/list` and `maldroid tools` begin with `MalDroid_`. The prefix also
+applies to model-generated tool calls and the local execution audit.
+
 ## Diagnostics and inventory
 
 ```bash
@@ -98,6 +101,10 @@ maldroid tools --profile react-native --json
 `--model-tool-test` is interactive and intentionally cannot be combined with `--json`.
 
 ## Exit behavior
+
+`/exit`, Ctrl-C, terminal-close `SIGHUP`, and `SIGTERM` all enter the same cleanup path. MalDroid
+stops the MCP listener, terminates the managed llama-server process group, and escalates to a forced
+group kill only when graceful shutdown times out.
 
 - Exit code `0`: command completed normally.
 - Exit code `1`: validated application, configuration, case, security, server, or tool failure.

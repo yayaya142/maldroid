@@ -8,7 +8,7 @@ from maldroid.investigation import InvestigationManager
 from maldroid.large_files import LargeTextIndexer
 from maldroid.paths import PathPolicy
 from maldroid.tools.dispatcher import ToolDispatcher
-from maldroid.tools.models import ToolContext
+from maldroid.tools.models import ToolContext, mcp_tool_name
 from maldroid.tools.registry import build_registry
 
 
@@ -59,12 +59,13 @@ def test_react_native_module_index_and_bounded_search(app_config: AppConfig) -> 
         path_policy=PathPolicy(case.root),
     )
     dispatcher = ToolDispatcher(registry, context)
-    indexed = dispatcher.execute("index_metro_bundle", {"path": bundle.name})
+    indexed = dispatcher.execute(mcp_tool_name("index_metro_bundle"), {"path": bundle.name})
     assert indexed.status == "completed"
     assert indexed.data["module_count"] == 2
-    modules = dispatcher.execute("list_bundle_modules", {"path": bundle.name})
+    modules = dispatcher.execute(mcp_tool_name("list_bundle_modules"), {"path": bundle.name})
     assert [item["module"] for item in modules.data["modules"]] == ["12", "34"]
     search = dispatcher.execute(
-        "search_bundle_modules", {"path": bundle.name, "query": "AccessibilityService"}
+        mcp_tool_name("search_bundle_modules"),
+        {"path": bundle.name, "query": "AccessibilityService"},
     )
     assert search.data["results"][0]["module"] == "34"

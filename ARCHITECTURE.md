@@ -47,8 +47,9 @@ append-only JSONL.
 MalDroid validates the binary and model, chooses port 7575 or a safe fallback, and starts the child
 in a new process group. Model API authentication is disabled by default for direct loopback use; if
 enabled, a per-run key is generated and redacted. MalDroid polls `/v1/health` and captures stdout
-and stderr. Exit, Ctrl+C, and SIGTERM terminate the process group gracefully, then force it only
-after a timeout. Command construction remains centralized.
+and stderr. Exit, Ctrl+C, `SIGHUP`, and SIGTERM terminate the process group gracefully, then force
+it only after a timeout. An interpreter-exit hook provides a final normal-exit safeguard. Command
+construction remains centralized.
 
 The owner-controlled llama.cpp WebUI enables its MCP CORS proxy and all built-in host tools. These
 tools execute in the llama-server process with host permissions and are explicitly outside
@@ -61,6 +62,10 @@ the client endpoint silently. Interactive chat owns the MCP lifecycle, while `ma
 provides a model-independent foreground lifecycle. Both print the effective endpoint. The MCP
 transport accepts browser origins only from the managed loopback llama-server port and emits the
 CORS headers required by the llama.cpp WebUI. Other browser origins remain rejected.
+
+All public MalDroid-managed MCP tool names use the `MalDroid_` prefix. The registry applies this
+centrally before schemas are exposed, so profile discovery, model calls, external clients, audit
+records, and direct internal dispatch all use the same unambiguous names.
 
 ## Message and tool lifecycle
 

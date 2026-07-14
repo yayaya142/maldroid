@@ -115,6 +115,10 @@ path is `/mcp`, not the legacy SSE path `/sse`. MalDroid permits browser request
 active loopback llama.cpp WebUI port and includes the required CORS response headers. The WebUI may
 connect directly or through its per-connection `Use llama-server proxy` option.
 
+Every managed tool name starts with `MalDroid_`, for example `MalDroid_read_case_state` and
+`MalDroid_search_text`. This keeps MalDroid tools recognizable when the WebUI connects several MCP
+servers at once.
+
 The MCP port is fixed. Its default is 8765, and MalDroid fails clearly if it is occupied rather
 than silently changing the endpoint. Set another persistent fixed port once with
 `maldroid config set mcp.preferred_port PORT`; `--port` on `mcp serve` and `--mcp-port` on normal
@@ -191,8 +195,10 @@ excerpts enter model context.
   not present. `/sse` is only for legacy MCP servers.
 - Python venv unavailable on Kali: install `python3-full` and `python3-venv`.
 
-Use `--debug` only when a traceback is needed. Uninstall safely with `./uninstall.sh`; cases and
-user knowledge are retained by default.
+Use `--debug` only when a traceback is needed. Closing the terminal, pressing Ctrl-C, sending
+SIGTERM, or using `/exit` shuts down the MCP listener and the entire managed llama-server process
+group. A forceful `kill -9` cannot be handled by any application. Uninstall safely with
+`./uninstall.sh`; cases and user knowledge are retained by default.
 
 ## Distribution
 

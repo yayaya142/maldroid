@@ -2,19 +2,54 @@
 
 from __future__ import annotations
 
+import atexit
 import http.client
 import json
 import os
 import signal
 import subprocess
+import threading
 import time
-from contextlib import suppress
+from collections.abc import Iterator
+from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import BinaryIO
 
 from maldroid.config import AppConfig
 from maldroid.exceptions import ServerError
 from maldroid.llama_adapter import ServerCommand, build_server_command
+
+
+class ShutdownRequested(BaseException):
+    """Request an orderly shutdown after an operating-system termination signal."""
+
+    def __init__(self, signum: int):
+        self.signum = signum
+        super().__init__(f"Shutdown requested by signal {signum}")
+
+
+@contextmanager
+def shutdown_signal_handlers() -> Iterator[None]:
+    """Convert terminal-close and termination signals into orderly stack unwinding."""
+    if threading.current_thread() is not threading.main_thread():
+        yield
+        return
+
+    supported = [signal.SIGINT, signal.SIGTERM]
+    if hasattr(signal, "SIGHUP"):
+        supported.append(signal.SIGHUP)
+    previous = {signum: signal.getsignal(signum) for signum in supported}
+
+    def request_shutdown(signum: int, _frame: object) -> None:
+        raise ShutdownRequested(signum)
+
+    try:
+        for signum in supported:
+            signal.signal(signum, request_shutdown)
+        yield
+    finally:
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
 
 
 class LlamaServerProcess:
@@ -25,6 +60,7 @@ class LlamaServerProcess:
         self.process: subprocess.Popen[bytes] | None = None
         self._stdout: BinaryIO | None = None
         self._stderr: BinaryIO | None = None
+        self._atexit_registered = False
 
     @property
     def base_url(self) -> str:
@@ -56,6 +92,8 @@ class LlamaServerProcess:
                 cwd=self.case_root,
                 start_new_session=True,
             )
+            atexit.register(self.stop)
+            self._atexit_registered = True
             self._wait_until_ready()
             return self.command
         except Exception:
@@ -94,6 +132,9 @@ class LlamaServerProcess:
         )
 
     def stop(self, graceful_seconds: float = 8.0) -> None:
+        if self._atexit_registered:
+            atexit.unregister(self.stop)
+            self._atexit_registered = False
         process = self.process
         if process and process.poll() is None:
             with suppress(ProcessLookupError):

@@ -10,6 +10,7 @@ from maldroid.investigation import InvestigationManager
 from maldroid.process_manager import LlamaServerProcess
 from maldroid.profiles import get_profile
 from maldroid.tools.dispatcher import ToolExecutor
+from maldroid.tools.models import mcp_tool_name
 from maldroid.tools.registry import ToolRegistry
 
 HELP = """/help, /exit, /status, /profile [NAME], /tools, /files, /findings,
@@ -110,7 +111,7 @@ class InteractiveChat:
             self.console.print("\n".join(self.registry.names(self.case.state.active_profile)))
         elif name == "/files":
             self.console.print_json(
-                data=self.dispatcher.execute("list_case_files", {}).model_dump()
+                data=self.dispatcher.execute(mcp_tool_name("list_case_files"), {}).model_dump()
             )
         elif name == "/findings":
             self.console.print_json(data=[item.model_dump() for item in self.case.state.findings])
@@ -138,7 +139,8 @@ class InteractiveChat:
             )
         elif name == "/knowledge":
             tool_result = self.dispatcher.execute(
-                "search_knowledge", {"query": rest or "Android static analysis"}
+                mcp_tool_name("search_knowledge"),
+                {"query": rest or "Android static analysis"},
             )
             self.console.print_json(data=tool_result.model_dump())
         else:

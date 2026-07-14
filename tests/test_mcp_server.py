@@ -17,7 +17,7 @@ from maldroid.mcp_server import MalDroidMcpServer, McpToolClient
 from maldroid.paths import PathPolicy
 from maldroid.session_manager import SessionManager
 from maldroid.tools.dispatcher import ToolDispatcher
-from maldroid.tools.models import ToolContext
+from maldroid.tools.models import MCP_TOOL_PREFIX, ToolContext, mcp_tool_name
 from maldroid.tools.registry import build_registry
 
 
@@ -68,17 +68,18 @@ def test_mcp_lists_profile_tools_and_executes_through_http(app_config: AppConfig
     endpoint = server.start()
     try:
         names = anyio.run(list_tool_names, endpoint)
-        assert "read_case_state" in names
-        assert "inspect_javascript_bundle" not in names
+        assert mcp_tool_name("read_case_state") in names
+        assert mcp_tool_name("inspect_javascript_bundle") not in names
+        assert all(name.startswith(MCP_TOOL_PREFIX) for name in names)
 
         client = McpToolClient(endpoint)
-        result = client.execute("read_case_state", {})
+        result = client.execute(mcp_tool_name("read_case_state"), {})
         assert result.status == "completed"
         assert result.data["active_profile"] == "generic"
 
         dispatcher.context.case.state.active_profile = "react-native"
         names = anyio.run(list_tool_names, endpoint)
-        assert "inspect_javascript_bundle" in names
+        assert mcp_tool_name("inspect_javascript_bundle") in names
     finally:
         server.stop()
 
@@ -89,7 +90,7 @@ def test_mcp_accepts_llama_webui_origin_and_cors_preflight(app_config: AppConfig
     origin = f"http://127.0.0.1:{app_config.llama.preferred_port}"
     try:
         names = anyio.run(list_tool_names_from_browser, endpoint, origin)
-        assert "read_case_state" in names
+        assert mcp_tool_name("read_case_state") in names
 
         response = httpx.options(
             endpoint,
@@ -166,7 +167,13 @@ def test_agent_tool_round_trip_uses_mcp_client(app_config: AppConfig) -> None:
             if self.calls == 1:
                 return AssistantMessage(
                     content=None,
-                    tool_calls=[ToolCall(id="mcp-call", name="read_case_state", arguments="{}")],
+                    tool_calls=[
+                        ToolCall(
+                            id="mcp-call",
+                            name=mcp_tool_name("read_case_state"),
+                            arguments="{}",
+                        )
+                    ],
                 )
             assert any(message.get("role") == "tool" for message in messages)
             return AssistantMessage(content="MCP tool completed.")

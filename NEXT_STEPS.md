@@ -5,13 +5,13 @@
    version and `/props` template behavior. Acceptance: structured array/object tool call and final
    response pass through MalDroid MCP independently of WebUI built-ins. Connect an external MCP client to the printed endpoint,
    confirm the saved fixed `http://127.0.0.1:8765/mcp` endpoint reconnects across runs, list tools,
-   and call `read_case_state`. Install the generated wheel, enable zsh completion, and smoke-test
+   and call `MalDroid_read_case_state`. Install the generated wheel, enable zsh completion, and smoke-test
    `--help`, `config validate`, `doctor --json`, and `mcp client-config`.
    Verify the public clone from `https://github.com/yayaya142/maldroid.git` in a clean directory.
    Confirm installation succeeds despite unrelated global `pip` index configuration; use
    `MALDROID_PIP_INDEX_URL` only when an approved private mirror is intentionally required.
    Verify `SYSTEM_PROMPT.md` in one direct external-client session and confirm the model starts with
-   `read_case_state` and `list_case_files` before bounded evidence reads.
+   `MalDroid_read_case_state` and `MalDroid_list_case_files` before bounded evidence reads.
    Confirm the llama.cpp UI connects without an API key under the default configuration, then
    enable `llama.api_key_enabled` once and verify the authenticated managed-client path.
    In WebUI, verify the owner can select built-in tools and that `doctor` labels their host-level

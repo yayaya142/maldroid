@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from maldroid.exceptions import ToolExecutionError
-from maldroid.tools.models import ToolDefinition
+from maldroid.tools.models import ToolDefinition, mcp_tool_name
 
 
 class ToolRegistry:
@@ -11,6 +13,7 @@ class ToolRegistry:
         self._tools: dict[str, ToolDefinition] = {}
 
     def register(self, definition: ToolDefinition) -> None:
+        definition = replace(definition, name=mcp_tool_name(definition.name))
         if definition.name in self._tools:
             raise ToolExecutionError(f"Duplicate tool name: {definition.name}")
         self._tools[definition.name] = definition

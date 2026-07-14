@@ -49,13 +49,17 @@ Last updated: 2026-07-14
 - The managed MCP server accepts only the active local llama.cpp WebUI origins and supplies complete
   CORS preflight/response handling, so the normal one-command workflow connects at `/mcp` without a
   second terminal.
+- Terminal-close, interrupt, and termination signals now stop both the MCP listener and the complete
+  llama-server process group; normal interpreter exit has an additional cleanup hook.
+- Every exposed managed MCP tool is namespaced with the `MalDroid_` prefix across discovery,
+  execution, prompts, audit records, CLI inventory, and documentation.
 
 ## Partial or environment-gated
 
 - Real Gemma 4 tool-call verification requires the supplied macOS model and local llama-server.
 - A physical Apple Silicon smoke test remains pending; hosted macOS 26 is the current CI target.
-- External-client MCP protocol acceptance passes on the user's macOS listener; final WebUI
-  reconnection after installing the browser-origin fix remains to be confirmed.
+- External MCP discovery and reconnection at the fixed endpoint pass in the user's macOS llama.cpp
+  WebUI after the browser-origin fix.
 - Installer dry-run passes in hosted macOS and Kali; real install/uninstall smoke tests remain
   required on the user's target machines.
 

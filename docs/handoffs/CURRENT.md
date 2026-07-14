@@ -49,6 +49,11 @@ Run target-machine acceptance with the authorized Gemma 4 model and an external 
   Browser initialization failed because MCP transport security allowed no `Origin` header. The
   server now allows only origins on the active loopback llama-server port and emits CORS headers;
   `/mcp` remains the correct Streamable HTTP endpoint and no second terminal is required.
+- The user confirmed the updated endpoint now connects successfully in the macOS llama.cpp WebUI.
+- MalDroid now handles terminal-close `SIGHUP`, Ctrl-C, and `SIGTERM` with the same orderly cleanup
+  path and registers an interpreter-exit fallback for the managed llama-server process group.
+- The registry centrally publishes every managed tool as `MalDroid_<tool_name>`; prompts, internal
+  slash commands, tests, CLI inventory, audit events, and external MCP discovery use that prefix.
 
 ## Verification
 
@@ -59,17 +64,16 @@ Verified in the local isolated Python 3.12 venv:
 ```
 
 Results: the consolidated release check passed. Ruff formatting and lint passed; mypy passed for 34
-source files; 52 tests passed with 68% line coverage. Project hygiene, installer dry-run, browser
-MCP origin/CORS coverage, JSON parsing tests, nested help/version/config UX, protocol integration,
-and wheel build/archive verification passed. The wheel is
+source files; 53 tests passed with 68% line coverage. Project hygiene, installer dry-run, browser
+MCP origin/CORS coverage, termination-signal cleanup, namespaced tool discovery, JSON parsing tests,
+nested help/version/config UX, protocol integration, and wheel build verification passed. The wheel is
 `dist/maldroid-0.1.0-py3-none-any.whl`.
 
 ## Known limitations
 
 - Target-platform and real-model acceptance are pending.
-- The browser-origin behavior is covered with an MCP handshake, CORS preflight, and hostile-origin
-  rejection tests. Final visual reconnection in the user's macOS llama.cpp WebUI is pending after
-  reinstalling the updated package.
+- Browser-origin behavior is covered with an MCP handshake, CORS preflight, hostile-origin
+  rejection tests, and a successful real macOS llama.cpp WebUI connection.
 - Version-specific Blutter and multi-architecture external-tool fixtures need expansion.
 
 ## Next command

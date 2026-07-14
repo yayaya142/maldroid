@@ -14,6 +14,13 @@ from maldroid.config import AppConfig
 from maldroid.investigation import InvestigationManager
 from maldroid.paths import PathPolicy
 
+MCP_TOOL_PREFIX = "MalDroid_"
+
+
+def mcp_tool_name(name: str) -> str:
+    """Return the public MCP name for one MalDroid-managed tool."""
+    return name if name.startswith(MCP_TOOL_PREFIX) else MCP_TOOL_PREFIX + name
+
 
 @dataclass
 class ToolContext:

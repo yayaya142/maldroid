@@ -211,6 +211,9 @@ class MalDroidMcpServer:
             self._uvicorn.should_exit = True
         if self._thread is not None and self._thread.is_alive():
             self._thread.join(timeout=5)
+        if self._thread is not None and self._thread.is_alive() and self._uvicorn is not None:
+            self._uvicorn.force_exit = True
+            self._thread.join(timeout=2)
         if self._socket is not None:
             with suppress(OSError):
                 self._socket.close()

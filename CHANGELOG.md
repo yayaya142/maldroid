@@ -46,3 +46,7 @@
   shell and file operations run outside MalDroid case policy.
 - Fixed llama.cpp WebUI MCP connections by allowing only the managed loopback WebUI origins through
   MCP DNS-rebinding checks and adding standards-compliant CORS preflight/response headers.
+- Added orderly `SIGHUP`, `SIGINT`, and `SIGTERM` cleanup plus an interpreter-exit safeguard so
+  terminal closure does not leave llama-server process groups or MCP listeners behind.
+- Namespaced every managed MCP tool with the `MalDroid_` prefix for clear discovery alongside tools
+  from other connected MCP servers.

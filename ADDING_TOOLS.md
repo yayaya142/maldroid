@@ -6,6 +6,7 @@
 4. Use `context.output_directory()` for large output.
 5. Use an allowlisted argument array, timeout, and `shell=False` for any static external utility.
 6. Register a unique name, concise description, argument model, handler, and one profile.
+   Use the unprefixed implementation name; the registry publishes it as `MalDroid_<name>`.
 7. Add unit, path-adversarial, output-limit, profile-filter, and failure tests.
 8. Document parameters, result, accuracy, and safety in `TOOLS.md`.
 9. Confirm `/tools` displays it only in core or the assigned profile.
@@ -48,6 +49,9 @@ registry.register(
     )
 )
 ```
+
+The example is therefore exposed through MCP as `MalDroid_count_term`. Do not manually add the
+prefix in individual modules; central registry normalization prevents missing or doubled prefixes.
 
 Do not add shell, deletion, arbitrary write, network, upload, sample execution, or dynamic-analysis
 tools.

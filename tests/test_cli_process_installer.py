@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import shlex
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -16,7 +17,11 @@ import maldroid.process_manager as process_manager_module
 from maldroid.config import AppConfig
 from maldroid.exceptions import ServerError
 from maldroid.llama_adapter import ServerCommand
-from maldroid.process_manager import LlamaServerProcess
+from maldroid.process_manager import (
+    LlamaServerProcess,
+    ShutdownRequested,
+    shutdown_signal_handlers,
+)
 
 
 def test_typer_commands_are_not_consumed_as_paths(
@@ -30,7 +35,16 @@ def test_typer_commands_are_not_consumed_as_paths(
     assert "llama-server" in result.stdout
     tools = runner.invoke(cli.app, ["tools", "--profile", "generic"])
     assert tools.exit_code == 0
-    assert "read_file_range" in tools.stdout
+    assert "MalDroid_read_file_range" in tools.stdout
+
+
+def test_shutdown_signal_handlers_restore_previous_handler() -> None:
+    previous = signal.getsignal(signal.SIGTERM)
+    with pytest.raises(ShutdownRequested, match="signal"), shutdown_signal_handlers():
+        handler = signal.getsignal(signal.SIGTERM)
+        assert callable(handler)
+        handler(signal.SIGTERM, None)
+    assert signal.getsignal(signal.SIGTERM) == previous
 
 
 def test_polished_help_version_and_mcp_client_config(
@@ -195,8 +209,18 @@ def test_process_manager_start_and_shutdown(
     assert process.status()["api_key_enabled"] is False
     assert process.status()["api_key"] is None
     assert process.base_url == f"http://127.0.0.1:{process.command.port}/v1"
-    process.stop(graceful_seconds=1)
+    child_pid = process.process.pid
+    terminal_close_signal = getattr(signal, "SIGHUP", signal.SIGTERM)
+    try:
+        with shutdown_signal_handlers():
+            handler = signal.getsignal(terminal_close_signal)
+            assert callable(handler)
+            handler(terminal_close_signal, None)
+    except ShutdownRequested:
+        process.stop(graceful_seconds=1)
     assert process.status()["running"] is False
+    with pytest.raises(ProcessLookupError):
+        os.kill(child_pid, 0)
     assert (case / ".maldroid" / "logs" / "llama-server.stdout.log").is_file()
 
 

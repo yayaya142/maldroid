@@ -13,7 +13,7 @@ from maldroid.paths import PathPolicy
 from maldroid.prompts import SYSTEM_PROMPT
 from maldroid.session_manager import SessionManager
 from maldroid.tools.dispatcher import ToolDispatcher
-from maldroid.tools.models import ToolContext
+from maldroid.tools.models import MCP_TOOL_PREFIX, ToolContext, mcp_tool_name
 from maldroid.tools.registry import build_registry
 
 
@@ -37,16 +37,17 @@ def test_documented_system_prompt_matches_runtime_prompt() -> None:
         encoding="utf-8"
     )
     assert SYSTEM_PROMPT.strip() in document
-    assert "read_case_state, then list_case_files" in SYSTEM_PROMPT
+    assert "MalDroid_read_case_state, then MalDroid_list_case_files" in SYSTEM_PROMPT
 
 
 def test_registry_profile_filtering(app_config: AppConfig) -> None:
     _, _, registry, _ = make_dispatcher(app_config)
     generic = set(registry.names("generic"))
     react_native = set(registry.names("react-native"))
-    assert "read_file_range" in generic
-    assert "inspect_javascript_bundle" not in generic
+    assert mcp_tool_name("read_file_range") in generic
+    assert mcp_tool_name("inspect_javascript_bundle") not in generic
     assert generic < react_native
+    assert all(name.startswith(MCP_TOOL_PREFIX) for name in react_native)
     assert not any("flutter" in name or "unity" in name for name in generic)
 
 
@@ -55,14 +56,19 @@ def test_dispatcher_executes_and_rejects_profile_tool(app_config: AppConfig) -> 
     sample = case.root / "sample.txt"
     sample.write_text("one\nneedle\nthree\n", encoding="utf-8")
     result = dispatcher.execute(
-        "read_file_range", {"path": "sample.txt", "start_line": 2, "end_line": 2}
+        mcp_tool_name("read_file_range"),
+        {"path": "sample.txt", "start_line": 2, "end_line": 2},
     )
     assert result.status == "completed"
     assert result.data["lines"][0]["text"] == "needle"
-    disabled = dispatcher.execute("inspect_javascript_bundle", {"path": "sample.txt"})
+    disabled = dispatcher.execute(
+        mcp_tool_name("inspect_javascript_bundle"), {"path": "sample.txt"}
+    )
     assert disabled.error and disabled.error.code == "disabled_tool"
-    invalid = dispatcher.execute("read_file_range", "not-json")
+    invalid = dispatcher.execute(mcp_tool_name("read_file_range"), "not-json")
     assert invalid.error and invalid.error.code == "invalid_json"
+    unprefixed = dispatcher.execute("read_file_range", {})
+    assert unprefixed.error and unprefixed.error.code == "unknown_tool"
 
 
 def test_dispatcher_saves_oversized_output(app_config: AppConfig) -> None:
@@ -73,7 +79,8 @@ def test_dispatcher_saves_oversized_output(app_config: AppConfig) -> None:
     sample = case.root / "large-line.txt"
     sample.write_text("x" * 5000 + "\n", encoding="utf-8")
     result = dispatcher.execute(
-        "read_file_range", {"path": sample.name, "start_line": 1, "end_line": 1}
+        mcp_tool_name("read_file_range"),
+        {"path": sample.name, "start_line": 1, "end_line": 1},
     )
     assert result.truncated is True
     assert result.output_file
@@ -106,7 +113,7 @@ class FakeClient:
                 tool_calls=[
                     ToolCall(
                         id="call-1",
-                        name="read_case_state",
+                        name=mcp_tool_name("read_case_state"),
                         arguments="{}",
                     )
                 ],

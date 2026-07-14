@@ -37,7 +37,11 @@ from maldroid.llama_client import LocalLlamaClient
 from maldroid.logging_config import configure_case_logging
 from maldroid.mcp_server import MalDroidMcpServer, McpToolClient
 from maldroid.paths import PathPolicy, data_directory, expand_path
-from maldroid.process_manager import LlamaServerProcess
+from maldroid.process_manager import (
+    LlamaServerProcess,
+    ShutdownRequested,
+    shutdown_signal_handlers,
+)
 from maldroid.profiles import PROFILES, get_profile, suggest_profiles
 from maldroid.session_manager import SessionManager
 from maldroid.tools.dispatcher import ToolDispatcher
@@ -365,7 +369,10 @@ def mcp_serve(
             console.print(f"Profile: {case.state.active_profile}")
             console.print("Press Ctrl-C to stop.")
         try:
-            server.wait()
+            with shutdown_signal_handlers():
+                server.wait()
+        except ShutdownRequested:
+            pass
         finally:
             server.stop()
 
@@ -745,47 +752,50 @@ def _run_case(
     sessions: SessionManager | None = None
     agent: MalDroidAgent | None = None
     try:
-        logger.info("Starting local llama-server")
-        command = server.start(case.state.context_size, port, explicit_port=port is not None)
-        client = LocalLlamaClient(
-            server.base_url,
-            command.api_key,
-            Path(config.llama.model).name,
-            config.llama.temperature,
-            config.llama.max_response_tokens,
-        )
-        registry, local_dispatcher = _build_tool_runtime(config, case, manager)
-        investigation = local_dispatcher.context.investigation
-        mcp_server = MalDroidMcpServer(
-            config,
-            registry,
-            local_dispatcher,
-            model_server_port=command.port,
-        )
-        mcp_endpoint = mcp_server.start(mcp_port)
-        console.print(f"MCP endpoint: {mcp_endpoint}")
-        dispatcher = McpToolClient(
-            mcp_endpoint, timeout_seconds=config.limits.command_timeout_seconds
-        )
-        previous = SessionManager.load_latest_summary(case)
-        sessions = SessionManager(case, manager)
-        agent = MalDroidAgent(config, case, client, registry, dispatcher, sessions, previous)
-        chat = InteractiveChat(
-            console,
-            case,
-            manager,
-            investigation,
-            server,
-            agent,
-            registry,
-            dispatcher,
-            mcp_endpoint,
-        )
-        chat.run()
-        try:
-            agent.compact()
-        except Exception as exc:
-            sessions.save_summary(case.state.summary or f"Session ended. Summary failed: {exc}")
+        with shutdown_signal_handlers():
+            logger.info("Starting local llama-server")
+            command = server.start(case.state.context_size, port, explicit_port=port is not None)
+            client = LocalLlamaClient(
+                server.base_url,
+                command.api_key,
+                Path(config.llama.model).name,
+                config.llama.temperature,
+                config.llama.max_response_tokens,
+            )
+            registry, local_dispatcher = _build_tool_runtime(config, case, manager)
+            investigation = local_dispatcher.context.investigation
+            mcp_server = MalDroidMcpServer(
+                config,
+                registry,
+                local_dispatcher,
+                model_server_port=command.port,
+            )
+            mcp_endpoint = mcp_server.start(mcp_port)
+            console.print(f"MCP endpoint: {mcp_endpoint}")
+            dispatcher = McpToolClient(
+                mcp_endpoint, timeout_seconds=config.limits.command_timeout_seconds
+            )
+            previous = SessionManager.load_latest_summary(case)
+            sessions = SessionManager(case, manager)
+            agent = MalDroidAgent(config, case, client, registry, dispatcher, sessions, previous)
+            chat = InteractiveChat(
+                console,
+                case,
+                manager,
+                investigation,
+                server,
+                agent,
+                registry,
+                dispatcher,
+                mcp_endpoint,
+            )
+            chat.run()
+            try:
+                agent.compact()
+            except Exception as exc:
+                sessions.save_summary(case.state.summary or f"Session ended. Summary failed: {exc}")
+    except ShutdownRequested as exc:
+        logger.info("Orderly shutdown requested by signal %s", exc.signum)
     finally:
         if mcp_server is not None:
             mcp_server.stop()
@@ -844,7 +854,7 @@ def _doctor_model_tool_test(config: AppConfig, console: Console) -> None:
         schema = {
             "type": "function",
             "function": {
-                "name": "maldroid_doctor_probe",
+                "name": "MalDroid_doctor_probe",
                 "description": "Return structured values for a local compatibility test.",
                 "parameters": {
                     "type": "object",
@@ -861,11 +871,11 @@ def _doctor_model_tool_test(config: AppConfig, console: Console) -> None:
             {"role": "system", "content": "Call the requested diagnostic tool exactly once."},
             {
                 "role": "user",
-                "content": 'Call maldroid_doctor_probe with items ["alpha", "{braces}"] and metadata {"status":"ok"}.',
+                "content": 'Call MalDroid_doctor_probe with items ["alpha", "{braces}"] and metadata {"status":"ok"}.',
             },
         ]
         first = client.complete(messages, [schema])
-        if len(first.tool_calls) != 1 or first.tool_calls[0].name != "maldroid_doctor_probe":
+        if len(first.tool_calls) != 1 or first.tool_calls[0].name != "MalDroid_doctor_probe":
             raise MalDroidError(
                 "The model did not return a structured tool call. Configure a compatible chat template."
             )
