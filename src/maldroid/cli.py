@@ -42,7 +42,8 @@ from maldroid.process_manager import (
     ShutdownRequested,
     shutdown_signal_handlers,
 )
-from maldroid.profiles import PROFILES, get_profile, suggest_profiles
+from maldroid.profile_detection import detect_profiles
+from maldroid.profiles import PROFILES, get_profile
 from maldroid.session_manager import SessionManager
 from maldroid.tools.dispatcher import ToolDispatcher
 from maldroid.tools.models import ToolContext
@@ -720,10 +721,14 @@ def _launch(
             EvidenceManager(manager).register(case, target, "copy" if copy else "symlink")
         else:
             raise MalDroidError(f"The requested path does not exist: {target}")
-        suggestions = suggest_profiles(target)
-        if suggestions and not profile:
-            _console(no_color).print("Suggested profile(s): " + ", ".join(suggestions))
     selected_profile = profile or case.state.active_profile or config.general.default_profile
+    if path is not None and not profile:
+        detection = detect_profiles(expand_path(path))
+        if detection.is_actionable:
+            selected_profile = detection.selected_profile
+            _console(no_color).print(
+                f"Auto-detected profile: {selected_profile} ({detection.confidence} confidence)"
+            )
     profile_definition = get_profile(selected_profile)
     if profile_definition.status != "implemented":
         raise MalDroidError(f"Profile is planned but not implemented in V1: {selected_profile}")
@@ -731,7 +736,15 @@ def _launch(
     case.state.context_size = context_size or config.general.default_context_size
     case.state.model_path = config.llama.model
     manager.save(case)
-    _run_case(config, case, manager, port, mcp_port, no_color)
+    _run_case(
+        config,
+        case,
+        manager,
+        port,
+        mcp_port,
+        no_color,
+        auto_profile=profile is None,
+    )
 
 
 def _launch_resume() -> None:
@@ -748,6 +761,7 @@ def _run_case(
     port: int | None,
     mcp_port: int | None,
     no_color: bool,
+    auto_profile: bool = True,
 ) -> None:
     console = _console(no_color)
     logger = configure_case_logging(case.root)
@@ -782,7 +796,16 @@ def _run_case(
             )
             previous = SessionManager.load_latest_summary(case)
             sessions = SessionManager(case, manager)
-            agent = MalDroidAgent(config, case, client, registry, dispatcher, sessions, previous)
+            agent = MalDroidAgent(
+                config,
+                case,
+                client,
+                registry,
+                dispatcher,
+                sessions,
+                previous,
+                auto_profile_enabled=auto_profile,
+            )
             chat = InteractiveChat(
                 console,
                 case,

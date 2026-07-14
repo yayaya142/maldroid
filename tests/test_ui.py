@@ -73,10 +73,12 @@ def test_slash_completion_includes_commands_and_profiles() -> None:
     completer = MalDroidCompleter()
     commands = list(completer.get_completions(Document("/cont"), CompleteEvent()))
     profiles = list(completer.get_completions(Document("/profile rea"), CompleteEvent()))
+    automatic = list(completer.get_completions(Document("/profile au"), CompleteEvent()))
     reasoning = list(completer.get_completions(Document("/reasoning hi"), CompleteEvent()))
 
     assert [item.text for item in commands] == ["/context"]
     assert [item.text for item in profiles] == ["react-native"]
+    assert [item.text for item in automatic] == ["auto"]
     assert [item.text for item in reasoning] == ["high"]
 
 

@@ -68,6 +68,12 @@
 - Removed enforcement of the legacy phase ceiling, including for existing configurations that had
   persisted the former value of 16; long tasks now stop only on completion, user interruption, or a
   genuine external dependency.
+- Added automatic evidence-backed profile selection across React Native, Flutter, Unity, Cordova,
+  Cocos, Native, and Generic using bounded recursive inventory, archive entries, ELF magic, content
+  samples, scored indicators, confidence, and mixed-framework safeguards.
+- Added core `MalDroid_detect_profile` and `MalDroid_select_profile` MCP tools, automatic tool-schema
+  refresh, session/UI profile-change events, model-assisted ambiguous selection, and `/profile auto`
+  with manual override locking.
 - Added streamed reasoning/content/tool-call reconstruction and live in-progress telemetry for
   generated tokens, context consumption, time, phase, tools, errors, and estimated capacity left.
 - Hardened MCP result normalization so structured, wrapped, and plain-text error responses preserve

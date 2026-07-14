@@ -18,6 +18,7 @@ from maldroid.evidence_manager import EvidenceManager
 from maldroid.knowledge_manager import KnowledgeManager
 from maldroid.large_files import LargeTextIndexer
 from maldroid.models import EvidenceReference
+from maldroid.profile_detection import detect_profiles
 from maldroid.tools.models import ToolContext, ToolDefinition, ToolHandler
 from maldroid.tools.registry import ToolRegistry
 
@@ -69,6 +70,16 @@ class ExtractStringsInput(PathInput):
 class RegisterEvidenceInput(PathInput):
     mode: Literal["symlink", "copy"] = "symlink"
     calculate_hash: bool = False
+
+
+class DetectProfileInput(Arguments):
+    path: str = "."
+
+
+class SelectProfileInput(Arguments):
+    profile: Literal["generic", "react-native", "native", "flutter", "unity", "cordova", "cocos"]
+    confidence: Literal["low", "medium", "high"]
+    reason: str = Field(min_length=10, max_length=2000)
 
 
 class SaveNoteInput(Arguments):
@@ -302,6 +313,23 @@ def read_case_state(context: ToolContext, _: BaseModel) -> dict[str, Any]:
     }
 
 
+def detect_case_profile(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
+    values = DetectProfileInput.model_validate(arguments)
+    root = context.read_path(values.path)
+    registered = [Path(item.source_resolved_path) for item in context.case.state.evidence]
+    return detect_profiles(root, registered).as_dict()
+
+
+def select_case_profile(_: ToolContext, arguments: BaseModel) -> dict[str, Any]:
+    values = SelectProfileInput.model_validate(arguments)
+    return {
+        "selected_profile": values.profile,
+        "confidence": values.confidence,
+        "reason": values.reason,
+        "application": "The MalDroid agent controller applies this validated recommendation.",
+    }
+
+
 def save_note(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
     values = SaveNoteInput.model_validate(arguments)
     return context.investigation.save_note(context.case, values.text, values.evidence).model_dump()
@@ -419,6 +447,18 @@ def register_core_tools(registry: ToolRegistry) -> None:
             "Register an existing case file as evidence.",
             RegisterEvidenceInput,
             register_evidence,
+        ),
+        (
+            "detect_profile",
+            "Detect the best analysis profile from bounded artifact indicators.",
+            DetectProfileInput,
+            detect_case_profile,
+        ),
+        (
+            "select_profile",
+            "Select an analysis profile after inspecting concrete artifact evidence.",
+            SelectProfileInput,
+            select_case_profile,
         ),
         (
             "read_case_state",

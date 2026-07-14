@@ -72,6 +72,11 @@ Last updated: 2026-07-14
   fragments, and final token usage. The active terminal line shows live generation/context totals.
 - MCP client result handling preserves structured, wrapped, and plain-text errors; case-local
   evidence registration and error-payload behavior have dedicated protocol regression coverage.
+- Profile mode is automatic by default. A bounded detector handles direct files, extracted trees,
+  registered roots, and Android/ZIP archive entries; it records confidence, scores, indicators, and
+  truncation, then persists changes and refreshes active MCP schemas before the next model call.
+- Ambiguous profile selection can be completed by the model through validated MCP detection and
+  selection tools. Manual CLI/slash overrides lock the session until `/profile auto` is requested.
 
 ## Partial or environment-gated
 

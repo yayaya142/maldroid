@@ -69,6 +69,7 @@ def test_mcp_lists_profile_tools_and_executes_through_http(app_config: AppConfig
     try:
         names = anyio.run(list_tool_names, endpoint)
         assert mcp_tool_name("read_case_state") in names
+        assert mcp_tool_name("detect_profile") in names
         assert mcp_tool_name("inspect_javascript_bundle") not in names
         assert all(name.startswith(MCP_TOOL_PREFIX) for name in names)
 

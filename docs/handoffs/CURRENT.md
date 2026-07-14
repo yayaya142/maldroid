@@ -76,6 +76,12 @@ Run target-machine acceptance with the authorized Gemma 4 model and an external 
 - MCP result parsing now accepts direct, wrapped, and text-encoded ToolResult payloads and preserves
   plain MCP errors. A real HTTP regression covers successful case-local evidence registration and
   invalid-path error propagation.
+- Profile selection is automatic by default. Bounded scored detection covers filesystem/archive
+  names, registered evidence, ELF magic, and content samples, with Native-score caps for mixed apps.
+  Actionable changes persist, emit UI/session events, and rebuild model tool schemas immediately.
+- `MalDroid_detect_profile` exposes indicators and confidence through MCP; the model can use
+  `MalDroid_select_profile` with a validated evidence reason when deterministic detection is
+  ambiguous. Manual choices hide model selection until `/profile auto` restores adaptation.
 
 ## Verification
 
@@ -85,12 +91,13 @@ Verified in the local isolated Python 3.12 venv:
 ./scripts/dev release-check
 ```
 
-Results: the consolidated release check passed. Ruff formatting and lint passed; mypy passed for 34
-source files; 75 tests passed. Project hygiene, installer dry-run, browser
+Results: the consolidated release check passed. Ruff formatting and lint passed; mypy passed for 35
+source files; 83 tests passed. Project hygiene, installer dry-run, browser
 MCP origin/CORS coverage, termination-signal cleanup, namespaced tool discovery, enforced and
 automatic and phase checkpoints, autonomous continuation, model retry, compaction fallback,
 streaming token/tool reconstruction, live terminal telemetry, dynamic reasoning-budget request
-tests, MCP result variants, JSON parsing, protocol integration, and wheel build verification passed. The wheel is
+tests, MCP result variants, automatic and model-assisted profile selection, archive/mixed-framework
+fixtures, JSON parsing, protocol integration, and wheel build verification passed. The wheel is
 `dist/maldroid-0.1.0-py3-none-any.whl`.
 
 ## Known limitations

@@ -67,7 +67,7 @@ class MalDroidCompleter(Completer):
             return
         if before.startswith("/profile "):
             fragment = before.removeprefix("/profile ").lower()
-            for profile in PROFILES:
+            for profile in ("auto", *PROFILES):
                 if profile.startswith(fragment):
                     yield Completion(profile, start_position=-len(fragment))
             return
@@ -320,6 +320,13 @@ class InteractiveChat:
                 f"[yellow]↻ Model request interrupted; retrying {attempt}/{maximum} "
                 f"in {delay:g}s.[/yellow]"
             )
+        elif event == "profile_change":
+            profile = data.get("profile", "generic")
+            mode = data.get("mode", "auto")
+            self.console.print(
+                f"[green]◆ Profile selected: [bold]{profile}[/bold] ({mode})[/green]"
+            )
+            self._update_status(f"Profile adapted to {profile}…")
         elif event == "compaction_start":
             self._update_status("Compacting context…")
         elif event == "compaction_complete":
@@ -347,7 +354,7 @@ class InteractiveChat:
         details.add_column(style="dim", no_wrap=True)
         details.add_column()
         details.add_row("Case", self.case.metadata.name)
-        details.add_row("Profile", self.case.state.active_profile)
+        details.add_row("Profile", f"{self.case.state.active_profile} · {self.agent.profile_mode}")
         details.add_row("Reasoning", self.agent.reasoning_level)
         details.add_row("Model", model)
         details.add_row("llama.cpp", self._server_label(server_status))
@@ -375,7 +382,10 @@ class InteractiveChat:
         open_todos = sum(item.status == "open" for item in self.case.state.todos)
         return FormattedText(
             [
-                ("class:toolbar.key", f" {self.case.state.active_profile} "),
+                (
+                    "class:toolbar.key",
+                    f" {self.agent.profile_mode}:{self.case.state.active_profile} ",
+                ),
                 ("class:bottom-toolbar", "│ "),
                 ("class:toolbar.key", f"reason {self.agent.reasoning_level}"),
                 ("class:bottom-toolbar", " │ "),
@@ -492,7 +502,10 @@ class InteractiveChat:
             ("Case", self.case.metadata.name),
             ("Case ID", self.case.metadata.case_id),
             ("Workspace", str(self.case.root)),
-            ("Profile", self.case.state.active_profile),
+            (
+                "Profile",
+                f"{self.case.state.active_profile} ({self.agent.profile_mode})",
+            ),
             ("Reasoning", self.agent.reasoning_level),
             ("Model", self.case.state.model_path or "not configured"),
             ("Context", f"~{used:,} / {total:,} tokens ({percent:.1f}%)"),
@@ -537,7 +550,24 @@ class InteractiveChat:
             for profile in PROFILES.values():
                 marker = "●" if profile.name == self.case.state.active_profile else "○"
                 table.add_row(marker, profile.name, profile.instruction)
-            self.console.print(Panel(table, title="Analysis profiles", border_style="cyan"))
+            self.console.print(
+                Panel(
+                    table,
+                    title=f"Analysis profiles · mode {self.agent.profile_mode}",
+                    border_style="cyan",
+                )
+            )
+            self.console.print(
+                "[dim]Auto mode inspects bounded artifact indicators and adapts the active "
+                "profile. Use /profile NAME only to force a manual override.[/dim]"
+            )
+            return
+        if name == "auto":
+            self.agent.enable_auto_profile()
+            self.console.print(
+                f"[green]✓[/green] Automatic profile selection enabled: "
+                f"[bold]{self.case.state.active_profile}[/bold]"
+            )
             return
         profile = get_profile(name)
         if profile.status != "implemented":
@@ -545,9 +575,11 @@ class InteractiveChat:
                 f"[yellow]Profile {name} is documented but not implemented yet.[/yellow]"
             )
             return
-        self.agent.switch_profile(name)
-        self.case_manager.save(self.case)
-        self.console.print(f"[green]✓[/green] Active profile: [bold]{name}[/bold]")
+        self.agent.switch_profile(name, automatic=False)
+        self.console.print(
+            f"[green]✓[/green] Manual profile override: [bold]{name}[/bold]. "
+            "Use /profile auto to resume detection."
+        )
 
     def _reasoning(self, level: str) -> None:
         levels = {

@@ -24,6 +24,8 @@ CHECKPOINT_TOOLS = {
 NON_INVESTIGATION_TOOLS = {
     mcp_tool_name("read_case_state"),
     mcp_tool_name("list_case_files"),
+    mcp_tool_name("detect_profile"),
+    mcp_tool_name("select_profile"),
 }
 CHECKPOINT_REMINDER = (
     "A durable progress checkpoint is required before the final answer. Call "
@@ -52,6 +54,7 @@ class MalDroidAgent:
         sessions: SessionManager,
         previous_summary: str = "",
         event_handler: AgentEventHandler | None = None,
+        auto_profile_enabled: bool = True,
     ):
         self.config = config
         self.case = case
@@ -60,6 +63,7 @@ class MalDroidAgent:
         self.dispatcher = dispatcher
         self.sessions = sessions
         self.event_handler = event_handler
+        self._auto_profile_enabled = auto_profile_enabled
         self.messages: list[dict[str, Any]] = []
         model_event_setter = getattr(self.client, "set_event_handler", None)
         if model_event_setter is not None:
@@ -90,9 +94,9 @@ class MalDroidAgent:
             )
 
     def respond(self, text: str) -> str:
+        self._detect_and_switch_profile()
         self.messages.append({"role": "user", "content": text})
         self.sessions.record("message", role="user", content=text)
-        tools = self.registry.schemas(self.case.state.active_profile)
         phase = 1
         phase_tool_rounds = 0
         total_tool_rounds = 0
@@ -101,6 +105,17 @@ class MalDroidAgent:
         checkpoint_requested = False
         activity: list[str] = []
         while True:
+            tools = self.registry.schemas(self.case.state.active_profile)
+            if not self._auto_profile_enabled:
+                filtered_tools: list[dict[str, Any]] = []
+                for item in tools:
+                    function = item.get("function")
+                    if isinstance(function, dict) and function.get("name") == mcp_tool_name(
+                        "select_profile"
+                    ):
+                        continue
+                    filtered_tools.append(item)
+                tools = filtered_tools
             self._emit(
                 "model_start",
                 phase=phase,
@@ -152,6 +167,20 @@ class MalDroidAgent:
                 tool_message = {"role": "tool", "tool_call_id": call.id, "content": serialized}
                 self.messages.append(tool_message)
                 self.sessions.record("tool_result", role="tool", content=tool_message)
+                if (
+                    call.name == mcp_tool_name("select_profile")
+                    and result.status == "completed"
+                    and isinstance(result.data, dict)
+                    and self._auto_profile_enabled
+                ):
+                    selected = str(result.data.get("selected_profile", "generic"))
+                    if selected != self.case.state.active_profile:
+                        self.switch_profile(selected, automatic=True, reason=result.data)
+                if call.name in {
+                    mcp_tool_name("register_evidence"),
+                    mcp_tool_name("detect_profile"),
+                }:
+                    self._detect_and_switch_profile()
             round_rollover = phase_tool_rounds >= self.config.limits.max_tool_rounds
             context_rollover = self.should_auto_compact()
             if round_rollover or context_rollover:
@@ -262,7 +291,24 @@ class MalDroidAgent:
             },
         )
 
-    def switch_profile(self, profile: str) -> None:
+    @property
+    def profile_mode(self) -> str:
+        return "auto" if self._auto_profile_enabled else "manual"
+
+    def enable_auto_profile(self) -> None:
+        self._auto_profile_enabled = True
+        self.sessions.record("profile_mode_change", content={"mode": "auto"})
+        self._detect_and_switch_profile(force=True)
+
+    def switch_profile(
+        self,
+        profile: str,
+        *,
+        automatic: bool = False,
+        reason: dict[str, Any] | None = None,
+    ) -> None:
+        if not automatic:
+            self._auto_profile_enabled = False
         self.case.state.active_profile = profile
         self.messages.append(
             {
@@ -270,7 +316,50 @@ class MalDroidAgent:
                 "content": "Profile changed to " + profile + ". " + profile_prompt(profile),
             }
         )
-        self.sessions.record("profile_change", content={"profile": profile})
+        self.sessions.case_manager.save(self.case)
+        self.sessions.record(
+            "profile_change",
+            content={
+                "profile": profile,
+                "mode": "auto" if automatic else "manual",
+                "reason": reason,
+            },
+        )
+        self._emit(
+            "profile_change",
+            profile=profile,
+            mode="auto" if automatic else "manual",
+            reason=reason,
+        )
+
+    def _detect_and_switch_profile(self, force: bool = False) -> None:
+        if not self._auto_profile_enabled and not force:
+            return
+        result = self.dispatcher.execute(mcp_tool_name("detect_profile"), {"path": "."})
+        if result.status != "completed" or not isinstance(result.data, dict):
+            self.sessions.record(
+                "profile_detection",
+                content={
+                    "status": result.status,
+                    "error": result.error.model_dump() if result.error else None,
+                },
+            )
+            return
+        selected = str(result.data.get("selected_profile", "generic"))
+        confidence = str(result.data.get("confidence", "none"))
+        self.sessions.record("profile_detection", content=result.data)
+        self._emit(
+            "profile_detection",
+            selected_profile=selected,
+            confidence=confidence,
+            scores=result.data.get("scores", {}),
+        )
+        if (
+            selected != "generic"
+            and confidence in {"medium", "high"}
+            and selected != self.case.state.active_profile
+        ):
+            self.switch_profile(selected, automatic=True, reason=result.data)
 
     @property
     def reasoning_level(self) -> ReasoningLevel:

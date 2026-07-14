@@ -96,6 +96,14 @@ same checkpoint/compact/continue sequence runs immediately. During streaming gen
 active status line shows elapsed time, generated tokens, context consumption, and estimated tokens
 remaining.
 
+Profile selection is automatic by default. MalDroid recursively inspects bounded artifact names,
+archive entries, ELF magic, and small content samples, then activates React Native, Flutter, Unity,
+Cordova, Cocos, Native, or Generic tools with evidence-backed confidence. Mixed apps use scored
+framework indicators so incidental native libraries do not override a stronger framework match.
+For ambiguous artifacts, the model can call `MalDroid_detect_profile` and make a validated
+`MalDroid_select_profile` recommendation after inspecting concrete evidence. `/profile NAME` is a
+manual session override; `/profile auto` restores adaptation.
+
 MalDroid does not rely on the local model to remember progress voluntarily. After meaningful tool
 use, the agent requires a durable `MalDroid_save_note` or finding checkpoint before accepting the
 final answer. If the model ignores that instruction, its draft is saved automatically as a progress

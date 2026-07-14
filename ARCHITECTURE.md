@@ -82,6 +82,20 @@ not accepted until the model saves a note/finding checkpoint. If it ignores the 
 saves its draft response automatically through the audited MCP note tool. Prose that resembles a
 tool call is never executed.
 
+## Profile selection
+
+Profile selection is controller-owned and automatic unless the operator explicitly locks a manual
+profile. A bounded detector scores filesystem names, registered evidence roots, archive central
+directory entries, ELF magic, and small candidate content samples. It returns the selected profile,
+confidence, all scores, concrete indicators, scan totals, and truncation state. Framework evidence
+outranks capped incidental Native evidence.
+
+Detection runs before a turn and after evidence registration. An actionable change is persisted,
+recorded as a session event, announced to the terminal, and followed by rebuilding the tool schema
+set for the next model request. The core MCP detector is also model-callable. For ambiguous evidence,
+the model can submit a schema-validated selection and reason; this capability is removed from model
+schemas while a manual profile lock is active.
+
 The terminal layer subscribes to bounded agent lifecycle events rather than parsing model prose.
 It renders model waits, tool start/result, checkpoint, and compaction activity while the agent and
 MCP dispatcher remain the source of execution truth. Prompt history and completion are local-only;

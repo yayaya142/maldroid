@@ -136,6 +136,123 @@ def test_agent_tool_call_round_trip(app_config: AppConfig) -> None:
     assert {event["type"] for event in events} >= {"tool_call", "tool_result"}
 
 
+def test_agent_auto_selects_profile_and_refreshes_available_tools(app_config: AppConfig) -> None:
+    manager, case, registry, dispatcher = make_dispatcher(app_config)
+    (case.root / "index.android.bundle").write_text(
+        "__d(function(){return HermesInternal;},1,[]);",
+        encoding="utf-8",
+    )
+    sessions = SessionManager(case, manager)
+
+    class ProfileAwareClient:
+        calls = 0
+
+        def complete(self, messages, tools):
+            self.calls += 1
+            names = {item["function"]["name"] for item in tools}
+            assert mcp_tool_name("inspect_javascript_bundle") in names
+            return AssistantMessage(content="React Native profile selected automatically.")
+
+    agent = MalDroidAgent(
+        app_config,
+        case,
+        ProfileAwareClient(),
+        registry,
+        dispatcher,
+        sessions,
+    )
+
+    response = agent.respond("Analyze the supplied artifact")
+
+    assert response == "React Native profile selected automatically."
+    assert case.state.active_profile == "react-native"
+    assert agent.profile_mode == "auto"
+    events = [json.loads(line) for line in sessions.history_path.read_text().splitlines()]
+    change = next(event for event in events if event["type"] == "profile_change")
+    assert change["content"]["mode"] == "auto"
+
+
+def test_manual_profile_override_stays_locked_until_auto_is_enabled(
+    app_config: AppConfig,
+) -> None:
+    manager, case, registry, dispatcher = make_dispatcher(app_config)
+    (case.root / "index.android.bundle").write_text("__d(function(){},1,[]);", encoding="utf-8")
+    sessions = SessionManager(case, manager)
+
+    class ManualProfileClient:
+        @staticmethod
+        def complete(messages, tools):
+            names = {item["function"]["name"] for item in tools}
+            assert mcp_tool_name("inspect_elf_file") in names
+            assert mcp_tool_name("inspect_javascript_bundle") not in names
+            assert mcp_tool_name("select_profile") not in names
+            return AssistantMessage(content="Manual profile preserved.")
+
+    agent = MalDroidAgent(
+        app_config,
+        case,
+        ManualProfileClient(),
+        registry,
+        dispatcher,
+        sessions,
+    )
+    agent.switch_profile("native", automatic=False)
+
+    assert agent.respond("Keep the forced profile") == "Manual profile preserved."
+    assert case.state.active_profile == "native"
+    assert agent.profile_mode == "manual"
+
+    agent.enable_auto_profile()
+    assert case.state.active_profile == "react-native"
+    assert agent.profile_mode == "auto"
+
+
+def test_model_can_select_profile_from_evidence_when_auto_detection_is_ambiguous(
+    app_config: AppConfig,
+) -> None:
+    manager, case, registry, dispatcher = make_dispatcher(app_config)
+    (case.root / "ambiguous.dat").write_bytes(b"framework-specific fixture")
+    sessions = SessionManager(case, manager)
+
+    class SelectingClient:
+        calls = 0
+
+        def complete(self, messages, tools):
+            self.calls += 1
+            names = {item["function"]["name"] for item in tools}
+            if self.calls == 1:
+                assert mcp_tool_name("select_profile") in names
+                return AssistantMessage(
+                    content=None,
+                    tool_calls=[
+                        ToolCall(
+                            id="select-unity",
+                            name=mcp_tool_name("select_profile"),
+                            arguments=(
+                                '{"profile":"unity","confidence":"medium",'
+                                '"reason":"Concrete IL2CPP metadata indicators were inspected."}'
+                            ),
+                        )
+                    ],
+                )
+            assert mcp_tool_name("detect_unity_backend") in names
+            return AssistantMessage(content="Unity analysis tools are now active.")
+
+    agent = MalDroidAgent(
+        app_config,
+        case,
+        SelectingClient(),
+        registry,
+        dispatcher,
+        sessions,
+    )
+
+    response = agent.respond("Choose the correct framework tools")
+
+    assert response == "Unity analysis tools are now active."
+    assert case.state.active_profile == "unity"
+
+
 def test_agent_reports_live_model_and_tool_events(app_config: AppConfig) -> None:
     manager, case, registry, dispatcher = make_dispatcher(app_config)
     sessions = SessionManager(case, manager)

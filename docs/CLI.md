@@ -46,6 +46,34 @@ maldroid config get limits.max_task_phases
 maldroid config get limits.model_retry_attempts
 ```
 
+### Automatic profile selection
+
+Normal runs start in `auto` profile mode. Before the first model request and at the start of later
+turns, MalDroid performs a bounded static inventory. It scores exact framework filenames and paths,
+APK/AAB/APKS/ZIP entry names without extracting them, ELF headers, and bounded JavaScript samples.
+The strongest actionable result activates its profile and refreshes the model's tool schemas before
+the next request.
+
+React Native, Flutter, Unity, Cordova, Cocos, and Native indicators are scored independently. A
+deterministic framework priority resolves ties, while Native scoring is capped so common `.so`
+dependencies do not hide stronger framework evidence. Generic remains active when confidence is
+insufficient. Detection scans at most 20,000 files/archive entries and 64 bounded content samples.
+
+The always-available `MalDroid_detect_profile` tool returns scores, confidence, indicators, scan
+counts, and truncation status. When deterministic evidence remains ambiguous, the model may call
+`MalDroid_select_profile` with a validated profile, confidence, and concrete reason. The controller
+applies the recommendation and refreshes active tools. The model is explicitly instructed not to
+ask the user to identify frameworks.
+
+```text
+/profile            # show current mode and profiles
+/profile native     # force a manual override for this session
+/profile auto       # resume automatic detection and adaptation
+```
+
+An explicit `--profile` CLI option starts that run in manual mode. Automatic switching never
+overrides a manual session choice.
+
 Keyboard controls:
 
 - Enter sends the current message.
