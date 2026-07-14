@@ -82,6 +82,11 @@ Run target-machine acceptance with the authorized Gemma 4 model and an external 
 - `MalDroid_detect_profile` exposes indicators and confidence through MCP; the model can use
   `MalDroid_select_profile` with a validated evidence reason when deterministic detection is
   ambiguous. Manual choices hide model selection until `/profile auto` restores adaptation.
+- Tool-window rollover no longer invokes compaction. It saves a bounded evidence-rich checkpoint
+  and continues with the current context; only measured context pressure invokes summarization.
+- After evidence work starts, the controller visibly requests TODO/Finding maintenance. Fresh
+  evidence invalidates an older synthesis note, and automatic fallback notes preserve the
+  objective, bounded arguments/results, current structured state, synthesis, and next action.
 
 ## Verification
 
@@ -92,12 +97,13 @@ Verified in the local isolated Python 3.12 venv:
 ```
 
 Results: the consolidated release check passed. Ruff formatting and lint passed; mypy passed for 35
-source files; 83 tests passed. Project hygiene, installer dry-run, browser
+source files; 85 tests passed. Project hygiene, installer dry-run, browser
 MCP origin/CORS coverage, termination-signal cleanup, namespaced tool discovery, enforced and
 automatic and phase checkpoints, autonomous continuation, model retry, compaction fallback,
 streaming token/tool reconstruction, live terminal telemetry, dynamic reasoning-budget request
 tests, MCP result variants, automatic and model-assisted profile selection, archive/mixed-framework
-fixtures, JSON parsing, protocol integration, and wheel build verification passed. The wheel is
+fixtures, non-compacting tool windows, meaningful checkpoint contents, structured TODO/Finding
+discipline, JSON parsing, protocol integration, and wheel build verification passed. The wheel is
 `dist/maldroid-0.1.0-py3-none-any.whl`.
 
 ## Known limitations

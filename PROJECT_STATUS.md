@@ -77,6 +77,11 @@ Last updated: 2026-07-14
   truncation, then persists changes and refreshes active MCP schemas before the next model call.
 - Ambiguous profile selection can be completed by the model through validated MCP detection and
   selection tools. Manual CLI/slash overrides lock the session until `/profile auto` is requested.
+- Tool-round windows no longer compact usable context. They save bounded, evidence-rich progress
+  checkpoints and continue; only actual context pressure triggers summarization and reset.
+- The controller actively drives TODO, Finding, and note maintenance during substantive work. A
+  fresh synthesis must follow later evidence operations, and automatic fallback notes include
+  objective, arguments/results, durable state, synthesis, and next action rather than tool names.
 
 ## Partial or environment-gated
 

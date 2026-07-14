@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from maldroid.agent import CHECKPOINT_REMINDER, MalDroidAgent
+from maldroid.agent import CHECKPOINT_REMINDER, STATE_DISCIPLINE_REMINDER, MalDroidAgent
 from maldroid.case_manager import CaseManager
 from maldroid.config import AppConfig
 from maldroid.investigation import InvestigationManager
@@ -370,7 +370,104 @@ def test_agent_saves_automatic_checkpoint_when_model_ignores_reminder(
     assert response == "Metadata inspected; read the suspicious range next."
     assert case.state.notes[-1].text.startswith("Automatic progress checkpoint")
     assert "read the suspicious range next" in case.state.notes[-1].text
-    assert "MalDroid_get_file_info (completed)" in case.state.notes[-1].text
+    assert '"tool": "MalDroid_get_file_info"' in case.state.notes[-1].text
+    assert '"path": "sample.txt"' in case.state.notes[-1].text
+    assert "Durable investigation state" in case.state.notes[-1].text
+
+
+class StructuredStateClient:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def complete(self, messages, tools):
+        self.calls += 1
+        if self.calls == 1:
+            return AssistantMessage(
+                content=None,
+                tool_calls=[
+                    ToolCall(
+                        id="inspect",
+                        name=mcp_tool_name("get_file_info"),
+                        arguments='{"path":"sample.txt"}',
+                    )
+                ],
+            )
+        if self.calls == 2:
+            assert any(message.get("content") == STATE_DISCIPLINE_REMINDER for message in messages)
+            return AssistantMessage(
+                content=None,
+                tool_calls=[
+                    ToolCall(
+                        id="todo-add",
+                        name=mcp_tool_name("update_todo"),
+                        arguments='{"action":"add","text_or_id":"Inspect sample metadata"}',
+                    )
+                ],
+            )
+        if self.calls == 3:
+            return AssistantMessage(
+                content=None,
+                tool_calls=[
+                    ToolCall(
+                        id="finding",
+                        name=mcp_tool_name("save_finding"),
+                        arguments=(
+                            '{"title":"Text artifact identified","summary":"sample.txt is a '
+                            'regular text artifact.","confidence":"high","severity":'
+                            '"informational","status":"confirmed","evidence":[{"path":'
+                            '"sample.txt","description":"Metadata inspection",'
+                            '"tool":"MalDroid_get_file_info"}],"tags":["fixture"]}'
+                        ),
+                    )
+                ],
+            )
+        if self.calls == 4:
+            return AssistantMessage(
+                content=None,
+                tool_calls=[
+                    ToolCall(
+                        id="todo-complete",
+                        name=mcp_tool_name("update_todo"),
+                        arguments='{"action":"complete","text_or_id":"TODO-0001"}',
+                    )
+                ],
+            )
+        if self.calls == 5:
+            return AssistantMessage(
+                content=None,
+                tool_calls=[
+                    ToolCall(
+                        id="note",
+                        name=mcp_tool_name("save_note"),
+                        arguments=(
+                            '{"text":"Confirmed the artifact type and completed metadata review. '
+                            'No unresolved work remains."}'
+                        ),
+                    ),
+                ],
+            )
+        return AssistantMessage(content="Investigation state and evidence are saved.")
+
+
+def test_agent_drives_todos_findings_and_meaningful_notes(app_config: AppConfig) -> None:
+    manager, case, registry, dispatcher = make_dispatcher(app_config)
+    (case.root / "sample.txt").write_text("evidence\n", encoding="utf-8")
+    agent = MalDroidAgent(
+        app_config,
+        case,
+        StructuredStateClient(),
+        registry,
+        dispatcher,
+        SessionManager(case, manager),
+    )
+
+    response = agent.respond("Inspect the sample fully")
+
+    assert response == "Investigation state and evidence are saved."
+    assert case.state.todos[0].status == "completed"
+    assert case.state.findings[0].title == "Text artifact identified"
+    assert case.state.findings[0].evidence[0].path == "sample.txt"
+    assert case.state.notes[-1].text.startswith("Confirmed the artifact type")
 
 
 class FailingCompactionClient:
@@ -484,9 +581,14 @@ def test_agent_rolls_long_task_into_next_phase_without_stopping(
 
     assert response == "The long investigation is complete."
     assert client.tool_turns == 3
-    assert client.compactions == 1
+    assert client.compactions == 0
     assert any(event == "phase_rollover" for event, _ in reported)
-    assert any(note.text.startswith("Autonomous phase 1 checkpoint") for note in case.state.notes)
+    checkpoint = next(
+        note for note in case.state.notes if note.text.startswith("Autonomous phase 1 checkpoint")
+    )
+    assert '"path": "sample.txt"' in checkpoint.text
+    assert "Evidence work performed" in checkpoint.text
+    assert any(event == "state_discipline_required" for event, _ in reported)
 
 
 def test_agent_compacts_inside_active_task_when_context_threshold_is_reached(
@@ -540,7 +642,7 @@ def test_legacy_saved_phase_ceiling_no_longer_stops_agent(app_config: AppConfig)
 
     assert response == "The long investigation is complete."
     assert client.tool_turns == 3
-    assert client.compactions == 3
+    assert client.compactions == 0
 
 
 class FlakyClient:

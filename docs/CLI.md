@@ -209,6 +209,9 @@ maldroid tools --profile react-native --json
 `limits.auto_compact_ratio` defaults to `0.72` and accepts values from `0.5` through `0.8`.
 Automatic compaction preserves full JSONL history and builds the new context from the generated
 summary or, if generation fails, durable findings, notes, TODOs, profile, and prior summary.
+Tool-window checkpoints do not trigger compaction: they preserve meaningful evidence activity and
+structured state while the existing context remains available. The terminal announces when the
+agent is organizing TODO/Finding state, saving a checkpoint, or compacting for actual context use.
 
 ## Exit behavior
 

@@ -24,7 +24,9 @@
    persistent history, Ctrl+C cancellation, live tool reporting, `/context`, `/reasoning` changes,
    and Ctrl+D cleanup. Confirm Gemma 4 returns separated `reasoning_content` at medium and high.
    Run an investigation exceeding eight tool rounds and verify it visibly rolls into phase 2 without
-   returning to the prompt. Confirm streamed token/context telemetry moves during generation and a
+   returning to the prompt or compacting while substantial context remains. Confirm TODOs,
+   evidence-backed Findings, and meaningful synthesis notes update during the run rather than only
+   at completion. Confirm streamed token/context telemetry moves during generation and a
    deliberately invalid evidence path exposes the real MCP tool error. Lower the context threshold
    and verify an active task compacts and continues before its eight-round window completes.
    Test automatic profile selection with a real Metro bundle and extracted APK, then verify a mixed

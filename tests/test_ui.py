@@ -130,3 +130,12 @@ def test_live_generation_status_shows_token_consumption(app_config) -> None:
     assert "out ≈25 tok" in rendered
     assert "ctx ≈" in rendered
     assert "left" in rendered
+
+
+def test_state_discipline_event_is_visible(app_config) -> None:
+    chat, output = make_chat(app_config)
+
+    chat._handle_agent_event("state_discipline_required", {})
+
+    rendered = output.getvalue()
+    assert "TODO/Finding state" in rendered

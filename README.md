@@ -89,12 +89,11 @@ exit. `/help` is the complete command index; `/context`, `/checkpoints`, `/histo
 all levels and `/reasoning high` changes the budget immediately without restarting llama-server.
 
 Long investigations run through an autonomous phase controller. Every configured tool-round window
-creates a durable checkpoint, compacts context, and continues the same objective without returning
-to the prompt. Phases are unlimited, with three automatic retries for transient
-model-server failures. If context reaches its compaction threshold in the middle of a phase, the
-same checkpoint/compact/continue sequence runs immediately. During streaming generation, the
-active status line shows elapsed time, generated tokens, context consumption, and estimated tokens
-remaining.
+creates a durable checkpoint and continues the same objective without returning to the prompt or
+throwing away usable context. Compaction is independent and runs only when the actual context ratio
+crosses its configured threshold. Phases are unlimited, with three automatic retries for transient
+model-server failures. During streaming generation, the active status line shows elapsed time,
+generated tokens, context consumption, and estimated tokens remaining.
 
 Profile selection is automatic by default. MalDroid recursively inspects bounded artifact names,
 archive entries, ELF magic, and small content samples, then activates React Native, Flutter, Unity,
@@ -104,11 +103,13 @@ For ambiguous artifacts, the model can call `MalDroid_detect_profile` and make a
 `MalDroid_select_profile` recommendation after inspecting concrete evidence. `/profile NAME` is a
 manual session override; `/profile auto` restores adaptation.
 
-MalDroid does not rely on the local model to remember progress voluntarily. After meaningful tool
-use, the agent requires a durable `MalDroid_save_note` or finding checkpoint before accepting the
-final answer. If the model ignores that instruction, its draft is saved automatically as a progress
-note. Context is compacted automatically at 72% usage by default, with durable case state used as a
-fallback if model summarization fails.
+MalDroid does not rely on the local model to remember progress voluntarily. It directs the model to
+create and complete TODOs, turn supported facts and labeled hypotheses into evidence-backed
+Findings, and save meaningful phase notes. Before accepting a final answer it requires a fresh note
+after the latest evidence work. If the model ignores that instruction, the automatic checkpoint
+records the objective, bounded tool inputs/results, structured case state, synthesis, and next
+action—not merely tool names. Context is compacted automatically at 72% usage by default, with
+durable case state used as a fallback if model summarization fails.
 
 ## MCP tools
 

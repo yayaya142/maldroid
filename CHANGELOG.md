@@ -78,3 +78,9 @@
   generated tokens, context consumption, time, phase, tools, errors, and estimated capacity left.
 - Hardened MCP result normalization so structured, wrapped, and plain-text error responses preserve
   the actual tool failure instead of degrading to “MCP returned no ToolResult payload.”
+- Fixed repeated compaction during long investigations by decoupling tool-window checkpoints from
+  context pressure; automatic compaction now runs only when the configured usage threshold is met.
+- Strengthened durable investigation state: the controller prompts for active TODO/Finding
+  maintenance, requires a fresh synthesis note after later evidence work, and makes automatic phase
+  notes preserve bounded inputs/results, structured state, conclusions, and next actions instead of
+  only listing executed tools.

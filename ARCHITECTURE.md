@@ -73,14 +73,18 @@ The request contains a short system prompt, one small active-profile instruction
 summary, active conversation, and only core plus active-profile schemas. Parallel calls are off.
 Each returned call is sent through the official MCP client, validated by both MCP input schemas and
 the dispatcher, executed serially, serialized as a `tool` role message, persisted, and sent back.
-Eight investigation tool rounds form one autonomous phase rather than a terminal limit. At a phase
-boundary the controller saves an MCP checkpoint, compacts context, restores the original objective,
-and continues without user input. A context-threshold crossing triggers the same rollover inside
-the active phase. Phases are unlimited; the legacy ceiling key is accepted only for configuration
-compatibility and is not enforced. Transient model calls use bounded retries. After meaningful investigation activity, a final response is
-not accepted until the model saves a note/finding checkpoint. If it ignores the reminder, the agent
-saves its draft response automatically through the audited MCP note tool. Prose that resembles a
-tool call is never executed.
+Eight investigation tool rounds form one autonomous work window rather than a terminal or context
+limit. At a window boundary the controller saves a meaningful MCP checkpoint and continues without
+discarding conversation context. Compaction occurs only when the configured context-usage threshold
+is actually crossed. Phases are unlimited; the legacy ceiling key is accepted only for configuration
+compatibility and is not enforced. Transient model calls use bounded retries.
+
+After the first substantive evidence operation, an empty state triggers an internal reminder to
+create and maintain TODOs, Findings, and synthesis notes. A final response is not accepted until a
+fresh note follows the latest investigation activity. If the model ignores the reminder, the agent
+saves a checkpoint containing the objective, bounded arguments and result previews, current
+Findings/TODOs, the model synthesis, and a next action. A tool-name list alone is not treated as
+meaningful continuity. Prose that resembles a tool call is never executed.
 
 ## Profile selection
 

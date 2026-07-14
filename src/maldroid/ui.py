@@ -290,6 +290,11 @@ class InteractiveChat:
         elif event == "checkpoint_required":
             self._update_status("Saving a durable progress checkpoint…")
             self.console.print("[yellow]◆ Ensuring progress is recorded before answering[/yellow]")
+        elif event == "state_discipline_required":
+            self._update_status("Organizing TODOs and findings…")
+            self.console.print(
+                "[cyan]◆ Updating durable TODO/Finding state before deeper investigation[/cyan]"
+            )
         elif event == "automatic_checkpoint":
             self.console.print("[yellow]◆ Automatic progress checkpoint saved[/yellow]")
         elif event == "phase_checkpoint":

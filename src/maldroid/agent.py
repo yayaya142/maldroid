@@ -18,8 +18,11 @@ from maldroid.tools.registry import ToolRegistry
 
 CHECKPOINT_TOOLS = {
     mcp_tool_name("save_note"),
+}
+STRUCTURED_STATE_TOOLS = {
     mcp_tool_name("save_finding"),
     mcp_tool_name("update_finding"),
+    mcp_tool_name("update_todo"),
 }
 NON_INVESTIGATION_TOOLS = {
     mcp_tool_name("read_case_state"),
@@ -28,10 +31,18 @@ NON_INVESTIGATION_TOOLS = {
     mcp_tool_name("select_profile"),
 }
 CHECKPOINT_REMINDER = (
-    "A durable progress checkpoint is required before the final answer. Call "
-    "MalDroid_save_note now. Record completed work, exact evidence paths and lines or offsets, "
-    "facts versus hypotheses, uncertainty, unresolved questions, and the exact next action. "
-    "Do not rely on conversation history alone."
+    "Durable investigation state is required before the final answer. Update or complete relevant "
+    "TODOs, save each evidence-backed conclusion with MalDroid_save_finding, then call "
+    "MalDroid_save_note with a synthesis of completed work, exact evidence paths and lines or "
+    "offsets, facts versus hypotheses, uncertainty, unresolved questions, and the exact next "
+    "action. Do not replace conclusions with a list of tool names."
+)
+STATE_DISCIPLINE_REMINDER = (
+    "Maintain the case files while you investigate. Create concrete TODOs for the remaining plan "
+    "with MalDroid_update_todo, complete them as work finishes, and call MalDroid_save_finding as "
+    "soon as a supported fact or clearly labeled hypothesis emerges. Notes are phase syntheses; a "
+    "tool-call list alone is not meaningful progress. Continue the investigation after updating "
+    "state."
 )
 CONTINUATION_INSTRUCTION = (
     "Continue the same user task autonomously from the durable checkpoint. Do not ask the user to "
@@ -103,7 +114,10 @@ class MalDroidAgent:
         investigation_performed = False
         checkpoint_saved = False
         checkpoint_requested = False
-        activity: list[str] = []
+        structured_state_updated = False
+        state_reminder_sent = False
+        investigation_calls = 0
+        activity: list[dict[str, Any]] = []
         while True:
             tools = self.registry.schemas(self.case.state.active_profile)
             if not self._auto_profile_enabled:
@@ -157,12 +171,16 @@ class MalDroidAgent:
                     output_file=result.output_file,
                     error=result.error.message if result.error else None,
                 )
-                activity.append(f"{call.name} ({result.status})")
+                activity.append(self._activity_record(call.name, call.arguments, result))
                 if call.name in CHECKPOINT_TOOLS:
                     if result.status == "completed" and investigation_performed:
                         checkpoint_saved = True
                 elif call.name not in NON_INVESTIGATION_TOOLS:
                     investigation_performed = True
+                    investigation_calls += 1
+                    checkpoint_saved = False
+                if call.name in STRUCTURED_STATE_TOOLS and result.status == "completed":
+                    structured_state_updated = True
                 serialized = json.dumps(result.model_dump(mode="json"), ensure_ascii=False)
                 tool_message = {"role": "tool", "tool_call_id": call.id, "content": serialized}
                 self.messages.append(tool_message)
@@ -181,6 +199,11 @@ class MalDroidAgent:
                     mcp_tool_name("detect_profile"),
                 }:
                     self._detect_and_switch_profile()
+            if investigation_calls and not structured_state_updated and not state_reminder_sent:
+                self.messages.append({"role": "system", "content": STATE_DISCIPLINE_REMINDER})
+                self.sessions.record("state_discipline_required", content={})
+                self._emit("state_discipline_required")
+                state_reminder_sent = True
             round_rollover = phase_tool_rounds >= self.config.limits.max_tool_rounds
             context_rollover = self.should_auto_compact()
             if round_rollover or context_rollover:
@@ -192,12 +215,16 @@ class MalDroidAgent:
                     total_tool_rounds=total_tool_rounds,
                     reason=rollover_reason,
                 )
-                self.compact()
+                if context_rollover:
+                    self.compact()
                 phase += 1
                 phase_tool_rounds = 0
                 investigation_performed = False
                 checkpoint_saved = False
                 checkpoint_requested = False
+                structured_state_updated = False
+                state_reminder_sent = False
+                investigation_calls = 0
                 activity = []
                 self.messages.append(
                     {
@@ -240,17 +267,18 @@ class MalDroidAgent:
     def _save_phase_checkpoint(
         self,
         objective: str,
-        activity: list[str],
+        activity: list[dict[str, Any]],
         phase: int,
         total_tool_rounds: int,
     ) -> None:
-        tools = "\n".join(f"- {item}" for item in activity[-40:]) or "- none recorded"
+        work = self._format_activity(activity[-20:])
         text = (
             f"Autonomous phase {phase} checkpoint after {total_tool_rounds} tool rounds.\n\n"
-            f"Original objective:\n{objective[:8000]}\n\n"
-            f"Recent tool activity:\n{tools}\n\n"
-            "The agent is continuing automatically from this checkpoint. Consult findings, TODOs, "
-            "tool outputs, and the session summary for detailed evidence and the exact next action."
+            f"Original objective:\n{objective[:4000]}\n\n"
+            f"Evidence work performed:\n{work}\n\n"
+            f"Durable investigation state:\n{self._durable_state_snapshot()}\n\n"
+            "Next action: continue unresolved TODOs and convert supported results into findings. "
+            "The agent is continuing automatically from this checkpoint."
         )
         result = self.dispatcher.execute(mcp_tool_name("save_note"), {"text": text[:40000]})
         self.sessions.record(
@@ -269,16 +297,19 @@ class MalDroidAgent:
             status=result.status,
         )
 
-    def _save_automatic_checkpoint(self, draft: str, activity: list[str] | None = None) -> None:
-        tool_summary = ""
-        if activity:
-            tool_summary = "\n\nTools executed:\n" + "\n".join(
-                f"- {item}" for item in activity[-20:]
-            )
+    def _save_automatic_checkpoint(
+        self, draft: str, activity: list[dict[str, Any]] | None = None
+    ) -> None:
+        evidence_work = self._format_activity((activity or [])[-20:])
         text = (
             "Automatic progress checkpoint because the model did not call MalDroid_save_note.\n\n"
-            + draft
-            + tool_summary
+            "Model synthesis:\n"
+            + draft[:8000]
+            + "\n\nEvidence work performed:\n"
+            + evidence_work
+            + "\n\nDurable investigation state:\n"
+            + self._durable_state_snapshot()
+            + "\n\nNext action: resume open TODOs and verify unresolved hypotheses against exact evidence."
         )
         text = text[:40000]
         result = self.dispatcher.execute(mcp_tool_name("save_note"), {"text": text})
@@ -290,6 +321,65 @@ class MalDroidAgent:
                 "error": result.error.model_dump() if result.error else None,
             },
         )
+
+    def _activity_record(self, name: str, arguments: str, result: Any) -> dict[str, Any]:
+        try:
+            parsed_arguments: Any = json.loads(arguments)
+        except (TypeError, json.JSONDecodeError):
+            parsed_arguments = arguments
+        record: dict[str, Any] = {
+            "tool": name,
+            "status": result.status,
+            "arguments": parsed_arguments,
+        }
+        if result.status == "completed":
+            record["result"] = result.data
+            if result.output_file:
+                record["output_file"] = result.output_file
+            if result.truncated:
+                record["truncated"] = True
+        elif result.error:
+            record["error"] = result.error.message
+        return record
+
+    def _format_activity(self, activity: list[dict[str, Any]]) -> str:
+        if not activity:
+            return "- No evidence operations were recorded."
+        lines = []
+        for item in activity:
+            rendered = json.dumps(item, ensure_ascii=False, default=str)
+            if len(rendered) > 1000:
+                rendered = rendered[:1000] + "…"
+            lines.append("- " + rendered)
+        return "\n".join(lines)
+
+    def _durable_state_snapshot(self) -> str:
+        findings = self.case.state.findings[-10:]
+        open_todos = [item for item in self.case.state.todos if item.status == "open"][-20:]
+        completed_todos = [item for item in self.case.state.todos if item.status == "completed"][
+            -10:
+        ]
+        sections = []
+        if findings:
+            sections.append(
+                "Findings:\n"
+                + "\n".join(
+                    f"- {item.id} [{item.status}/{item.confidence}]: "
+                    f"{item.title[:300]} — {item.summary[:600]}"
+                    for item in findings
+                )
+            )
+        if open_todos:
+            sections.append(
+                "Open TODOs:\n"
+                + "\n".join(f"- {item.id}: {item.text[:300]}" for item in open_todos)
+            )
+        if completed_todos:
+            sections.append(
+                "Recently completed TODOs:\n"
+                + "\n".join(f"- {item.id}: {item.text[:300]}" for item in completed_todos)
+            )
+        return "\n\n".join(sections) or "No structured findings or TODOs have been saved yet."
 
     @property
     def profile_mode(self) -> str:
