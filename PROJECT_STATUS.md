@@ -88,6 +88,18 @@ Last updated: 2026-07-14
 
 ## Partial or environment-gated
 
+- The owner reports that Finding and other durable-state writes fail or appear missing during real
+  model use. A planning audit reproduced one likely contract failure: omitting the mandatory
+  `evidence[].description` produces a generic `invalid_arguments`, while successful Findings lose
+  evidence and tags in `FINDINGS.md`. The real macOS payload is not captured yet; this is the new
+  highest-priority task and must not be described as fixed.
+- State JSON and Markdown views are not transactional as a set. State is committed before view
+  rendering, retries have no idempotency key, and readback MCP APIs do not expose complete Findings,
+  Notes, or completed TODOs.
+- Automatic Notes lack a typed semantic checkpoint contract and may preserve tool/error noise.
+- `maldroid cases` lists cases but does not yet open the configured directory as requested.
+- Safe Python decoding-script execution is requested but not designed or implemented. No sandbox
+  claim is authorized until an ADR and adversarial OS-isolation tests exist.
 - Real Gemma 4 tool-call verification requires the supplied macOS model and local llama-server.
 - A physical Apple Silicon smoke test remains pending; hosted macOS 26 is the current CI target.
 - External MCP discovery and reconnection at the fixed endpoint pass in the user's macOS llama.cpp
@@ -106,4 +118,5 @@ The local synthetic suite passes. See `docs/handoffs/CURRENT.md` for exact comma
 
 ## Immediate task
 
-Run target-platform acceptance with the authorized Gemma 4 model, then expand compatibility fixtures.
+Execute `REL-010` from `NEXT_AGENT_MASTER_PLAN.md`: capture the real macOS Finding failure and add a
+sanitized reproduction before changing persistence code.

@@ -1,12 +1,26 @@
 # Current Handoff
 
-Task: `REL-001`
+Task: `REL-010`
 
 ## Goal
 
-Run target-machine acceptance with the authorized Gemma 4 model and an external MCP client.
+Capture and sanitize the owner's exact macOS Finding persistence failure before implementing a fix.
 
 ## State
+
+- The owner has reprioritized the project around reliability, research depth, CLI transparency,
+  case-folder navigation, and safely designed Python decoding scripts. Implementation is explicitly
+  deferred to the next agent.
+- `NEXT_AGENT_MASTER_PLAN.md` is now the mandatory gated backlog and Git/handoff guide. `AGENTS.md`
+  requires every future agent to read it at startup.
+- Planning audit confirmed that a complete Finding payload succeeds, while a natural minimal
+  payload without `evidence[].description` fails with generic `invalid_arguments`. A successful
+  Finding's evidence and tags are stored in JSON but omitted from `FINDINGS.md`.
+- Canonical state is currently saved before Markdown rendering; a render failure can therefore
+  report an error after mutation. Mutations lack revision/idempotency semantics, automatic Notes
+  lack a semantic schema, and MCP readback cannot enumerate complete Findings/Notes/TODO history.
+- These are open defects/risks, not completed fixes. The next agent must capture the real macOS
+  session before changing the schema or persistence layer.
 
 - `maldroid mcp serve [CASE]` starts an official MCP Streamable HTTP endpoint and prints its port.
 - MCP port 8765 is fixed by default; a collision fails instead of changing saved client settings.
@@ -114,6 +128,9 @@ protocol integration, and wheel build verification passed. The wheel is
 
 ## Known limitations
 
+- Real-user Finding/state persistence failure remains open; only a synthetic contract reproduction
+  is documented so far.
+- The master-plan tool, guide, CLI, agent-controller, and Python-execution work is backlog only.
 - Target-platform and real-model acceptance are pending.
 - Browser-origin behavior is covered with an MCP handshake, CORS preflight, hostile-origin
   rejection tests, and a successful real macOS llama.cpp WebUI connection.
@@ -122,9 +139,9 @@ protocol integration, and wheel build verification passed. The wheel is
 ## Next command
 
 ```bash
-maldroid --help
+git status --short --branch && git log -5 --oneline && ./scripts/dev test
 ```
 
-On the authorized macOS host, pull and reinstall MalDroid, start a normal case, verify `/help` and
-the live context toolbar, then reconnect `http://127.0.0.1:8765/mcp` in the llama.cpp WebUI without
-launching `maldroid mcp serve` separately.
+Then read `NEXT_AGENT_MASTER_PLAN.md` completely and begin `REL-010`. Ask the owner for the failing
+case/session location, but do not copy evidence into Git. Capture the exact structured failure and
+add a benign regression fixture before implementing any repair.

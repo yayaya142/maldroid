@@ -4,8 +4,8 @@ This repository is maintained by one agent at a time. Never perform concurrent e
 
 ## Mandatory startup
 
-1. Read `Tasks.MD`, `ARCHITECTURE.md`, `PROJECT_STATUS.md`, `DECISIONS.md`, `NEXT_STEPS.md`, and
-   `docs/handoffs/CURRENT.md` completely.
+1. Read `NEXT_AGENT_MASTER_PLAN.md`, `Tasks.MD`, `ARCHITECTURE.md`, `PROJECT_STATUS.md`,
+   `DECISIONS.md`, `NEXT_STEPS.md`, and `docs/handoffs/CURRENT.md` completely.
 2. Run `git status --short --branch`; reconcile unexplained changes before editing.
 3. Run `./scripts/dev doctor` and `./scripts/dev test`.
 4. Work only on the first ready task ID in `NEXT_STEPS.md` unless the user explicitly reprioritizes.

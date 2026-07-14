@@ -2,6 +2,10 @@
 
 ## 0.1.0 - Unreleased
 
+- Added a reliability/research-platform master plan for the next sequential agents, including the
+  observed Finding/state defects, 15 gated workstreams, extensive tool/playbook backlog, safe Python
+  execution design requirements, CLI improvements, acceptance criteria, and mandatory Git/handoff
+  procedure. This is planning only; the reported persistence defects remain open.
 - Added secure local llama-server lifecycle using the authorized Gemma 4 performance settings.
 - Enabled the owner-controlled llama.cpp WebUI, MCP proxy, and built-in host tools while keeping
   agent mode disabled and MalDroid-managed tools on the separate case-scoped MCP path.
