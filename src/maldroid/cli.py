@@ -264,9 +264,11 @@ def open_command(
 
 
 @app.command()
-def resume() -> None:
-    """Resume the most recently opened case."""
-    _run_guarded(lambda: _launch_resume(), False, _console())
+def resume(
+    case_id: str | None = typer.Argument(None, help="Optional case ID to resume. If omitted, prompts interactively."),
+) -> None:
+    """Resume a case."""
+    _run_guarded(lambda: _launch_resume(case_id), False, _console())
 
 
 @app.command(
@@ -1083,10 +1085,37 @@ def _launch(
     )
 
 
-def _launch_resume() -> None:
+def _launch_resume(case_id: str | None = None) -> None:
     config = load_config()
     manager = CaseManager(config)
-    case = manager.resume()
+    
+    if case_id:
+        # Find case by ID
+        records = manager.list_cases()
+        matched = [r for r in records if r["case_id"] == case_id]
+        if not matched:
+            raise MalDroidError(f"Case '{case_id}' not found.")
+        from pathlib import Path
+        case = manager.open(Path(str(matched[0]["path"])))
+    else:
+        records = manager.list_cases()
+        if not records:
+            raise MalDroidError("No previous MalDroid case was found.")
+        if len(records) == 1:
+            case = manager.resume()
+        else:
+            from rich.prompt import Prompt
+            console = _console()
+            console.print("[bold cyan]Select a case to resume:[/bold cyan]")
+            for i, r in enumerate(records[:10]):
+                console.print(f"  [cyan]{i+1}[/cyan]. {r['name']} ({r['case_id']}) - {r['last_opened_at']}")
+            
+            choices = [str(i+1) for i in range(min(10, len(records)))]
+            selection = Prompt.ask("Enter case number", choices=choices, default="1")
+            selected_idx = int(selection) - 1
+            from pathlib import Path
+            case = manager.open(Path(str(records[selected_idx]["path"])))
+            
     _run_case(config, case, manager, None, None, False)
 
 
