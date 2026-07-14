@@ -34,14 +34,16 @@ Last updated: 2026-07-14
   target-platform signal remains reproducible.
 - Process termination and direct loopback health behavior have independent deterministic tests;
   neither test depends on nested listener availability in hosted CI.
+- GitHub Actions passes on macOS 15 with Python 3.12 and Kali rolling, including lint, formatting,
+  the complete test suite, and installer dry-run.
 
 ## Partial or environment-gated
 
 - Real Gemma 4 tool-call verification requires the supplied macOS model and local llama-server.
-- macOS, Apple Silicon, and Kali CI definitions exist but have not run in this Linux workspace.
+- A physical Apple Silicon smoke test remains pending; hosted macOS 15 and Kali rolling CI pass.
 - External-client MCP acceptance on the user's macOS client remains environment-gated.
-- Installer dry-run can be validated here only as unsupported Ubuntu behavior; target smoke tests
-  remain required on macOS and Kali.
+- Installer dry-run passes in hosted macOS and Kali; real install/uninstall smoke tests remain
+  required on the user's target machines.
 
 ## Missing later gates
 

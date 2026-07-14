@@ -29,3 +29,4 @@
   to macOS 26 during validation.
 - Split process lifecycle and health-probe tests so macOS CI verifies both behaviors without relying
   on a nested test listener that runner networking can stall.
+- Validated the complete GitHub Actions pipeline on macOS 15 and Kali rolling.

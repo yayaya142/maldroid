@@ -1,10 +1,10 @@
 # Current Handoff
 
-Task: `CI-001`
+Task: `REL-001`
 
 ## Goal
 
-Make the first public macOS and Kali GitHub Actions run pass after publishing the repository.
+Run target-machine acceptance with the authorized Gemma 4 model and an external MCP client.
 
 ## State
 
@@ -29,6 +29,8 @@ Make the first public macOS and Kali GitHub Actions run pass after publishing th
   validation; future macOS image upgrades must be deliberate compatibility tasks.
 - Process lifecycle and direct loopback health checks are tested independently to avoid hosted
   macOS nested-listener stalls while retaining assertions for the exact health endpoint.
+- Public GitHub Actions run `29319396213` passed on macOS 15/Python 3.12 and Kali rolling, including
+  lint, format checks, all tests, and installer dry-run.
 
 ## Verification
 
