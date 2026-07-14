@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: ./scripts/bootstrap-dev.sh
+      - run: ./scripts/dev lint
+      - run: ./scripts/dev format-check
+      - run: ./scripts/dev test --cov=maldroid
+      - run: ./install.sh --dry-run
+
+  kali:
+    runs-on: ubuntu-latest
+    container: kalilinux/kali-rolling
+    steps:
+      - run: apt-get update && apt-get install -y git python3-full python3-venv ripgrep
+      - uses: actions/checkout@v4
+      - run: ./scripts/bootstrap-dev.sh
+      - run: ./scripts/dev lint
+      - run: ./scripts/dev format-check
+      - run: ./scripts/dev test --cov=maldroid
+      - run: ./install.sh --dry-run

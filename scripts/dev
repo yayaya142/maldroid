@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+"${ROOT_DIR}/scripts/bootstrap-dev.sh"
+
+COMMAND="${1:-help}"
+if [ "$#" -gt 0 ]; then shift; fi
+
+case "${COMMAND}" in
+  test)
+    exec "${ROOT_DIR}/.venv/bin/python" -m pytest "$@"
+    ;;
+  lint)
+    "${ROOT_DIR}/.venv/bin/python" -m ruff check .
+    exec "${ROOT_DIR}/.venv/bin/python" -m mypy
+    ;;
+  format-check)
+    exec "${ROOT_DIR}/.venv/bin/python" -m ruff format --check .
+    ;;
+  maldroid)
+    exec "${ROOT_DIR}/.venv/bin/maldroid" "$@"
+    ;;
+  python)
+    exec "${ROOT_DIR}/.venv/bin/python" "$@"
+    ;;
+  doctor)
+    exec "${ROOT_DIR}/.venv/bin/maldroid" doctor "$@"
+    ;;
+  help|*)
+    echo "Usage: ./scripts/dev {test|lint|format-check|maldroid|python|doctor} [args...]"
+    ;;
+esac
+

@@ -1,0 +1,34 @@
+from __future__ import annotations
+
+import socket
+
+import pytest
+
+from maldroid.config import AppConfig
+from maldroid.llama_adapter import build_server_command, select_port
+
+
+def test_secure_server_command_preserves_performance_settings(app_config: AppConfig) -> None:
+    command = build_server_command(app_config)
+    arguments = command.arguments
+    assert "--jinja" in arguments
+    assert "--no-ui" in arguments
+    assert "--no-ui-mcp-proxy" in arguments
+    assert "--tools" not in arguments
+    assert "--agent" not in arguments
+    assert arguments[arguments.index("-c") + 1] == "65536"
+    assert arguments[arguments.index("--parallel") + 1] == "1"
+    assert arguments[arguments.index("--keep") + 1] == "4096"
+    assert arguments[arguments.index("-ngl") + 1] == "99"
+    assert arguments[arguments.index("-b") + 1] == "512"
+    assert command.api_key not in command.display()
+    assert "<redacted>" in command.display()
+
+
+def test_explicit_occupied_port_fails() -> None:
+    with socket.socket() as handle:
+        handle.bind(("127.0.0.1", 0))
+        port = handle.getsockname()[1]
+        with pytest.raises(Exception, match="already in use"):
+            select_port("127.0.0.1", port, explicit=True)
+        assert select_port("127.0.0.1", port, explicit=False) != port
