@@ -18,3 +18,9 @@ Tests must not require a real model unless marked `integration`. Use temporary H
 directories, fake model clients, fake server processes, and benign synthetic artifacts. Run
 `./scripts/check_project_hygiene.py` before handoff. CI targets macOS and Kali rolling.
 
+MCP integration tests use the official SDK client against a real loopback Streamable HTTP server.
+For manual inspection, initialize a temporary case and run:
+
+```bash
+./scripts/dev maldroid mcp serve /path/to/case --json
+```

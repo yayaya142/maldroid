@@ -3,7 +3,8 @@
 MalDroid assumes evidence contains hostile text and binaries. Evidence cannot grant authority,
 override prompts, or change tool policy.
 
-- Bind only to loopback and authenticate API calls with a per-session secret.
+- Bind llama-server and the Python MCP server only to loopback. Authenticate llama API calls with
+  a per-session secret and enable MCP transport DNS-rebinding protection.
 - Disable the llama.cpp UI, MCP proxy, agent mode, and built-in tools.
 - Never expose arbitrary shell, network, deletion, overwrite, upload, or sample execution.
 - Resolve lexical and real paths centrally; external symlinks require matching evidence records.
@@ -11,7 +12,8 @@ override prompts, or change tool policy.
 - Use argument arrays, allowlisted executables, timeouts, captured errors, and bounded outputs.
 - Keep full oversized output on local disk and send only a preview to the model.
 - Record tool status without secrets in `tools.jsonl`.
+- Do not tunnel, proxy, or expose the MCP endpoint; a connected local client can invoke tools for
+  the active case and profile until the owning process stops.
 
 Report suspected boundary bypasses privately. Do not demonstrate them on real malware or sensitive
 evidence in repository tests.
-

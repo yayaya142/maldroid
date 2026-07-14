@@ -10,7 +10,7 @@ from maldroid.config import AppConfig
 from maldroid.llama_client import ModelClient
 from maldroid.prompts import SYSTEM_PROMPT, profile_prompt
 from maldroid.session_manager import SessionManager
-from maldroid.tools.dispatcher import ToolDispatcher
+from maldroid.tools.dispatcher import ToolExecutor
 from maldroid.tools.registry import ToolRegistry
 
 
@@ -21,7 +21,7 @@ class MalDroidAgent:
         case: Case,
         client: ModelClient,
         registry: ToolRegistry,
-        dispatcher: ToolDispatcher,
+        dispatcher: ToolExecutor,
         sessions: SessionManager,
         previous_summary: str = "",
     ):

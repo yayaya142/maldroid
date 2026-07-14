@@ -13,6 +13,7 @@ authors = [{ name = "MalDroid contributors" }]
 dependencies = [
   "defusedxml>=0.7",
   "filelock>=3.13",
+  "mcp>=1.26,<2",
   "openai>=1.40",
   "platformdirs>=4.2",
   "psutil>=5.9",

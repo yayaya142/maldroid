@@ -4,6 +4,11 @@ All tools return a `ToolResult` with `status`, `data`, optional structured `erro
 `output_file`. Paths are relative to the active case. Unknown arguments are rejected. Oversized
 JSON is saved under `tool-output/` and only a preview is returned.
 
+Tools are published through the Python MCP server at the endpoint printed by `maldroid` or
+`maldroid mcp serve`. MCP `tools/list` reflects the current profile dynamically. MCP `tools/call`
+returns the same `ToolResult` as structured content and JSON text, with protocol `isError` set for
+failed results. All calls converge on the serialized `ToolDispatcher` and its audit log.
+
 ## Core tools
 
 | Tool | Main parameters | Result | Safety boundary |
@@ -114,4 +119,4 @@ Flutter/Dart version compatibility must be verified.
 | `read_cocos_script_range` | path and lines | Bounded plaintext JS/Lua output |
 | `extract_cocos_strings` | path, minimum length | Saved strings from compiled/static artifacts |
 
-`/tools` always displays only core plus the active profile's tools.
+`/tools` and MCP discovery always display only core plus the active profile's tools.

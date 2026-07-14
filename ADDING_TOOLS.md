@@ -9,9 +9,10 @@
 7. Add unit, path-adversarial, output-limit, profile-filter, and failure tests.
 8. Document parameters, result, accuracy, and safety in `TOOLS.md`.
 9. Confirm `/tools` displays it only in core or the assigned profile.
-10. Confirm the generated JSON Schema is sent to the fake model.
-11. Confirm a fake returned call executes and its `tool` result returns to the model.
-12. Update status, changelog, and handoff.
+10. Confirm MCP `tools/list` publishes the generated JSON Schema only for the correct profile.
+11. Confirm MCP `tools/call` returns the expected structured `ToolResult` and audit event.
+12. Confirm a fake model call executes through `McpToolClient` and returns to the model.
+13. Update status, changelog, and handoff.
 
 Complete example:
 
@@ -50,4 +51,3 @@ registry.register(
 
 Do not add shell, deletion, arbitrary write, network, upload, sample execution, or dynamic-analysis
 tools.
-

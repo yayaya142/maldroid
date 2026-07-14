@@ -17,6 +17,8 @@ This repository is maintained by one agent at a time. Never perform concurrent e
 - Never add unrestricted shell access, `sudo`, uploads, telemetry, cloud model calls, ADB, Frida,
   emulators, or automatic network access.
 - Never enable llama-server `--tools`, `--agent`, or MCP proxy flags.
+- Route model and external-client tool execution through MalDroid's loopback MCP server. Never add
+  an alternate handler path that bypasses `ToolDispatcher`.
 - Never bypass the central path policy or output limits.
 - Never expose all profile tools simultaneously.
 - Preserve case schema compatibility and add migrations before changing persisted shapes.
@@ -29,4 +31,3 @@ Update tests and technical documentation with functional changes. Update `PROJEC
 `NEXT_STEPS.md`, `CHANGELOG.md`, and `docs/handoffs/CURRENT.md`. Record exact commands and results,
 known issues, dirty-tree state, and the next command. Create an ADR for architectural decisions.
 Leave an atomic commit with the task ID and never rewrite a handed-off commit.
-

@@ -1,15 +1,18 @@
 # Current Handoff
 
-Task: `V1-IMPLEMENTATION-001`
+Task: `MCP-001`
 
 ## Goal
 
-Implement the MalDroid V1 foundation and React Native vertical slice from the approved plan.
+Expose every MalDroid tool through a connectable local MCP server and route built-in chat tool
+execution through it.
 
 ## State
 
-- Repository was created from `Tasks.MD`.
-- Working implementation exists under `src/maldroid`, including every initial profile.
+- `maldroid mcp serve [CASE]` starts an official MCP Streamable HTTP endpoint and prints its port.
+- Normal chat starts the same server and executes model tool calls through its official MCP client.
+- Active-profile discovery, Pydantic validation, path policy, output limits, audit, and serialized
+  execution remain enforced by the existing registry and dispatcher.
 - Authorized model/server integration is environment-gated because this workspace lacks both the
   macOS GGUF path and `llama-server`.
 
@@ -24,19 +27,22 @@ Verified in the local isolated Python 3.12 venv:
 PYTHON="$PWD/.venv/bin/python" ./install.sh --dry-run
 ```
 
-Results: Ruff formatting and lint passed; mypy passed for 32 source files; 33 tests passed; line
-coverage was 66%; installer dry-run and CLI doctor/profile/tool smoke tests passed. The doctor
-correctly reported that the authorized macOS model and llama-server are absent on this Linux host.
+Results: Ruff formatting and lint passed; mypy passed for 34 source files; 37 tests passed with 66%
+line coverage. The focused MCP tests use the official client to initialize, list tools, execute a
+tool, complete an agent/model round trip, observe a profile change, reject an explicit busy port,
+and fall back from a busy configured port. Project hygiene, installer dry-run, `doctor`, MCP CLI
+help, and wheel build also passed.
 
 ## Known limitations
 
 - Target-platform and real-model acceptance are pending.
+- An external desktop MCP client has not been available in this Linux workspace for UI acceptance.
 - Version-specific Blutter and multi-architecture external-tool fixtures need expansion.
 
 ## Next command
 
 ```bash
-maldroid doctor --show-command
+maldroid mcp serve /path/to/case --json
 ```
 
-Run it on the authorized macOS host after configuring the actual llama-server binary.
+Copy the reported endpoint into the chosen MCP client, then list tools and call `read_case_state`.

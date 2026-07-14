@@ -4,13 +4,14 @@
 
 ```text
 Researcher terminal
-  -> MalDroid CLI and in-process Python tools
-       -> validated loopback OpenAI-compatible requests
-            -> one child llama-server process
+  -> MalDroid CLI
+       -> official MCP client -> loopback Python MCP server -> ToolDispatcher -> Python tools
+       -> validated loopback OpenAI-compatible requests -> one child llama-server process
 ```
 
 Evidence, knowledge, and model output are untrusted. `llama-server` receives schemas and returns
-requests; it never receives authority to execute tools. `ToolDispatcher` independently enforces
+requests; it never receives authority to execute tools. `mcp_server` publishes only active-profile
+schemas over loopback Streamable HTTP. `ToolDispatcher` independently enforces
 profile enablement, Pydantic schemas, path boundaries, output limits, structured errors, and audit
 logging. External static utilities are temporary allowlisted subprocesses with `shell=False`.
 
@@ -22,6 +23,7 @@ logging. External static utilities are temporary allowlisted subprocesses with `
 - `process_manager` and `llama_adapter`: command construction, ports, health, logs, signals, and
   child shutdown.
 - `llama_client`: normalized Chat Completions messages, tool calls, and `reasoning_content`.
+- `mcp_server`: MCP protocol discovery/calls, loopback port lifecycle, and the internal MCP client.
 - `agent`, `session_manager`, and `ui`: bounded tool loop, append-only sessions, compaction, and
   line-oriented chat.
 - `tools.registry` and `tools.dispatcher`: schema discovery, profile filtering, execution, and
@@ -47,12 +49,18 @@ ephemeral API key, starts the child in a new process group, polls `/v1/health`, 
 and stderr. Exit, Ctrl+C, and SIGTERM terminate the process group gracefully, then force it only
 after a timeout. The command is centralized and secrets are redacted.
 
+The Python MCP server binds `127.0.0.1` only, enables MCP transport DNS-rebinding protection, and
+uses a pre-bound socket. Its preferred port is 8765. Configured-port collisions select a free port;
+explicit-port collisions fail. Interactive chat owns the MCP lifecycle, while `maldroid mcp serve`
+provides a model-independent foreground lifecycle. Both print the effective endpoint.
+
 ## Message and tool lifecycle
 
 The request contains a short system prompt, one small active-profile instruction, persistent case
 summary, active conversation, and only core plus active-profile schemas. Parallel calls are off.
-Each returned call is validated, executed, serialized as a `tool` role message, persisted, and sent
-back. Eight tool rounds is the hard default. Prose that resembles a tool call is never executed.
+Each returned call is sent through the official MCP client, validated by both MCP input schemas and
+the dispatcher, executed serially, serialized as a `tool` role message, persisted, and sent back.
+Eight tool rounds is the hard default. Prose that resembles a tool call is never executed.
 
 ## Context and retrieval
 
@@ -60,4 +68,3 @@ Conversation size is conservatively estimated. The UI warns at 75% and blocks or
 85% pending compaction. Compaction saves full history and creates a structured summary without
 deleting findings or TODOs. Large evidence enters context only through search results, bounded
 ranges, indexed chunks, or modules. Knowledge uses matching excerpts rather than prompt injection.
-

@@ -91,12 +91,20 @@ class ExternalToolsConfig(BaseModel):
     blutter: str | None = None
 
 
+class McpConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    host: Literal["127.0.0.1"] = "127.0.0.1"
+    preferred_port: int = Field(default=8765, ge=1, le=65535)
+    startup_timeout_seconds: int = Field(default=10, ge=1, le=60)
+
+
 class AppConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     general: GeneralConfig = Field(default_factory=GeneralConfig)
     llama: LlamaConfig = Field(default_factory=LlamaConfig)
     limits: LimitsConfig = Field(default_factory=LimitsConfig)
     external_tools: ExternalToolsConfig = Field(default_factory=ExternalToolsConfig)
+    mcp: McpConfig = Field(default_factory=McpConfig)
 
     @model_validator(mode="after")
     def validate_context_budget(self) -> AppConfig:
@@ -168,6 +176,7 @@ def set_config_value(config: AppConfig, dotted_key: str, raw_value: str) -> AppC
         "llama",
         "limits",
         "external_tools",
+        "mcp",
     }:
         raise ConfigurationError("Configuration keys must use section.key form.")
     data = config.model_dump()

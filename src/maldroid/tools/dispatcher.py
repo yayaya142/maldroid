@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
+import threading
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Protocol
 
 from pydantic import ValidationError
 
@@ -15,12 +16,21 @@ from maldroid.tools.models import ToolContext
 from maldroid.tools.registry import ToolRegistry
 
 
+class ToolExecutor(Protocol):
+    def execute(self, name: str, raw_arguments: str | dict[str, Any]) -> ToolResult: ...
+
+
 class ToolDispatcher:
     def __init__(self, registry: ToolRegistry, context: ToolContext):
         self.registry = registry
         self.context = context
+        self._execution_lock = threading.RLock()
 
     def execute(self, name: str, raw_arguments: str | dict[str, Any]) -> ToolResult:
+        with self._execution_lock:
+            return self._execute_locked(name, raw_arguments)
+
+    def _execute_locked(self, name: str, raw_arguments: str | dict[str, Any]) -> ToolResult:
         started = now_iso()
         tool = self.registry.get(name)
         if tool is None:

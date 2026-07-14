@@ -30,7 +30,13 @@ def test_typer_commands_are_not_consumed_as_paths(
 
 @pytest.mark.parametrize(
     ("arguments", "inserted"),
-    [([], "new"), (["/tmp/case"], "open"), (["-c", "8192"], "new"), (["doctor"], None)],
+    [
+        ([], "new"),
+        (["/tmp/case"], "open"),
+        (["-c", "8192"], "new"),
+        (["doctor"], None),
+        (["mcp", "--help"], None),
+    ],
 )
 def test_entrypoint_rewrites_daily_syntax(
     monkeypatch: pytest.MonkeyPatch, arguments: list[str], inserted: str | None

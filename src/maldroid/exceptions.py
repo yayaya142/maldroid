@@ -23,3 +23,7 @@ class ToolExecutionError(MalDroidError):
 
 class ServerError(MalDroidError):
     """Raised when llama-server cannot be managed safely."""
+
+
+class McpServerError(MalDroidError):
+    """Raised when the local MCP server cannot be started or contacted safely."""

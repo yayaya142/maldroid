@@ -12,6 +12,8 @@ Last updated: 2026-07-14
   shutdown lifecycle.
 - Local normalized model client, reasoning-content preservation, bounded tool loop, and line chat.
 - Core tool registry/dispatcher, path enforcement, audit, truncation, large-text FTS5, and knowledge.
+- Loopback MCP Streamable HTTP discovery and execution for all tools, standalone serving, effective
+  port reporting, active-profile filtering, and internal chat routing through the official client.
 - React Native inspection, Metro module indexing, bounded module reads, symbol search, and URLs.
 - Static Native, Flutter, Unity, Cordova, and Cocos handlers with allowlisted adapters, artifact
   detection, bounded search/read operations, and explicit unsupported-format reporting.
@@ -21,6 +23,7 @@ Last updated: 2026-07-14
 
 - Real Gemma 4 tool-call verification requires the supplied macOS model and local llama-server.
 - macOS, Apple Silicon, and Kali CI definitions exist but have not run in this Linux workspace.
+- External-client MCP acceptance on the user's macOS client remains environment-gated.
 - Installer dry-run can be validated here only as unsupported Ubuntu behavior; target smoke tests
   remain required on macOS and Kali.
 

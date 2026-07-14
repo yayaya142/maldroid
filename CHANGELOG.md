@@ -11,3 +11,5 @@
   explicit compatibility reporting.
 - Added automatic venv development workflow, macOS/Kali installer, safe uninstaller, documentation,
   starter playbooks, and synthetic test coverage.
+- Added a loopback-only MCP Streamable HTTP server for every MalDroid tool, dynamic port reporting,
+  standalone `maldroid mcp serve`, official MCP client routing for chat tools, and protocol tests.

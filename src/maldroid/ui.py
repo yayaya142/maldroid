@@ -9,7 +9,7 @@ from maldroid.case_manager import Case, CaseManager
 from maldroid.investigation import InvestigationManager
 from maldroid.process_manager import LlamaServerProcess
 from maldroid.profiles import get_profile
-from maldroid.tools.dispatcher import ToolDispatcher
+from maldroid.tools.dispatcher import ToolExecutor
 from maldroid.tools.registry import ToolRegistry
 
 HELP = """/help, /exit, /status, /profile [NAME], /tools, /files, /findings,
@@ -27,7 +27,8 @@ class InteractiveChat:
         server: LlamaServerProcess,
         agent: MalDroidAgent,
         registry: ToolRegistry,
-        dispatcher: ToolDispatcher,
+        dispatcher: ToolExecutor,
+        mcp_endpoint: str,
     ):
         self.console = console
         self.case = case
@@ -37,6 +38,7 @@ class InteractiveChat:
         self.agent = agent
         self.registry = registry
         self.dispatcher = dispatcher
+        self.mcp_endpoint = mcp_endpoint
 
     def run(self) -> None:
         self.console.print("\n[bold]MalDroid[/bold]\n")
@@ -44,6 +46,7 @@ class InteractiveChat:
         self.console.print(f"Path: {self.case.root}")
         self.console.print(f"Profile: {self.case.state.active_profile}")
         self.console.print(f"Context: {self.case.state.context_size}")
+        self.console.print(f"MCP: {self.mcp_endpoint}")
         self.console.print("\nType /help for available commands.\n")
         while True:
             try:
@@ -85,6 +88,7 @@ class InteractiveChat:
                     "model": self.case.state.model_path,
                     "context_size": self.case.state.context_size,
                     "server": self.server.status(),
+                    "mcp_endpoint": self.mcp_endpoint,
                     "tool_count": len(self.registry.enabled(self.case.state.active_profile)),
                     "findings": len(self.case.state.findings),
                     "open_todos": sum(item.status == "open" for item in self.case.state.todos),
@@ -129,7 +133,9 @@ class InteractiveChat:
             self.agent.clear()
             self.console.print("Active conversation context cleared; case state was preserved.")
         elif name == "/server":
-            self.console.print_json(data=self.server.status())
+            self.console.print_json(
+                data={"llama": self.server.status(), "mcp_endpoint": self.mcp_endpoint}
+            )
         elif name == "/knowledge":
             tool_result = self.dispatcher.execute(
                 "search_knowledge", {"query": rest or "Android static analysis"}

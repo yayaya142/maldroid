@@ -30,13 +30,14 @@ from maldroid.knowledge_manager import KnowledgeManager
 from maldroid.llama_adapter import build_server_command, resolve_binary
 from maldroid.llama_client import LocalLlamaClient
 from maldroid.logging_config import configure_case_logging
+from maldroid.mcp_server import MalDroidMcpServer, McpToolClient
 from maldroid.paths import PathPolicy, data_directory, expand_path
 from maldroid.process_manager import LlamaServerProcess
 from maldroid.profiles import PROFILES, get_profile, suggest_profiles
 from maldroid.session_manager import SessionManager
 from maldroid.tools.dispatcher import ToolDispatcher
 from maldroid.tools.models import ToolContext
-from maldroid.tools.registry import build_registry
+from maldroid.tools.registry import ToolRegistry, build_registry
 from maldroid.ui import InteractiveChat
 
 app = typer.Typer(
@@ -45,8 +46,10 @@ app = typer.Typer(
 )
 config_app = typer.Typer(help="Manage validated local configuration.")
 knowledge_app = typer.Typer(help="Manage local research playbooks.")
+mcp_app = typer.Typer(help="Expose case-scoped MalDroid tools through MCP.")
 app.add_typer(config_app, name="config")
 app.add_typer(knowledge_app, name="knowledge")
+app.add_typer(mcp_app, name="mcp")
 
 
 def _console(no_color: bool = False) -> Console:
@@ -61,13 +64,23 @@ def new(
     model: Path | None = typer.Option(None, "--model"),
     llama_server: Path | None = typer.Option(None, "--llama-server"),
     port: int | None = typer.Option(None, "--port", min=1, max=65535),
+    mcp_port: int | None = typer.Option(None, "--mcp-port", min=1, max=65535),
     no_color: bool = typer.Option(False, "--no-color"),
     debug: bool = typer.Option(False, "--debug"),
 ) -> None:
     """Create a new managed case and start the assistant."""
     _run_guarded(
         lambda: _launch(
-            None, name, profile, context_size, False, model, llama_server, port, no_color
+            None,
+            name,
+            profile,
+            context_size,
+            False,
+            model,
+            llama_server,
+            port,
+            mcp_port,
+            no_color,
         ),
         debug,
         _console(no_color),
@@ -84,6 +97,7 @@ def open_command(
     model: Path | None = typer.Option(None, "--model"),
     llama_server: Path | None = typer.Option(None, "--llama-server"),
     port: int | None = typer.Option(None, "--port", min=1, max=65535),
+    mcp_port: int | None = typer.Option(None, "--mcp-port", min=1, max=65535),
     no_color: bool = typer.Option(False, "--no-color"),
     debug: bool = typer.Option(False, "--debug"),
 ) -> None:
@@ -98,6 +112,7 @@ def open_command(
             model,
             llama_server,
             port,
+            mcp_port,
             no_color,
         ),
         debug,
@@ -150,6 +165,57 @@ def tools_command(profile: str = typer.Option("generic", "--profile")) -> None:
     _console().print("\n".join(registry.names(profile)))
 
 
+@mcp_app.command("serve")
+def mcp_serve(
+    case_path: Path | None = typer.Argument(None),
+    profile: str | None = typer.Option(None, "--profile"),
+    port: int | None = typer.Option(None, "--port", min=1, max=65535),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """Serve the latest or selected case through loopback MCP Streamable HTTP."""
+
+    def run() -> None:
+        config = load_config()
+        manager = CaseManager(config)
+        case = manager.open(expand_path(case_path)) if case_path else manager.resume()
+        if profile:
+            selected = get_profile(profile)
+            if selected.status != "implemented":
+                raise MalDroidError(f"Profile is not implemented: {profile}")
+            case.state.active_profile = profile
+            manager.save(case)
+        registry, dispatcher = _build_tool_runtime(config, case, manager)
+        server = MalDroidMcpServer(config, registry, dispatcher)
+        endpoint = server.start(port, explicit_port=port is not None)
+        console = _console()
+        if json_output:
+            console.print_json(
+                data={
+                    "status": "ready",
+                    "transport": "streamable-http",
+                    "host": server.host,
+                    "port": server.port,
+                    "endpoint": endpoint,
+                    "case": str(case.root),
+                    "profile": case.state.active_profile,
+                }
+            )
+        else:
+            console.print("[bold]MalDroid MCP server is ready[/bold]")
+            console.print(f"Endpoint: {endpoint}")
+            console.print(f"Port: {server.port}")
+            console.print("Transport: streamable-http")
+            console.print(f"Case: {case.root}")
+            console.print(f"Profile: {case.state.active_profile}")
+            console.print("Press Ctrl-C to stop.")
+        try:
+            server.wait()
+        finally:
+            server.stop()
+
+    _run_guarded(run, False, _console())
+
+
 @app.command()
 def doctor(
     show_command: bool = typer.Option(False, "--show-command"),
@@ -174,6 +240,13 @@ def doctor(
     model_path = expand_path(config.llama.model)
     checks.append(("GGUF model", "ok" if model_path.is_file() else "error", str(model_path)))
     checks.append(("Host boundary", "ok", config.llama.host))
+    checks.append(
+        (
+            "MCP transport",
+            "ok",
+            f"streamable-http on {config.mcp.host}:{config.mcp.preferred_port}/mcp",
+        )
+    )
     table = Table("Check", "Status", "Details")
     for check, status, details in checks:
         table.add_row(check, status, details)
@@ -259,6 +332,7 @@ def _launch(
     model: Path | None,
     llama_server: Path | None,
     port: int | None,
+    mcp_port: int | None,
     no_color: bool,
 ) -> None:
     config = _config_with_overrides(load_config(), model, llama_server)
@@ -289,14 +363,14 @@ def _launch(
     case.state.context_size = context_size or config.general.default_context_size
     case.state.model_path = config.llama.model
     manager.save(case)
-    _run_case(config, case, manager, port, no_color)
+    _run_case(config, case, manager, port, mcp_port, no_color)
 
 
 def _launch_resume() -> None:
     config = load_config()
     manager = CaseManager(config)
     case = manager.resume()
-    _run_case(config, case, manager, None, False)
+    _run_case(config, case, manager, None, None, False)
 
 
 def _run_case(
@@ -304,11 +378,13 @@ def _run_case(
     case: Case,
     manager: CaseManager,
     port: int | None,
+    mcp_port: int | None,
     no_color: bool,
 ) -> None:
     console = _console(no_color)
     logger = configure_case_logging(case.root)
     server = LlamaServerProcess(config, case.root)
+    mcp_server: MalDroidMcpServer | None = None
     sessions: SessionManager | None = None
     agent: MalDroidAgent | None = None
     try:
@@ -321,24 +397,27 @@ def _run_case(
             config.llama.temperature,
             config.llama.max_response_tokens,
         )
-        registry = build_registry()
-        investigation = InvestigationManager(manager)
-        evidence_sources = {
-            item.case_path: item.source_resolved_path for item in case.state.evidence
-        }
-        context = ToolContext(
-            config=config,
-            case=case,
-            case_manager=manager,
-            investigation=investigation,
-            path_policy=PathPolicy(case.root, evidence_sources),
+        registry, local_dispatcher = _build_tool_runtime(config, case, manager)
+        investigation = local_dispatcher.context.investigation
+        mcp_server = MalDroidMcpServer(config, registry, local_dispatcher)
+        mcp_endpoint = mcp_server.start(mcp_port, explicit_port=mcp_port is not None)
+        console.print(f"MCP endpoint: {mcp_endpoint}")
+        dispatcher = McpToolClient(
+            mcp_endpoint, timeout_seconds=config.limits.command_timeout_seconds
         )
-        dispatcher = ToolDispatcher(registry, context)
         previous = SessionManager.load_latest_summary(case)
         sessions = SessionManager(case, manager)
         agent = MalDroidAgent(config, case, client, registry, dispatcher, sessions, previous)
         chat = InteractiveChat(
-            console, case, manager, investigation, server, agent, registry, dispatcher
+            console,
+            case,
+            manager,
+            investigation,
+            server,
+            agent,
+            registry,
+            dispatcher,
+            mcp_endpoint,
         )
         chat.run()
         try:
@@ -346,8 +425,26 @@ def _run_case(
         except Exception as exc:
             sessions.save_summary(case.state.summary or f"Session ended. Summary failed: {exc}")
     finally:
+        if mcp_server is not None:
+            mcp_server.stop()
         server.stop()
         logger.info("Local llama-server stopped")
+
+
+def _build_tool_runtime(
+    config: AppConfig, case: Case, manager: CaseManager
+) -> tuple[ToolRegistry, ToolDispatcher]:
+    registry = build_registry()
+    investigation = InvestigationManager(manager)
+    evidence_sources = {item.case_path: item.source_resolved_path for item in case.state.evidence}
+    context = ToolContext(
+        config=config,
+        case=case,
+        case_manager=manager,
+        investigation=investigation,
+        path_policy=PathPolicy(case.root, evidence_sources),
+    )
+    return registry, ToolDispatcher(registry, context)
 
 
 def _config_with_overrides(
@@ -467,6 +564,7 @@ def entrypoint() -> None:
         "tools",
         "config",
         "knowledge",
+        "mcp",
     }
     arguments = sys.argv[1:]
     if not arguments:
