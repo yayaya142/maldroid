@@ -87,6 +87,34 @@ def test_polished_help_version_and_mcp_client_config(
     }
 
 
+def test_external_mcp_cli_add_list_history_and_remove(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("MALDROID_CONFIG_DIR", str(tmp_path / "config"))
+    monkeypatch.setattr(cli.ExternalMcpClient, "list_tools", lambda self: [])
+    runner = CliRunner()
+
+    added = runner.invoke(
+        cli.app,
+        ["mcp", "add", "http://127.0.0.1:8766/mcp", "--name", "ghidra"],
+    )
+    assert added.exit_code == 0
+    assert "Saved MCP server" in added.stdout
+
+    listed = runner.invoke(cli.app, ["mcp", "list", "--json"])
+    assert listed.exit_code == 0
+    payload = json.loads(listed.stdout)
+    assert payload["servers"][0]["nickname"] == "ghidra"
+
+    history = runner.invoke(cli.app, ["mcp", "history", "--json"])
+    assert history.exit_code == 0
+    assert {event["action"] for event in json.loads(history.stdout)["events"]} >= {"add", "test"}
+
+    removed = runner.invoke(cli.app, ["mcp", "remove", "ghidra", "--yes"])
+    assert removed.exit_code == 0
+    assert json.loads(runner.invoke(cli.app, ["mcp", "list", "--json"]).stdout)["servers"] == []
+
+
 def test_config_cli_discovery_set_validate_and_reset(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -318,3 +346,39 @@ def test_installer_help_is_self_contained() -> None:
     assert completed.returncode == 0
     assert "Install MalDroid into an isolated user environment" in completed.stdout
     assert "--dry-run" in completed.stdout
+
+
+def test_uninstall_preserves_or_explicitly_removes_saved_mcp_configuration(
+    tmp_path: Path,
+) -> None:
+    root = Path(__file__).resolve().parents[1]
+    environment = os.environ.copy()
+    environment["HOME"] = str(tmp_path)
+    config_directory = tmp_path / ".config" / "maldroid"
+    config_directory.mkdir(parents=True)
+    registry = config_directory / "mcp-servers.json"
+    registry.write_text('{"schema_version":1,"servers":[]}\n', encoding="utf-8")
+
+    preserved = subprocess.run(
+        [str(root / "uninstall.sh")],
+        cwd=root,
+        env=environment,
+        input="y\nn\n",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert preserved.returncode == 0
+    assert registry.exists()
+
+    removed = subprocess.run(
+        [str(root / "uninstall.sh")],
+        cwd=root,
+        env=environment,
+        input="y\ny\n",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert removed.returncode == 0
+    assert not config_directory.exists()

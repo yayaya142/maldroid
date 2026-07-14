@@ -3,7 +3,7 @@ set -euo pipefail
 
 VENV_DIR="${HOME}/.local/share/maldroid/venv"
 WRAPPER="${HOME}/.local/bin/maldroid"
-CONFIG_FILE="${HOME}/.config/maldroid/config.toml"
+CONFIG_DIR="${HOME}/.config/maldroid"
 CACHE_DIR="${HOME}/.local/share/maldroid/cache"
 
 echo "MalDroid will remove:"
@@ -20,11 +20,11 @@ fi
 rm -rf "${VENV_DIR}"
 rm -f "${WRAPPER}"
 
-if [ -f "${CONFIG_FILE}" ]; then
-  printf "Remove configuration file ${CONFIG_FILE}? [y/N] "
+if [ -d "${CONFIG_DIR}" ]; then
+  printf "Remove configuration, saved MCP servers, and MCP history in ${CONFIG_DIR}? [y/N] "
   read -r answer
   if [ "${answer}" = "y" ] || [ "${answer}" = "Y" ]; then
-    rm -f "${CONFIG_FILE}"
+    rm -rf "${CONFIG_DIR}"
   fi
 fi
 
@@ -37,4 +37,3 @@ if [ -d "${CACHE_DIR}" ]; then
 fi
 
 echo "MalDroid executable and virtual environment were removed."
-

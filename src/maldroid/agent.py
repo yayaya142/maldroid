@@ -9,6 +9,7 @@ from typing import Any
 
 from maldroid.case_manager import Case
 from maldroid.config import AppConfig
+from maldroid.external_mcp import ExternalMcpRuntime
 from maldroid.llama_client import REASONING_BUDGETS, AssistantMessage, ModelClient, ReasoningLevel
 from maldroid.prompts import SYSTEM_PROMPT, profile_prompt
 from maldroid.session_manager import SessionManager
@@ -66,6 +67,7 @@ class MalDroidAgent:
         previous_summary: str = "",
         event_handler: AgentEventHandler | None = None,
         auto_profile_enabled: bool = True,
+        external_mcp: ExternalMcpRuntime | None = None,
     ):
         self.config = config
         self.case = case
@@ -75,6 +77,7 @@ class MalDroidAgent:
         self.sessions = sessions
         self.event_handler = event_handler
         self._auto_profile_enabled = auto_profile_enabled
+        self.external_mcp = external_mcp
         self.messages: list[dict[str, Any]] = []
         model_event_setter = getattr(self.client, "set_event_handler", None)
         if model_event_setter is not None:
@@ -119,7 +122,7 @@ class MalDroidAgent:
         investigation_calls = 0
         activity: list[dict[str, Any]] = []
         while True:
-            tools = self.registry.schemas(self.case.state.active_profile)
+            tools = self.available_tool_schemas()
             if not self._auto_profile_enabled:
                 filtered_tools: list[dict[str, Any]] = []
                 for item in tools:
@@ -162,7 +165,11 @@ class MalDroidAgent:
                     content={"id": call.id, "name": call.name, "arguments": call.arguments},
                 )
                 self._emit("tool_start", name=call.name, arguments=call.arguments)
-                result = self.dispatcher.execute(call.name, call.arguments)
+                result = (
+                    self.external_mcp.execute(call.name, call.arguments)
+                    if self.external_mcp is not None and self.external_mcp.handles(call.name)
+                    else self.dispatcher.execute(call.name, call.arguments)
+                )
                 self._emit(
                     "tool_result",
                     name=call.name,
@@ -470,11 +477,17 @@ class MalDroidAgent:
         serialized = json.dumps(
             {
                 "messages": self.messages,
-                "tools": self.registry.schemas(self.case.state.active_profile),
+                "tools": self.available_tool_schemas(),
             },
             ensure_ascii=False,
         )
         return max(1, len(serialized) // 4)
+
+    def available_tool_schemas(self) -> list[dict[str, Any]]:
+        tools = self.registry.schemas(self.case.state.active_profile)
+        if self.external_mcp is not None:
+            tools.extend(self.external_mcp.schemas())
+        return tools
 
     def context_ratio(self) -> float:
         return self.estimate_tokens() / self.case.state.context_size

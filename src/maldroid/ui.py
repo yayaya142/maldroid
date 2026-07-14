@@ -618,10 +618,20 @@ class InteractiveChat:
         table = Table("Tool", "Scope", "Description", box=box.SIMPLE, padding=(0, 1))
         for tool in tools:
             table.add_row(tool.name, tool.profile, tool.description)
+        external_count = 0
+        if self.agent.external_mcp is not None:
+            for schema in self.agent.external_mcp.schemas():
+                function = schema.get("function", {})
+                table.add_row(
+                    str(function.get("name", "external-tool")),
+                    "external MCP",
+                    str(function.get("description", "")),
+                )
+                external_count += 1
         self.console.print(
             Panel(
                 table,
-                title=f"Tools · {self.case.state.active_profile} · {len(tools)}",
+                title=(f"Tools · {self.case.state.active_profile} · {len(tools) + external_count}"),
                 border_style="cyan",
             )
         )
@@ -709,6 +719,15 @@ class InteractiveChat:
         table.add_row("mcp.endpoint", self.mcp_endpoint)
         table.add_row("mcp.transport", "streamable-http")
         table.add_row("mcp.tools", str(len(self.registry.enabled(self.case.state.active_profile))))
+        if self.agent.external_mcp is not None:
+            for status in self.agent.external_mcp.statuses:
+                details = f"{status['status']} · {status['tools']} tools · {status['url']}"
+                if status.get("error"):
+                    details += " · " + str(status["error"])[:160]
+                table.add_row(
+                    "external." + str(status["nickname"]),
+                    details,
+                )
         self.console.print(
             Panel(table, title="MCP" if mcp_only else "Local servers", border_style="cyan")
         )

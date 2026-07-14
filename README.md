@@ -147,6 +147,34 @@ Every managed tool name starts with `MalDroid_`, for example `MalDroid_read_case
 `MalDroid_search_text`. This keeps MalDroid tools recognizable when the WebUI connects several MCP
 servers at once.
 
+### Additional MCP servers
+
+MalDroid can attach additional local MCP servers directly to its CLI agent. Paste the URL and,
+optionally, give it a short nickname:
+
+```bash
+maldroid mcp add http://127.0.0.1:8080/mcp --name ghidra
+maldroid mcp add http://localhost:9000/sse --name legacy
+maldroid mcp list
+maldroid mcp test ghidra
+maldroid mcp history
+maldroid mcp remove ghidra
+```
+
+The `/mcp` suffix selects Streamable HTTP and `/sse` selects legacy SSE automatically. Without
+`--name`, MalDroid uses `local-PORT`. Discovered tools are namespaced as
+`MCP_<nickname>_<tool-name>`, added to the model on the next MalDroid session, shown by `/tools` and
+`/mcp`, and recorded in normal case tool history. An unavailable saved server produces a warning
+and is retried on the next run without blocking the investigation.
+
+Connectors and their add/remove/test/connection history live in
+`~/.config/maldroid/mcp-servers.json` and `mcp-servers-history.jsonl`. A normal reinstall or
+uninstall preserves them. `uninstall.sh` removes them only when the user explicitly approves the
+configuration-removal prompt. URLs are restricted to loopback, cannot embed credentials or query
+tokens, and may use only HTTP(S). External MCP servers have their own permissions and are not
+restricted by MalDroid's case path policy; only their invocation status and returned-output limit
+are enforced by MalDroid.
+
 The MCP port is fixed. Its default is 8765, and MalDroid fails clearly if it is occupied rather
 than silently changing the endpoint. Set another persistent fixed port once with
 `maldroid config set mcp.preferred_port PORT`; `--port` on `mcp serve` and `--mcp-port` on normal

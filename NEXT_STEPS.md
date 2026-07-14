@@ -32,6 +32,9 @@
    Test automatic profile selection with a real Metro bundle and extracted APK, then verify a mixed
    framework/native tree selects the framework, updates the toolbar, and exposes its profile tools
    without asking the user. Verify `/profile native` locks and `/profile auto` resumes detection.
+   Add one real local Streamable HTTP connector and one legacy SSE connector, restart MalDroid,
+   verify their `MCP_<nickname>_` tools appear and execute, then confirm an offline saved connector
+   warns without blocking startup and survives a default uninstall/reinstall.
 2. `REL-002` — Run the full suite and installer lifecycle on Kali rolling and Apple Silicon.
 3. `COMPAT-001` — Expand benign multi-architecture ELF and versioned Blutter fixtures on target
    platforms and record exact external-tool versions.

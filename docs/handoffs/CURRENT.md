@@ -87,6 +87,10 @@ Run target-machine acceptance with the authorized Gemma 4 model and an external 
 - After evidence work starts, the controller visibly requests TODO/Finding maintenance. Fresh
   evidence invalidates an older synthesis note, and automatic fallback notes preserve the
   objective, bounded arguments/results, current structured state, synthesis, and next action.
+- External local MCP servers can be saved with URL plus optional nickname. Both Streamable HTTP and
+  SSE are discovered at startup, namespaced into model schemas, executed through official MCP
+  clients, output-limited, and audited. Registry/history survive uninstall unless configuration
+  removal is explicitly approved; unavailable connectors do not block a case.
 
 ## Verification
 
@@ -96,14 +100,16 @@ Verified in the local isolated Python 3.12 venv:
 ./scripts/dev release-check
 ```
 
-Results: the consolidated release check passed. Ruff formatting and lint passed; mypy passed for 35
-source files; 85 tests passed. Project hygiene, installer dry-run, browser
+Results: the consolidated release check passed. Ruff formatting and lint passed; mypy passed for 36
+source files; 90 tests passed. Project hygiene, installer dry-run, browser
 MCP origin/CORS coverage, termination-signal cleanup, namespaced tool discovery, enforced and
 automatic and phase checkpoints, autonomous continuation, model retry, compaction fallback,
 streaming token/tool reconstruction, live terminal telemetry, dynamic reasoning-budget request
 tests, MCP result variants, automatic and model-assisted profile selection, archive/mixed-framework
 fixtures, non-compacting tool windows, meaningful checkpoint contents, structured TODO/Finding
-discipline, JSON parsing, protocol integration, and wheel build verification passed. The wheel is
+discipline, persistent external MCP registry/history, Streamable HTTP discovery/execution,
+namespace routing, SSE configuration, offline behavior, uninstall preservation, JSON parsing,
+protocol integration, and wheel build verification passed. The wheel is
 `dist/maldroid-0.1.0-py3-none-any.whl`.
 
 ## Known limitations

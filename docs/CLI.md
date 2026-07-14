@@ -74,6 +74,30 @@ ask the user to identify frameworks.
 An explicit `--profile` CLI option starts that run in manual mode. Automatic switching never
 overrides a manual session choice.
 
+### Persistent external MCP connectors
+
+Add a local Streamable HTTP or SSE server by pasting its URL. A nickname is optional:
+
+```bash
+maldroid mcp add http://127.0.0.1:8080/mcp --name ghidra
+maldroid mcp add http://localhost:9000/sse
+maldroid mcp list [--json]
+maldroid mcp test NAME
+maldroid mcp history [--json]
+maldroid mcp remove NAME [--yes]
+```
+
+Transport is inferred from `/mcp` or `/sse`. The default name is `local-PORT`; exposed model tools
+use `MCP_<nickname>_` names. Saved servers are discovered at normal chat startup. Connections and
+tool calls appear in session history, while the persistent connector audit records adds, removals,
+tests, and connection attempts. Restart MalDroid after adding a connector to make its tools
+available to the active model session.
+
+Only loopback URLs without embedded credentials, queries, or fragments are accepted. External MCP
+implementations are independent programs: MalDroid limits returned output and records invocation
+status, but cannot apply case path policy or constrain their side effects. `/tools` shows connected
+external tools and `/mcp` shows connector health.
+
 Keyboard controls:
 
 - Enter sends the current message.

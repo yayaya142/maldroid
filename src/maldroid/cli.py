@@ -30,6 +30,13 @@ from maldroid.config import (
 from maldroid.constants import VERSION
 from maldroid.evidence_manager import EvidenceManager
 from maldroid.exceptions import MalDroidError
+from maldroid.external_mcp import (
+    ExternalMcpClient,
+    ExternalMcpRegistryManager,
+    ExternalMcpRuntime,
+    concise_mcp_error,
+    external_tool_alias,
+)
 from maldroid.investigation import InvestigationManager
 from maldroid.knowledge_manager import KnowledgeManager
 from maldroid.llama_adapter import build_server_command, resolve_binary
@@ -69,7 +76,7 @@ knowledge_app = typer.Typer(
     help="Manage local research playbooks.", no_args_is_help=True, rich_markup_mode="rich"
 )
 mcp_app = typer.Typer(
-    help="Serve and configure case-scoped MCP tools.",
+    help="Serve case tools and manage persistent local MCP connectors.",
     no_args_is_help=True,
     rich_markup_mode="rich",
 )
@@ -404,6 +411,115 @@ def mcp_client_config(
     )
 
 
+@mcp_app.command("add")
+def mcp_add(
+    url: str = typer.Argument(..., help="Loopback MCP URL ending in /mcp or /sse."),
+    nickname: str | None = typer.Option(
+        None, "--name", "-n", help="Optional short name used as the tool prefix."
+    ),
+) -> None:
+    """Save an additional local MCP server and test its tool discovery."""
+    manager = ExternalMcpRegistryManager()
+    server = manager.add(url, nickname)
+    console = _console()
+    console.print(f"[green]✓ Saved MCP server:[/green] [bold]{server.nickname}[/bold]")
+    console.print(f"URL: {server.url}")
+    console.print(f"Transport: {server.transport}")
+    try:
+        tools = ExternalMcpClient(server, load_config().mcp.startup_timeout_seconds).list_tools()
+        manager.record("test", nickname=server.nickname, status="connected", tools=len(tools))
+        console.print(f"[green]✓ Connected:[/green] {len(tools)} tools discovered")
+        if tools:
+            console.print(f"Tool prefix: MCP_{server.nickname}_")
+    except Exception as exc:
+        error = concise_mcp_error(exc)
+        manager.record("test", nickname=server.nickname, status="unavailable", error=error)
+        console.print(
+            "[yellow]Saved, but the server is currently unavailable.[/yellow] "
+            "MalDroid will retry at the next session."
+        )
+        console.print(f"[dim]{error}[/dim]")
+
+
+@mcp_app.command("list")
+def mcp_list(
+    json_output: bool = typer.Option(False, "--json", help="Emit saved connectors as JSON."),
+) -> None:
+    """List persistent external MCP servers."""
+    manager = ExternalMcpRegistryManager()
+    servers = [item.model_dump(mode="json") for item in manager.load().servers]
+    if json_output:
+        _emit_json({"path": str(manager.path), "servers": servers})
+        return
+    if not servers:
+        _console().print("[dim]No external MCP servers are saved.[/dim]")
+        return
+    table = Table("Name", "Transport", "URL")
+    for server in servers:
+        table.add_row(server["nickname"], server["transport"], server["url"])
+    _console().print(table)
+    _console().print(f"[dim]Saved in {manager.path}[/dim]")
+
+
+@mcp_app.command("remove")
+def mcp_remove(
+    nickname: str = typer.Argument(..., help="Saved MCP nickname."),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Remove without confirmation."),
+) -> None:
+    """Remove one saved external MCP server."""
+    manager = ExternalMcpRegistryManager()
+    server = manager.get(nickname)
+    if not yes:
+        typer.confirm(f"Remove MCP server '{server.nickname}' ({server.url})?", abort=True)
+    manager.remove(nickname)
+    _console().print(f"[green]✓ Removed MCP server:[/green] {server.nickname}")
+
+
+@mcp_app.command("test")
+def mcp_test(nickname: str = typer.Argument(..., help="Saved MCP nickname.")) -> None:
+    """Connect to one saved MCP server and list its tools."""
+    manager = ExternalMcpRegistryManager()
+    server = manager.get(nickname)
+    try:
+        tools = ExternalMcpClient(server, load_config().mcp.startup_timeout_seconds).list_tools()
+    except Exception as exc:
+        error = concise_mcp_error(exc)
+        manager.record("test", nickname=server.nickname, status="unavailable", error=error)
+        raise MalDroidError(f"MCP server '{server.nickname}' is unavailable: {error}") from exc
+    manager.record("test", nickname=server.nickname, status="connected", tools=len(tools))
+    table = Table("Exposed name", "Original tool")
+    for tool in tools:
+        table.add_row(external_tool_alias(server.nickname, tool.name), tool.name)
+    _console().print(Panel(table, title=f"{server.nickname} · {len(tools)} tools"))
+
+
+@mcp_app.command("history")
+def mcp_history(
+    limit: int = typer.Option(25, "--limit", min=1, max=500),
+    json_output: bool = typer.Option(False, "--json", help="Emit connector history as JSON."),
+) -> None:
+    """Show persistent add, remove, test, and connection history."""
+    manager = ExternalMcpRegistryManager()
+    entries = manager.history(limit)
+    if json_output:
+        _emit_json({"path": str(manager.history_path), "events": entries})
+        return
+    if not entries:
+        _console().print("[dim]No external MCP history has been recorded.[/dim]")
+        return
+    table = Table("Time", "Action", "Server", "Status")
+    for event in entries:
+        raw_server = event.get("server")
+        server_details: dict[str, Any] = raw_server if isinstance(raw_server, dict) else {}
+        table.add_row(
+            str(event.get("timestamp", "")),
+            str(event.get("action", "")),
+            str(event.get("nickname") or server_details.get("nickname", "")),
+            str(event.get("status", "")),
+        )
+    _console().print(table)
+
+
 @app.command(epilog="Examples: maldroid doctor --json | maldroid doctor --model-tool-test")
 def doctor(
     show_command: bool = typer.Option(
@@ -468,6 +584,15 @@ def doctor(
             "MCP transport",
             "ok",
             f"streamable-http on {config.mcp.host}:{config.mcp.preferred_port}/mcp",
+        )
+    )
+    external_registry = ExternalMcpRegistryManager()
+    external_count = len(external_registry.load().servers)
+    checks.append(
+        (
+            "External MCP connectors",
+            "ok",
+            f"{external_count} saved in {external_registry.path}",
         )
     )
     if json_output and model_tool_test:
@@ -796,6 +921,18 @@ def _run_case(
             )
             previous = SessionManager.load_latest_summary(case)
             sessions = SessionManager(case, manager)
+            external_mcp = ExternalMcpRuntime(config, case, ExternalMcpRegistryManager())
+            for status in external_mcp.refresh():
+                sessions.record("external_mcp_connection", content=status)
+                if status["status"] == "connected":
+                    console.print(
+                        f"External MCP {status['nickname']}: connected ({status['tools']} tools)"
+                    )
+                else:
+                    console.print(
+                        f"[yellow]External MCP {status['nickname']}: unavailable; "
+                        "continuing without it[/yellow]"
+                    )
             agent = MalDroidAgent(
                 config,
                 case,
@@ -805,6 +942,7 @@ def _run_case(
                 sessions,
                 previous,
                 auto_profile_enabled=auto_profile,
+                external_mcp=external_mcp,
             )
             chat = InteractiveChat(
                 console,

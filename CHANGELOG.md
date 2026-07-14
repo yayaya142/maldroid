@@ -84,3 +84,7 @@
   maintenance, requires a fresh synthesis note after later evidence work, and makes automatic phase
   notes preserve bounded inputs/results, structured state, conclusions, and next actions instead of
   only listing executed tools.
+- Added persistent external MCP connectors with one-command URL registration, optional nicknames,
+  automatic Streamable HTTP/SSE selection, collision-safe tool namespaces, startup discovery,
+  graceful unavailable-server handling, CLI health/history management, case execution audit, and
+  output limiting. Connector configuration survives normal uninstall unless explicitly removed.

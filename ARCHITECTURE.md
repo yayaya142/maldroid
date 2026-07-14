@@ -110,6 +110,20 @@ are reconstructed only from structured API deltas. The terminal uses streaming e
 token/context telemetry; the complete reconstructed assistant message remains the sole history and
 tool-loop input.
 
+## External MCP connectors
+
+The persistent external connector registry is separate from the case-scoped MalDroid MCP server.
+It stores validated loopback URLs and nicknames under the configuration directory and keeps an
+append-only connector history. Streamable HTTP and legacy SSE use the official MCP clients.
+
+At chat startup, each configured server is discovered independently. Its schemas are added to the
+model under a collision-resistant `MCP_<nickname>_` namespace; unavailable servers are omitted
+without failing the case. Calls route directly to the owning MCP server, returned output is capped
+and overflowed into the case, and invocation status joins the case tool audit and session JSONL.
+The external process remains responsible for argument semantics, filesystem authority, and side
+effects, so its descriptions and results are treated as untrusted and never represented as
+MalDroid-case-policy enforcement.
+
 Reasoning effort is a per-request model-client property. The configured human-readable level maps
 to llama.cpp `thinking_budget_tokens`, can change between tool rounds without a server restart, and
 is recorded as a session event. No command-line reasoning budget is set, preserving dynamic control.

@@ -82,6 +82,9 @@ Last updated: 2026-07-14
 - The controller actively drives TODO, Finding, and note maintenance during substantive work. A
   fresh synthesis must follow later evidence operations, and automatic fallback notes include
   objective, arguments/results, durable state, synthesis, and next action rather than tool names.
+- Persistent external MCP connectors support loopback Streamable HTTP and SSE URLs, optional
+  nicknames, namespaced discovery/execution inside the agent, non-blocking offline behavior,
+  connector and case histories, bounded outputs, and explicit remove/uninstall lifecycle.
 
 ## Partial or environment-gated
 
