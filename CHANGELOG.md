@@ -34,3 +34,8 @@
   default, with an explicit `MALDROID_PIP_INDEX_URL` override for approved private mirrors.
 - Added a concise, documented system prompt with deterministic case startup, bounded file handling,
   MCP-only tool use, evidence safety, and persistent investigation guidance.
+- Made llama.cpp model API authentication optional and disabled by default for direct local server
+  clients, while preserving random per-run keys as an explicit setting.
+- Reworked installation and first-use configuration into an explained five-step flow with automatic
+  llama-server detection, Enter-to-accept defaults, quieter dependency output, and clearer next
+  commands.

@@ -44,10 +44,11 @@ append-only JSONL.
 
 ## Server lifecycle
 
-MalDroid validates the binary and model, chooses port 7575 or a safe fallback, generates an
-ephemeral API key, starts the child in a new process group, polls `/v1/health`, and captures stdout
+MalDroid validates the binary and model, chooses port 7575 or a safe fallback, and starts the child
+in a new process group. Model API authentication is disabled by default for direct loopback use; if
+enabled, a per-run key is generated and redacted. MalDroid polls `/v1/health` and captures stdout
 and stderr. Exit, Ctrl+C, and SIGTERM terminate the process group gracefully, then force it only
-after a timeout. The command is centralized and secrets are redacted.
+after a timeout. Command construction remains centralized.
 
 The Python MCP server binds `127.0.0.1` only, enables MCP transport DNS-rebinding protection, and
 uses a pre-bound socket. Its fixed default port is 8765. Every collision fails rather than changing

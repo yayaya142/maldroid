@@ -8,8 +8,8 @@ Last updated: 2026-07-14
 - Validated secure configuration with the supplied Gemma 4 performance preset.
 - Managed and existing-directory cases, evidence symlink/copy, registry, resume, and case listing.
 - Persistent findings, notes, TODOs, sessions, summaries, and schema versions.
-- Secure llama-server command construction, port policy, ephemeral API key, logging, health, and
-  shutdown lifecycle.
+- Secure llama-server command construction, port policy, optional per-run API authentication,
+  logging, health, and shutdown lifecycle. Authentication is off by default on loopback.
 - Local normalized model client, reasoning-content preservation, bounded tool loop, and line chat.
 - Core tool registry/dispatcher, path enforcement, audit, truncation, large-text FTS5, and knowledge.
 - Loopback MCP Streamable HTTP discovery and execution for all tools, standalone serving, fixed-port
@@ -40,6 +40,8 @@ Last updated: 2026-07-14
   user `pip` configuration; private mirrors require an explicit MalDroid-specific override.
 - Built-in chat and the ready-to-paste `SYSTEM_PROMPT.md` share the same tested, case-aware system
   prompt for MCP file workflows and evidence handling.
+- Installation and `config init` provide an explained first-use workflow, automatic server
+  detection, preserved reinstallation settings, and explicit local-access choices.
 
 ## Partial or environment-gated
 

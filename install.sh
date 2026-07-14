@@ -12,6 +12,13 @@ PACKAGE_INDEX="${MALDROID_PIP_INDEX_URL:-${DEFAULT_PACKAGE_INDEX}}"
 
 if [ "${1:-}" = "--dry-run" ]; then
   DRY_RUN=true
+elif [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+  echo "Usage: ./install.sh [--dry-run]"
+  echo
+  echo "Install MalDroid into an isolated user environment."
+  echo "  --dry-run  Show detected paths and requirements without changing files."
+  echo "  -h, --help Show this help message."
+  exit 0
 elif [ "$#" -gt 0 ]; then
   echo "Usage: ./install.sh [--dry-run]" >&2
   exit 2
@@ -62,7 +69,13 @@ if [ -z "${PYTHON_BIN}" ]; then
   exit 1
 fi
 
-echo "MalDroid installation plan"
+echo
+echo "============================================================"
+echo " MalDroid installer"
+echo " Local Android static analysis with llama.cpp and MCP tools"
+echo "============================================================"
+echo
+echo "[1/5] Checking this computer"
 echo "Platform: ${PLATFORM}"
 echo "Python: ${PYTHON_BIN}"
 echo "Virtual environment: ${VENV_DIR}"
@@ -77,20 +90,24 @@ else
 fi
 
 if ${DRY_RUN}; then
+  echo
   echo "Dry run complete; no files were changed."
   exit 0
 fi
 
+echo
+echo "[2/5] Creating MalDroid's private Python environment"
 mkdir -p "${INSTALL_ROOT}" "${BIN_DIR}"
 "${PYTHON_BIN}" -m venv "${VENV_DIR}"
+echo "[3/5] Installing MalDroid and its dependencies"
 if ! "${VENV_DIR}/bin/python" -m pip --isolated install \
-  --index-url "${PACKAGE_INDEX}" --upgrade pip; then
+  --quiet --index-url "${PACKAGE_INDEX}" --upgrade pip; then
   echo "Failed to prepare pip from the configured MalDroid package index." >&2
   echo "For an approved private mirror, set MALDROID_PIP_INDEX_URL and retry." >&2
   exit 1
 fi
 if ! "${VENV_DIR}/bin/python" -m pip --isolated install \
-  --index-url "${PACKAGE_INDEX}" "${ROOT_DIR}"; then
+  --quiet --index-url "${PACKAGE_INDEX}" "${ROOT_DIR}"; then
   echo "Failed to install MalDroid and its Python dependencies." >&2
   echo "For an approved private mirror, set MALDROID_PIP_INDEX_URL and retry." >&2
   exit 1
@@ -99,6 +116,7 @@ fi
 printf '%s\n' '#!/usr/bin/env sh' "exec \"${VENV_DIR}/bin/maldroid\" \"\$@\"" > "${WRAPPER}"
 chmod 0755 "${WRAPPER}"
 
+echo "[4/5] Making the 'maldroid' command available"
 case ":${PATH}:" in
   *":${BIN_DIR}:"*) ;;
   *)
@@ -115,13 +133,33 @@ case ":${PATH}:" in
     ;;
 esac
 
+echo
+echo "[5/5] Configuring your local model"
 if [ ! -f "${HOME}/.config/maldroid/config.toml" ]; then
+  echo "A short setup wizard will now ask for llama-server and your GGUF model."
   "${VENV_DIR}/bin/maldroid" config init
+else
+  echo "Existing configuration found; keeping it unchanged."
+  echo "To change it later, run: maldroid config init"
 fi
+echo
+echo "Final verification"
 "${VENV_DIR}/bin/maldroid" doctor
+echo
+echo "============================================================"
 echo "Installation complete."
+echo "============================================================"
 echo "Next steps:"
-echo "  maldroid --install-completion"
-echo "  maldroid config validate"
-echo "  maldroid mcp client-config"
-echo "  maldroid --help"
+echo "  1. Open a new terminal if PATH was updated."
+echo "  2. Run: maldroid --help"
+echo "  3. Start a case: maldroid /path/to/android/artifact"
+echo "  4. MCP client config: maldroid mcp client-config"
+if ! command -v rg >/dev/null 2>&1; then
+  echo
+  echo "Optional: install ripgrep for faster searches."
+  if [ "${PLATFORM}" = "macOS" ]; then
+    echo "  brew install ripgrep"
+  else
+    echo "  sudo apt install ripgrep"
+  fi
+fi

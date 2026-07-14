@@ -18,7 +18,7 @@ from maldroid.paths import expand_path
 class ServerCommand:
     arguments: list[str]
     port: int
-    api_key: str
+    api_key: str | None
 
     def display(self) -> str:
         redacted: list[str] = []
@@ -86,7 +86,7 @@ def build_server_command(
         port if port is not None else config.llama.preferred_port,
         explicit=explicit_port,
     )
-    api_key = secrets.token_urlsafe(32)
+    api_key = secrets.token_urlsafe(32) if config.llama.api_key_enabled else None
     arguments = [
         str(binary),
         "-m",
@@ -110,9 +110,9 @@ def build_server_command(
         "--jinja",
         "--no-ui",
         "--no-ui-mcp-proxy",
-        "--api-key",
-        api_key,
     ]
+    if api_key:
+        arguments.extend(["--api-key", api_key])
     if config.llama.chat_template_file:
         template = expand_path(config.llama.chat_template_file)
         if not template.is_file():

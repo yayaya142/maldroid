@@ -47,12 +47,12 @@ class LocalLlamaClient:
     def __init__(
         self,
         base_url: str,
-        api_key: str,
+        api_key: str | None,
         model: str,
         temperature: float = 0.2,
         max_tokens: int = 4096,
     ):
-        self.client = OpenAI(base_url=base_url, api_key=api_key)
+        self.client = OpenAI(base_url=base_url, api_key=api_key or "local-no-auth")
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens

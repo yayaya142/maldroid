@@ -32,6 +32,10 @@ approved private mirror can be selected explicitly:
 MALDROID_PIP_INDEX_URL="https://packages.example/simple" ./install.sh
 ```
 
+The installer presents five explained steps, detects `llama-server` when it is already in `PATH`,
+and shows defaults that can be accepted with Enter. Existing configuration is preserved on
+reinstallation.
+
 After installation, enable native shell completion and inspect the command map:
 
 ```bash
@@ -122,6 +126,7 @@ maldroid config show
 maldroid config show --json
 maldroid config get mcp.preferred_port
 maldroid config set llama.temperature 0.1
+maldroid config set llama.api_key_enabled true
 maldroid config validate
 maldroid config reset llama.temperature --yes
 maldroid config path
@@ -133,6 +138,10 @@ a ready-to-paste connector definition with `maldroid mcp client-config`.
 
 CLI options override configuration for one run. The preferred model port is 7575 and may fall back
 when configured as a default. The MCP port is fixed at 8765 by default and never falls back.
+
+The loopback llama.cpp API does not require an API key by default, which keeps direct local UIs and
+clients simple. Enable `llama.api_key_enabled` only when local model API authentication is needed;
+MalDroid then creates a new random key on every server start. The model host remains loopback-only.
 
 MalDroid rejects `--tools`, `--agent`, and MCP proxy flags in `extra_args`. Its MCP server is the
 Python security boundary; `llama-server` built-in tools and experimental MCP proxy remain disabled.

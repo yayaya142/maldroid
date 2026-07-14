@@ -101,6 +101,25 @@ def test_config_cli_discovery_set_validate_and_reset(
     assert "8765" in reset.stdout
 
 
+def test_first_time_config_wizard_explains_defaults(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("MALDROID_CONFIG_DIR", str(tmp_path / "config"))
+    monkeypatch.setenv("MALDROID_DATA_DIR", str(tmp_path / "data"))
+    runner = CliRunner()
+
+    result = runner.invoke(cli.app, ["config", "init"], input="\n\n\n\n\n\n")
+
+    assert result.exit_code == 0, result.output
+    plain_output = Text.from_ansi(result.stdout).plain
+    assert "MalDroid first-time setup" in plain_output
+    assert "Press Enter to accept" in plain_output
+    assert "API authentication: disabled" in plain_output
+    shown = runner.invoke(cli.app, ["config", "get", "llama.api_key_enabled", "--json"])
+    assert shown.exit_code == 0
+    assert json.loads(shown.stdout)["value"] is False
+
+
 @pytest.mark.parametrize(
     ("arguments", "inserted"),
     [
@@ -234,3 +253,17 @@ def test_installer_dry_run_does_not_write(tmp_path: Path) -> None:
     assert "no files were changed" in completed.stdout
     assert "public PyPI (isolated from user pip configuration)" in completed.stdout
     assert not (tmp_path / ".local" / "share" / "maldroid").exists()
+
+
+def test_installer_help_is_self_contained() -> None:
+    root = Path(__file__).resolve().parents[1]
+    completed = subprocess.run(
+        [str(root / "install.sh"), "--help"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0
+    assert "Install MalDroid into an isolated user environment" in completed.stdout
+    assert "--dry-run" in completed.stdout

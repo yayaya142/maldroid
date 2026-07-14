@@ -54,6 +54,7 @@ class LlamaConfig(BaseModel):
     flash_attention: Literal["on", "off", "auto"] = "on"
     temperature: float = Field(default=0.2, ge=0.0, le=2.0)
     max_response_tokens: int = Field(default=4096, ge=128)
+    api_key_enabled: bool = False
     chat_template_file: str | None = None
     extra_args: list[str] = Field(default_factory=list)
 

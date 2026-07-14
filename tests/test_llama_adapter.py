@@ -21,6 +21,16 @@ def test_secure_server_command_preserves_performance_settings(app_config: AppCon
     assert arguments[arguments.index("--keep") + 1] == "4096"
     assert arguments[arguments.index("-ngl") + 1] == "99"
     assert arguments[arguments.index("-b") + 1] == "512"
+    assert "--api-key" not in arguments
+    assert command.api_key is None
+
+
+def test_optional_api_key_is_random_and_redacted(app_config: AppConfig) -> None:
+    data = app_config.model_dump()
+    data["llama"]["api_key_enabled"] = True
+    command = build_server_command(AppConfig.model_validate(data))
+    assert command.api_key
+    assert "--api-key" in command.arguments
     assert command.api_key not in command.display()
     assert "<redacted>" in command.display()
 

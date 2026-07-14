@@ -38,6 +38,8 @@ maldroid config init
 maldroid config show
 maldroid config show --json
 maldroid config get llama.model
+maldroid config get llama.api_key_enabled
+maldroid config set llama.api_key_enabled true
 maldroid config get mcp.preferred_port --json
 maldroid config set mcp.preferred_port 8765
 maldroid config reset mcp.preferred_port --yes
@@ -48,6 +50,10 @@ maldroid config path
 Keys use `section.key` form. Unknown keys, invalid types, unsafe llama.cpp flags, non-loopback hosts,
 and invalid cross-field limits are rejected before the file is replaced. `config reset` changes one
 key only. The configuration file is private-mode TOML and saves atomically.
+
+`llama.api_key_enabled` defaults to `false` for uncomplicated direct access to the loopback
+llama.cpp UI and API. When set to `true`, each managed server start receives a new random key. The
+setting does not change MCP access and cannot make the model server listen beyond loopback.
 
 ## MCP
 
@@ -72,8 +78,8 @@ maldroid profiles --json
 maldroid tools --profile react-native --json
 ```
 
-`doctor --show-command` always redacts the ephemeral API secret. `--model-tool-test` is interactive
-and intentionally cannot be combined with `--json`.
+`doctor --show-command` redacts the random API secret whenever authentication is enabled.
+`--model-tool-test` is interactive and intentionally cannot be combined with `--json`.
 
 ## Exit behavior
 

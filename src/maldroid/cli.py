@@ -13,6 +13,7 @@ from typing import Any
 import typer
 from pydantic import ValidationError
 from rich.console import Console
+from rich.panel import Panel
 from rich.table import Table
 
 from maldroid.agent import MalDroidAgent
@@ -88,6 +89,7 @@ CONFIG_DESCRIPTIONS = {
     "llama.flash_attention": "Flash-attention mode: on, off, or auto.",
     "llama.temperature": "Sampling temperature for assistant responses.",
     "llama.max_response_tokens": "Maximum generated tokens per model response.",
+    "llama.api_key_enabled": "Enable a random per-run key for the loopback model API.",
     "llama.chat_template_file": "Optional explicit Jinja chat-template path.",
     "llama.extra_args": "Additional validated llama-server arguments.",
     "limits.max_tool_output_characters": "Largest inline tool result before disk overflow.",
@@ -455,22 +457,66 @@ def doctor(
 def config_init() -> None:
     """Run first-use configuration and save a validated TOML file."""
     current = load_config()
-    binary = typer.prompt("llama-server executable", default=current.llama.binary)
+    console = _console()
+    detected_binary = shutil.which("llama-server")
+    binary_default = detected_binary or current.llama.binary
+    console.print(
+        Panel.fit(
+            "This wizard connects MalDroid to your local llama.cpp installation.\n"
+            "Press Enter to accept any value shown in brackets.",
+            title="MalDroid first-time setup",
+        )
+    )
+    console.print("\n[bold]1/5 — llama-server[/bold]")
+    console.print("The executable that starts your local model server.")
+    if detected_binary:
+        console.print(f"Detected automatically: [green]{detected_binary}[/green]")
+    binary = typer.prompt("llama-server path", default=binary_default)
+
+    console.print("\n[bold]2/5 — Model[/bold]")
+    console.print("The complete path to your local .gguf model file.")
     model = typer.prompt("GGUF model path", default=current.llama.model)
+
+    console.print("\n[bold]3/5 — Cases[/bold]")
+    console.print("New investigation folders will be created here.")
     cases_directory = typer.prompt("Cases directory", default=current.general.cases_directory)
+
+    console.print("\n[bold]4/5 — Model context[/bold]")
+    console.print("Keep 65536 unless your model or hardware requires a smaller value.")
     context_size = typer.prompt(
         "Default context size", default=current.general.default_context_size, type=int
     )
-    extra = typer.prompt("Optional extra llama-server arguments", default="")
+
+    console.print("\n[bold]5/5 — Local access[/bold]")
+    console.print(
+        "API-key authentication is normally unnecessary because the server only listens on "
+        "this computer. Leave it disabled for direct llama-server UI and API access."
+    )
+    api_key_enabled = typer.confirm(
+        "Enable a new random API key on every server start?",
+        default=current.llama.api_key_enabled,
+    )
+    console.print(
+        "\n[dim]Advanced arguments are optional. Most users should leave this empty.[/dim]"
+    )
+    existing_extra = shlex.join(current.llama.extra_args)
+    extra = typer.prompt("Additional llama-server arguments", default=existing_extra)
     data = current.model_dump()
     data["llama"]["binary"] = binary
     data["llama"]["model"] = model
+    data["llama"]["api_key_enabled"] = api_key_enabled
     data["llama"]["extra_args"] = shlex.split(extra) if extra else []
     data["general"]["cases_directory"] = cases_directory
     data["general"]["default_context_size"] = context_size
     config = AppConfig.model_validate(data)
     target = save_config(config)
-    _console().print(f"Saved configuration: {target}")
+    console.print("\n[green bold]Configuration saved.[/green bold]")
+    console.print(f"File: {target}")
+    console.print(
+        "API authentication: "
+        + ("enabled (a new key is generated per run)" if api_key_enabled else "disabled")
+    )
+    console.print("Run [bold]maldroid doctor[/bold] to verify the complete setup.")
 
 
 @config_app.command("show", epilog="Use --json for scripts and support bundles.")
@@ -739,9 +785,9 @@ def _doctor_model_tool_test(config: AppConfig, console: Console) -> None:
     server = LlamaServerProcess(config, diagnostic)
     try:
         command = server.start()
+        headers = {"Authorization": f"Bearer {command.api_key}"} if command.api_key else {}
         request = urllib.request.Request(
-            server.base_url.removesuffix("/v1") + "/props",
-            headers={"Authorization": f"Bearer {command.api_key}"},
+            server.base_url.removesuffix("/v1") + "/props", headers=headers
         )
         with urllib.request.urlopen(request, timeout=10) as response:
             props = json.loads(response.read().decode("utf-8"))

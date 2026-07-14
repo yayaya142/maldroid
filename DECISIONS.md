@@ -9,5 +9,7 @@
 - ADR-0007: One sequential agent, atomic commits, and durable handoffs are the collaboration model.
 - ADR-0002: All tool execution uses a loopback Python MCP Streamable HTTP server; llama.cpp's MCP
   proxy and built-in tools remain disabled.
+- ADR-0008: Model API authentication is optional and off by default for direct loopback server use;
+  enabling it generates a redacted random key per run.
 
 Detailed records live in `docs/adr/`.

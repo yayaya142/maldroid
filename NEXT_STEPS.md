@@ -12,6 +12,8 @@
    `MALDROID_PIP_INDEX_URL` only when an approved private mirror is intentionally required.
    Verify `SYSTEM_PROMPT.md` in one direct external-client session and confirm the model starts with
    `read_case_state` and `list_case_files` before bounded evidence reads.
+   Confirm the llama.cpp UI connects without an API key under the default configuration, then
+   enable `llama.api_key_enabled` once and verify the authenticated managed-client path.
 2. `REL-002` — Run the full suite and installer lifecycle on Kali rolling and Apple Silicon.
 3. `COMPAT-001` — Expand benign multi-architecture ELF and versioned Blutter fixtures on target
    platforms and record exact external-tool versions.
