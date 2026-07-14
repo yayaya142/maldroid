@@ -85,6 +85,7 @@ class SelectProfileInput(Arguments):
 class SaveNoteInput(Arguments):
     text: str = Field(min_length=1, max_length=50000)
     evidence: list[EvidenceReference] = Field(default_factory=list)
+    client_mutation_id: str | None = Field(default=None, description="Optional ID for idempotent retries")
 
 
 class SaveFindingInput(Arguments):
@@ -95,6 +96,7 @@ class SaveFindingInput(Arguments):
     status: Literal["tentative", "confirmed", "rejected", "resolved"] = "tentative"
     evidence: list[EvidenceReference] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
+    client_mutation_id: str | None = Field(default=None, description="Optional ID for idempotent retries")
 
 
 class UpdateFindingInput(Arguments):
@@ -105,6 +107,7 @@ class UpdateFindingInput(Arguments):
 class UpdateTodoInput(Arguments):
     action: Literal["add", "complete", "reopen", "remove"]
     text_or_id: str
+    client_mutation_id: str | None = Field(default=None, description="Optional ID for idempotent retries")
 
 
 class KnowledgeSearchInput(Arguments):
@@ -388,7 +391,9 @@ def select_case_profile(_: ToolContext, arguments: BaseModel) -> dict[str, Any]:
 
 def save_note(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
     values = SaveNoteInput.model_validate(arguments)
-    return context.investigation.save_note(context.case, values.text, values.evidence).model_dump()
+    return context.investigation.save_note(
+        context.case, values.text, values.evidence, values.client_mutation_id
+    ).model_dump()
 
 
 def save_finding(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
@@ -402,6 +407,7 @@ def save_finding(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
         values.status,
         values.evidence,
         values.tags,
+        values.client_mutation_id,
     ).model_dump()
 
 
@@ -414,7 +420,9 @@ def update_finding(context: ToolContext, arguments: BaseModel) -> dict[str, Any]
 
 def update_todo(context: ToolContext, arguments: BaseModel) -> dict[str, Any] | None:
     values = UpdateTodoInput.model_validate(arguments)
-    result = context.investigation.update_todo(context.case, values.action, values.text_or_id)
+    result = context.investigation.update_todo(
+        context.case, values.action, values.text_or_id, values.client_mutation_id
+    )
     return result.model_dump() if result else None
 
 

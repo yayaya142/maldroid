@@ -59,6 +59,7 @@ class Finding(BaseModel):
     status: Literal["tentative", "confirmed", "rejected", "resolved"] = "tentative"
     evidence: list[EvidenceReference] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
+    client_mutation_id: str | None = None
     created_at: str = Field(default_factory=now_iso)
     updated_at: str = Field(default_factory=now_iso)
 
@@ -68,6 +69,7 @@ class TodoItem(BaseModel):
     id: str
     text: str
     status: Literal["open", "completed"] = "open"
+    client_mutation_id: str | None = None
     created_at: str = Field(default_factory=now_iso)
     updated_at: str = Field(default_factory=now_iso)
 
@@ -77,6 +79,7 @@ class InvestigationNote(BaseModel):
     id: str
     text: str
     evidence: list[EvidenceReference] = Field(default_factory=list)
+    client_mutation_id: str | None = None
     created_at: str = Field(default_factory=now_iso)
 
 

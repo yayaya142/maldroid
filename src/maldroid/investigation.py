@@ -21,12 +21,22 @@ class InvestigationManager:
         self.case_manager = case_manager
 
     def save_note(
-        self, case: Case, text: str, evidence: list[EvidenceReference] | None = None
+        self,
+        case: Case,
+        text: str,
+        evidence: list[EvidenceReference] | None = None,
+        client_mutation_id: str | None = None,
     ) -> InvestigationNote:
+        if client_mutation_id:
+            for existing in case.state.notes:
+                if existing.client_mutation_id == client_mutation_id:
+                    return existing
+
         note = InvestigationNote(
             id=_next_id("NOTE", [item.id for item in case.state.notes]),
             text=text,
             evidence=evidence or [],
+            client_mutation_id=client_mutation_id,
         )
         # Build Markdown first — if this fails nothing is persisted
         note_md = _render_note_section(note)
@@ -52,7 +62,19 @@ class InvestigationManager:
         status: str = "tentative",
         evidence: list[EvidenceReference] | None = None,
         tags: list[str] | None = None,
+        client_mutation_id: str | None = None,
     ) -> Finding:
+        if client_mutation_id:
+            for existing in case.state.findings:
+                if existing.client_mutation_id == client_mutation_id:
+                    return existing
+
+        # Near-duplicate detection
+        title_lower = title.lower().strip()
+        for existing in case.state.findings:
+            if existing.title.lower().strip() == title_lower:
+                raise CaseError(f"Duplicate finding detected: a finding with the title '{title}' already exists ({existing.id}). Use update_finding instead.")
+
         finding = Finding(
             id=_next_id("FIND", [item.id for item in case.state.findings]),
             title=title,
@@ -62,6 +84,7 @@ class InvestigationManager:
             status=status,  # type: ignore[arg-type]
             evidence=evidence or [],
             tags=tags or [],
+            client_mutation_id=client_mutation_id,
         )
         # Build the full Markdown representation first — fail before touching state
         updated_findings = case.state.findings + [finding]
@@ -111,12 +134,31 @@ class InvestigationManager:
             raise
         return updated
 
-    def update_todo(self, case: Case, action: str, text_or_id: str) -> TodoItem | None:
+    def update_todo(
+        self,
+        case: Case,
+        action: str,
+        text_or_id: str,
+        client_mutation_id: str | None = None,
+    ) -> TodoItem | None:
         item: TodoItem | None
         original_todos = list(case.state.todos)
         if action == "add":
+            if client_mutation_id:
+                for existing in case.state.todos:
+                    if existing.client_mutation_id == client_mutation_id:
+                        return existing
+            
+            # Near-duplicate detection for TODOs
+            text_lower = text_or_id.lower().strip()
+            for existing in case.state.todos:
+                if existing.text.lower().strip() == text_lower and existing.status == "open":
+                    raise CaseError(f"Duplicate TODO detected: an open TODO with the text '{text_or_id}' already exists ({existing.id}).")
+
             item = TodoItem(
-                id=_next_id("TODO", [todo.id for todo in case.state.todos]), text=text_or_id
+                id=_next_id("TODO", [todo.id for todo in case.state.todos]),
+                text=text_or_id,
+                client_mutation_id=client_mutation_id,
             )
             case.state.todos.append(item)
         else:
