@@ -226,9 +226,12 @@ class InvestigationManager:
             raise CaseError(f"Finding not found: {finding_id}")
         
         changes = {}
-        if title is not None: changes["title"] = title
-        if summary is not None: changes["summary"] = summary
-        if confidence is not None: changes["confidence"] = confidence
+        if title is not None:
+            changes["title"] = title
+        if summary is not None:
+            changes["summary"] = summary
+        if confidence is not None:
+            changes["confidence"] = confidence
         if severity is not None:
             changes["severity"] = severity
         if status is not None:

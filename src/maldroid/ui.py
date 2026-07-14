@@ -48,6 +48,7 @@ COMMANDS: dict[str, str] = {
     "/dashboard": "Show the investigation dashboard",
     "/detail": "Show detailed, expandable view of recent activities or specific items",
     "/report": "Export the investigation state to a Markdown report in the case directory",
+    "/timeline": "Show session replay and event timeline",
     "/skip-todo": "Mark a TODO item as completed/skipped",
     "/mark-blocked": "Mark a TODO item as blocked",
     "/note": "Save a durable progress note",
@@ -474,6 +475,8 @@ class InteractiveChat:
             self._show_detail(rest)
         elif name == "/report":
             self._export_report()
+        elif name == "/timeline":
+            self._show_timeline()
         elif name == "/skip-todo":
             if not rest:
                 self.console.print("Usage: [cyan]/skip-todo TODO_ID[/cyan]")
@@ -674,6 +677,45 @@ class InteractiveChat:
             
         report_path.write_text("\n".join(lines), encoding="utf-8")
         self.console.print(f"[bold green]Report exported to:[/bold green] {report_path}")
+
+    def _show_timeline(self) -> None:
+        import json
+        
+        path = self.agent.sessions.history_path
+        if not path.exists():
+            self.console.print("[dim]No timeline events recorded yet in this session.[/dim]")
+            return
+            
+        from rich.table import Table
+        table = Table(title="Session Timeline", show_lines=True)
+        table.add_column("Timestamp", style="dim")
+        table.add_column("Type", style="bold cyan")
+        table.add_column("Details")
+        
+        try:
+            with path.open("r", encoding="utf-8") as f:
+                for line in f:
+                    if not line.strip():
+                        continue
+                    event = json.loads(line)
+                    ts = event.get("timestamp", "").split("T")[-1].split(".")[0]
+                    ev_type = event.get("type", "unknown")
+                    content = event.get("content", {})
+                    
+                    details = ""
+                    if ev_type == "message" and event.get("role") == "user":
+                        details = f"[bold green]Prompt:[/bold green] {content.get('content', '')}"
+                    elif ev_type == "tool_call":
+                        details = f"[bold blue]Tool:[/bold blue] {content.get('name')} {content.get('arguments')}"
+                    elif ev_type == "checkpoint_required":
+                        details = "[yellow]Checkpoint threshold reached[/yellow]"
+                    else:
+                        details = str(content)[:100] + ("..." if len(str(content)) > 100 else "")
+                        
+                    table.add_row(ts, ev_type, details)
+            self.console.print(table)
+        except Exception as e:
+            self.console.print(f"[red]Could not read timeline:[/red] {e}")
 
     def _show_context(self) -> None:
         used, total, remaining, percent = self._context_numbers()
