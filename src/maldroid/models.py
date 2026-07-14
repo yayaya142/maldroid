@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from maldroid.constants import CASE_SCHEMA_VERSION, STATE_SCHEMA_VERSION
 
@@ -29,13 +29,24 @@ class EvidenceRecord(BaseModel):
 
 class EvidenceReference(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    path: str
-    start_line: int | None = Field(default=None, ge=1)
-    end_line: int | None = Field(default=None, ge=1)
-    start_offset: int | None = Field(default=None, ge=0)
-    end_offset: int | None = Field(default=None, ge=0)
-    description: str
-    tool: str | None = None
+    path: str = Field(description="Case-relative path to the evidence file")
+    start_line: int | None = Field(default=None, ge=1, description="First line number (1-indexed)")
+    end_line: int | None = Field(default=None, ge=1, description="Last line number (inclusive)")
+    start_offset: int | None = Field(default=None, ge=0, description="Start byte offset")
+    end_offset: int | None = Field(default=None, ge=0, description="End byte offset")
+    description: str = Field(
+        default="",
+        description="Human-readable description of what this evidence shows (optional; a default is generated from path if omitted)",
+    )
+    tool: str | None = Field(
+        default=None, description="Name of the tool that produced this reference"
+    )
+
+    @model_validator(mode="after")
+    def _fill_default_description(self) -> EvidenceReference:
+        if not self.description:
+            self.description = f"Reference to {self.path}"
+        return self
 
 
 class Finding(BaseModel):

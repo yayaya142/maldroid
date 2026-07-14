@@ -134,6 +134,39 @@ class LargeChunkInput(Arguments):
     chunk_number: int = Field(ge=1)
 
 
+class ListFindingsInput(Arguments):
+    status: str | None = Field(
+        default=None,
+        description="Filter by status: tentative, confirmed, rejected, resolved",
+    )
+    confidence: str | None = Field(
+        default=None,
+        description="Filter by confidence: low, medium, high",
+    )
+    tag: str | None = Field(default=None, description="Filter by tag")
+    page: int = Field(default=1, ge=1)
+    page_size: int = Field(default=20, ge=1, le=50)
+
+
+class GetFindingInput(Arguments):
+    finding_id: str = Field(min_length=1, max_length=50)
+
+
+class ListNotesInput(Arguments):
+    page: int = Field(default=1, ge=1)
+    page_size: int = Field(default=20, ge=1, le=50)
+
+
+class GetNoteInput(Arguments):
+    note_id: str = Field(min_length=1, max_length=50)
+
+
+class ListTodosInput(Arguments):
+    include_completed: bool = False
+    page: int = Field(default=1, ge=1)
+    page_size: int = Field(default=50, ge=1, le=100)
+
+
 def list_case_files(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
     values = ListFilesInput.model_validate(arguments)
     root = context.read_path(values.path)
@@ -304,10 +337,23 @@ def register_evidence(context: ToolContext, arguments: BaseModel) -> dict[str, A
 
 def read_case_state(context: ToolContext, _: BaseModel) -> dict[str, Any]:
     state = context.case.state
+    findings_preview = [
+        {
+            "id": f.id,
+            "title": f.title,
+            "status": f.status,
+            "confidence": f.confidence,
+            "severity": f.severity,
+            "tag_count": len(f.tags),
+            "evidence_count": len(f.evidence),
+        }
+        for f in state.findings
+    ]
     return {
         "active_profile": state.active_profile,
         "summary": state.summary,
         "finding_count": len(state.findings),
+        "findings": findings_preview,
         "open_todos": [item.model_dump() for item in state.todos if item.status == "open"],
         "recent_notes": [item.model_dump() for item in state.notes[-10:]],
     }
@@ -400,6 +446,45 @@ def read_large_text_chunk(context: ToolContext, arguments: BaseModel) -> dict[st
     values = LargeChunkInput.model_validate(arguments)
     return LargeTextIndexer(context.case.root).read_chunk(
         values.path, values.chunk_number, context.config.limits.max_tool_output_characters
+    )
+
+
+def list_findings(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
+    values = ListFindingsInput.model_validate(arguments)
+    return context.investigation.list_findings(
+        context.case,
+        status=values.status,
+        confidence=values.confidence,
+        tag=values.tag,
+        page=values.page,
+        page_size=values.page_size,
+    )
+
+
+def get_finding(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
+    values = GetFindingInput.model_validate(arguments)
+    return context.investigation.get_finding(context.case, values.finding_id).model_dump()
+
+
+def list_notes(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
+    values = ListNotesInput.model_validate(arguments)
+    return context.investigation.list_notes(
+        context.case, page=values.page, page_size=values.page_size
+    )
+
+
+def get_note(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
+    values = GetNoteInput.model_validate(arguments)
+    return context.investigation.get_note(context.case, values.note_id).model_dump()
+
+
+def list_todos(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
+    values = ListTodosInput.model_validate(arguments)
+    return context.investigation.list_todos(
+        context.case,
+        include_completed=values.include_completed,
+        page=values.page,
+        page_size=values.page_size,
     )
 
 
@@ -514,6 +599,26 @@ def register_core_tools(registry: ToolRegistry) -> None:
             "Read one bounded chunk from an indexed source.",
             LargeChunkInput,
             read_large_text_chunk,
+        ),
+        (
+            "list_findings",
+            "List structured findings with optional filters and pagination.",
+            ListFindingsInput,
+            list_findings,
+        ),
+        (
+            "get_finding",
+            "Get a single finding by ID including all evidence and tags.",
+            GetFindingInput,
+            get_finding,
+        ),
+        ("list_notes", "List investigation notes with pagination.", ListNotesInput, list_notes),
+        ("get_note", "Get a single investigation note by ID.", GetNoteInput, get_note),
+        (
+            "list_todos",
+            "List TODO items with optional completed items.",
+            ListTodosInput,
+            list_todos,
         ),
     ]
     for name, description, model, handler in definitions:
