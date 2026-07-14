@@ -1,10 +1,10 @@
 # Current Handoff
 
-Task: `REL-010`
+Task: `REL-010`, `CLI-010`
 
 ## Goal
 
-Capture and sanitize the owner's exact macOS Finding persistence failure before implementing a fix.
+Confirm the focused Finding persistence fix on the owner's macOS case.
 
 ## State
 
@@ -13,14 +13,12 @@ Capture and sanitize the owner's exact macOS Finding persistence failure before 
   deferred to the next agent.
 - `NEXT_AGENT_MASTER_PLAN.md` is now the mandatory gated backlog and Git/handoff guide. `AGENTS.md`
   requires every future agent to read it at startup.
-- Planning audit confirmed that a complete Finding payload succeeds, while a natural minimal
-  payload without `evidence[].description` fails with generic `invalid_arguments`. A successful
-  Finding's evidence and tags are stored in JSON but omitted from `FINDINGS.md`.
-- Canonical state is currently saved before Markdown rendering; a render failure can therefore
-  report an error after mutation. Mutations lack revision/idempotency semantics, automatic Notes
-  lack a semantic schema, and MCP readback cannot enumerate complete Findings/Notes/TODO history.
-- These are open defects/risks, not completed fixes. The next agent must capture the real macOS
-  session before changing the schema or persistence layer.
+- Natural Finding evidence no longer requires `evidence[].description`; a default is applied and
+  validation errors name exact fields. Finding Markdown includes evidence, tags, timestamps, and
+  tool provenance.
+- Finding, Note, and TODO mutations rebuild deterministic Markdown views and roll canonical state
+  back if rendering fails. Revision/idempotency and complete MCP readback remain future work.
+- `maldroid cases` now opens the configured folder. `--list` and `--json` preserve inventory output.
 
 - `maldroid mcp serve [CASE]` starts an official MCP Streamable HTTP endpoint and prints its port.
 - MCP port 8765 is fixed by default; a collision fails instead of changing saved client settings.
@@ -114,8 +112,8 @@ Verified in the local isolated Python 3.12 venv:
 ./scripts/dev release-check
 ```
 
-Results: the consolidated release check passed. Ruff formatting and lint passed; mypy passed for 36
-source files; 90 tests passed. Project hygiene, installer dry-run, browser
+Results: the focused change passed Ruff formatting/lint, mypy for 36 source files, and the complete
+93-test suite. The previous consolidated release check also passed. Project hygiene, installer dry-run, browser
 MCP origin/CORS coverage, termination-signal cleanup, namespaced tool discovery, enforced and
 automatic and phase checkpoints, autonomous continuation, model retry, compaction fallback,
 streaming token/tool reconstruction, live terminal telemetry, dynamic reasoning-budget request
@@ -128,8 +126,7 @@ protocol integration, and wheel build verification passed. The wheel is
 
 ## Known limitations
 
-- Real-user Finding/state persistence failure remains open; only a synthetic contract reproduction
-  is documented so far.
+- The reproduced Finding schema/view failure is fixed; confirmation on the real macOS case remains.
 - The master-plan tool, guide, CLI, agent-controller, and Python-execution work is backlog only.
 - Target-platform and real-model acceptance are pending.
 - Browser-origin behavior is covered with an MCP handshake, CORS preflight, hostile-origin
@@ -139,9 +136,9 @@ protocol integration, and wheel build verification passed. The wheel is
 ## Next command
 
 ```bash
-git status --short --branch && git log -5 --oneline && ./scripts/dev test
+./scripts/dev test
 ```
 
-Then read `NEXT_AGENT_MASTER_PLAN.md` completely and begin `REL-010`. Ask the owner for the failing
-case/session location, but do not copy evidence into Git. Capture the exact structured failure and
-add a benign regression fixture before implementing any repair.
+Then install the current commit on the owner's macOS host and retry the previously failing Finding.
+If it still fails, capture the sanitized structured tool response and audit entry before changing
+the implementation again.

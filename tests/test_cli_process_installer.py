@@ -38,6 +38,32 @@ def test_typer_commands_are_not_consumed_as_paths(
     assert "MalDroid_read_file_range" in tools.stdout
 
 
+def test_cases_opens_configured_folder_and_list_remains_available(
+    app_config: AppConfig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cases_directory = Path(app_config.general.cases_directory)
+    monkeypatch.setattr(cli, "load_config", lambda: app_config)
+    monkeypatch.setattr(cli.sys, "platform", "darwin")
+    monkeypatch.setattr(cli.shutil, "which", lambda name: f"/usr/bin/{name}")
+    launched: list[list[str]] = []
+
+    class DummyProcess:
+        def __init__(self, command: list[str], **_kwargs: object) -> None:
+            launched.append(command)
+
+    monkeypatch.setattr(cli.subprocess, "Popen", DummyProcess)
+    runner = CliRunner()
+
+    opened = runner.invoke(cli.app, ["cases"])
+    listed = runner.invoke(cli.app, ["cases", "--list"])
+
+    assert opened.exit_code == 0
+    assert launched == [["/usr/bin/open", str(cases_directory)]]
+    assert "Opened cases folder" in opened.stdout
+    assert listed.exit_code == 0
+    assert "Case ID" in listed.stdout
+
+
 def test_shutdown_signal_handlers_restore_previous_handler() -> None:
     previous = signal.getsignal(signal.SIGTERM)
     with pytest.raises(ShutdownRequested, match="signal"), shutdown_signal_handlers():

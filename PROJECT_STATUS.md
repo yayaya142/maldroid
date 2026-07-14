@@ -88,16 +88,14 @@ Last updated: 2026-07-14
 
 ## Partial or environment-gated
 
-- The owner reports that Finding and other durable-state writes fail or appear missing during real
-  model use. A planning audit reproduced one likely contract failure: omitting the mandatory
-  `evidence[].description` produces a generic `invalid_arguments`, while successful Findings lose
-  evidence and tags in `FINDINGS.md`. The real macOS payload is not captured yet; this is the new
-  highest-priority task and must not be described as fixed.
-- State JSON and Markdown views are not transactional as a set. State is committed before view
-  rendering, retries have no idempotency key, and readback MCP APIs do not expose complete Findings,
-  Notes, or completed TODOs.
+- The reproduced Finding contract failure is fixed: evidence descriptions now have a safe default,
+  validation errors identify the failing field, and `FINDINGS.md` includes evidence, tags,
+  timestamps, and tool provenance. The owner's real macOS case still needs confirmation.
+- Finding, Note, and TODO writes roll canonical state back if deterministic Markdown rendering
+  fails. Mutations still lack revision/idempotency semantics, and MCP readback does not expose
+  complete Findings, Notes, or completed TODOs.
 - Automatic Notes lack a typed semantic checkpoint contract and may preserve tool/error noise.
-- `maldroid cases` lists cases but does not yet open the configured directory as requested.
+- `maldroid cases` opens the configured directory; `--list` and `--json` provide inventories.
 - Safe Python decoding-script execution is requested but not designed or implemented. No sandbox
   claim is authorized until an ADR and adversarial OS-isolation tests exist.
 - Real Gemma 4 tool-call verification requires the supplied macOS model and local llama-server.
@@ -118,5 +116,5 @@ The local synthetic suite passes. See `docs/handoffs/CURRENT.md` for exact comma
 
 ## Immediate task
 
-Execute `REL-010` from `NEXT_AGENT_MASTER_PLAN.md`: capture the real macOS Finding failure and add a
-sanitized reproduction before changing persistence code.
+Retest `MalDroid_save_finding` on the owner's macOS case to confirm the reproduced schema failure was
+the only user-visible cause, then continue the reliability sequence without broad feature work.

@@ -3,6 +3,14 @@
 MalDroid is designed for both interactive terminal use and predictable local automation. Human
 output uses Rich tables; commands that expose structured state provide `--json`.
 
+Open the configured cases directory in Finder or the system file manager:
+
+```bash
+maldroid cases
+maldroid cases --list  # show the terminal table instead
+maldroid cases --json  # automation-friendly case inventory
+```
+
 ## Interactive terminal workspace
 
 A normal case opens a full-screen-aware terminal prompt without taking over the alternate screen.

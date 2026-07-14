@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import shlex
 import shutil
+import subprocess
 import sys
 import urllib.request
 from pathlib import Path
@@ -24,6 +25,7 @@ from maldroid.config import (
     get_config_value,
     load_config,
     reset_config_value,
+    resolved_cases_directory,
     save_config,
     set_config_value,
 )
@@ -263,16 +265,35 @@ def resume() -> None:
     _run_guarded(lambda: _launch_resume(), False, _console())
 
 
-@app.command(epilog="Example: maldroid cases --json")
+@app.command(epilog="Examples: maldroid cases | maldroid cases --list | maldroid cases --json")
 def cases(
     json_output: bool = typer.Option(False, "--json", help="Emit stable JSON output."),
+    list_only: bool = typer.Option(False, "--list", "-l", help="List known cases in the terminal."),
 ) -> None:
-    """List known cases and compact investigation counts."""
+    """Open the cases folder, or list known cases with --list."""
     console = _console()
-    manager = CaseManager(load_config())
+    config = load_config()
+    manager = CaseManager(config)
     records = manager.list_cases()
     if json_output:
         _emit_json(records)
+        return
+    if not list_only:
+        directory = resolved_cases_directory(config)
+        directory.mkdir(parents=True, exist_ok=True)
+        opener = "open" if sys.platform == "darwin" else "xdg-open"
+        executable = shutil.which(opener)
+        if executable is None:
+            console.print(f"[yellow]Could not find {opener}; cases folder:[/yellow] {directory}")
+            return
+        subprocess.Popen(
+            [executable, str(directory)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        console.print(f"[green]Opened cases folder:[/green] {directory}")
+        console.print("[dim]Use 'maldroid cases --list' to show the case table.[/dim]")
         return
     table = Table(
         "Name", "Case ID", "Path", "Created", "Last opened", "Profile", "Findings", "Open TODO"

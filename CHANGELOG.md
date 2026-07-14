@@ -2,6 +2,11 @@
 
 ## 0.1.0 - Unreleased
 
+- Fixed `MalDroid_save_finding` for natural evidence payloads that omit the optional description,
+  added rollback across canonical state and Markdown views, and rendered Finding evidence, tags,
+  timestamps, and tool provenance.
+- Changed `maldroid cases` to open the configured cases directory by default while preserving the
+  case table as `maldroid cases --list` and stable JSON output as `--json`.
 - Added a reliability/research-platform master plan for the next sequential agents, including the
   observed Finding/state defects, 15 gated workstreams, extensive tool/playbook backlog, safe Python
   execution design requirements, CLI improvements, acceptance criteria, and mandatory Git/handoff

@@ -53,12 +53,17 @@ class ToolDispatcher:
                 error=ToolError(code="invalid_json", message=f"Invalid tool arguments: {exc}"),
             )
         except ValidationError as exc:
+            errors = exc.errors(include_url=False)
+            summary = "; ".join(
+                f"{'.'.join(str(part) for part in error['loc'])}: {error['msg']}"
+                for error in errors[:5]
+            )
             result = ToolResult(
                 status="error",
                 error=ToolError(
                     code="invalid_arguments",
-                    message="Tool arguments failed schema validation.",
-                    details={"errors": exc.errors(include_url=False)},
+                    message=f"Tool arguments failed schema validation: {summary}",
+                    details={"errors": errors},
                 ),
             )
         except Exception as exc:

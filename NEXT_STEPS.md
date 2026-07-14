@@ -3,18 +3,18 @@
 The owner has reprioritized reliability and research quality. Follow
 `NEXT_AGENT_MASTER_PLAN.md`; do not add broad new tools before the durable-state gate is trustworthy.
 
-1. `REL-010` — Capture and sanitize the owner's exact macOS `MalDroid_save_finding` failure. Record
+1. `REL-010` — Retest the fixed `MalDroid_save_finding` path on the owner's macOS case. Record
    the structured tool call/result, case state before/after, rendered Markdown, audit/session events,
    installed commit, and model/server versions. Add a benign regression test that fails for the
-   same reason. Do not mix the fix into the reproduction commit.
+   same payload shape if a distinct failure remains.
 2. `REL-011` — Define canonical-state, transaction, revision, idempotency, rendering, and recovery
    invariants in an ADR with executable contract tests.
 3. `REL-012` through `REL-020` — Execute the durable-state reliability chain in the exact dependency
    order documented by the master plan.
 4. `STATE-010` through `STATE-016` — Replace free-form automatic continuity with meaningful typed
    checkpoints and complete readback.
-5. `CLI-010` — After `REL-010`, make `maldroid cases` open the configured cases directory while
-   preserving `--list` and `--json` automation behavior.
+5. `CLI-010` — Completed: `maldroid cases` opens the configured cases directory while preserving
+   `--list` and `--json` automation behavior.
 6. `REL-001` — After the reliability gates, on the user's macOS host run installer dry-run, installation, doctor command
    preview, and `doctor --model-tool-test` using the authorized Gemma 4 GGUF. Record llama.cpp
    version and `/props` template behavior. Acceptance: structured array/object tool call and final

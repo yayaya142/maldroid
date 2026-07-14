@@ -34,7 +34,11 @@ class EvidenceReference(BaseModel):
     end_line: int | None = Field(default=None, ge=1)
     start_offset: int | None = Field(default=None, ge=0)
     end_offset: int | None = Field(default=None, ge=0)
-    description: str
+    description: str = Field(
+        default="Supporting evidence",
+        min_length=1,
+        max_length=2000,
+    )
     tool: str | None = None
 
 

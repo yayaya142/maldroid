@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from maldroid.agent import CHECKPOINT_REMINDER, STATE_DISCIPLINE_REMINDER, MalDroidAgent
 from maldroid.case_manager import CaseManager
 from maldroid.config import AppConfig
@@ -30,6 +32,52 @@ def make_dispatcher(app_config: AppConfig):
         path_policy=PathPolicy(case.root),
     )
     return manager, case, registry, ToolDispatcher(registry, context)
+
+
+def test_save_finding_accepts_evidence_without_description_and_persists_views(
+    app_config: AppConfig,
+) -> None:
+    manager, case, _, dispatcher = make_dispatcher(app_config)
+    (case.root / "sample.txt").write_text("first\nsecond\n", encoding="utf-8")
+
+    result = dispatcher.execute(
+        mcp_tool_name("save_finding"),
+        {
+            "title": "Endpoint discovered",
+            "summary": "The sample contains a candidate endpoint.",
+            "confidence": "high",
+            "severity": "informational",
+            "status": "confirmed",
+            "evidence": [{"path": "sample.txt", "start_line": 2, "end_line": 2}],
+            "tags": ["network"],
+        },
+    )
+
+    assert result.status == "completed"
+    reopened = manager.open(case.root)
+    assert reopened.state.findings[0].evidence[0].description == "Supporting evidence"
+    rendered = (case.root / "notes" / "FINDINGS.md").read_text(encoding="utf-8")
+    assert "`sample.txt:2`" in rendered
+    assert "network" in rendered
+
+
+def test_failed_finding_view_write_rolls_back_canonical_state(
+    app_config: AppConfig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manager, case, _, dispatcher = make_dispatcher(app_config)
+
+    def fail_views(_case: object) -> None:
+        raise OSError("read-only notes folder")
+
+    monkeypatch.setattr(InvestigationManager, "_render_views", fail_views)
+    result = dispatcher.execute(
+        mcp_tool_name("save_finding"),
+        {"title": "Will fail", "summary": "This mutation must be rolled back."},
+    )
+
+    assert result.status == "error"
+    assert case.state.findings == []
+    assert manager.open(case.root).state.findings == []
 
 
 def test_documented_system_prompt_matches_runtime_prompt() -> None:
