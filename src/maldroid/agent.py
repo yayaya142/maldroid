@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import enum
 import json
 import time
 from collections.abc import Callable
@@ -19,7 +18,6 @@ from maldroid.tools.models import mcp_tool_name
 from maldroid.tools.registry import ToolRegistry
 
 CHECKPOINT_TOOLS = {
-    mcp_tool_name("save_checkpoint"),
     mcp_tool_name("save_note"),
 }
 STRUCTURED_STATE_TOOLS = {
@@ -32,18 +30,18 @@ NON_INVESTIGATION_TOOLS = {
     mcp_tool_name("list_case_files"),
     mcp_tool_name("detect_profile"),
     mcp_tool_name("select_profile"),
-    mcp_tool_name("transition_state"),
 }
 CHECKPOINT_REMINDER = (
     "Durable investigation state is required before the final answer. Update or complete relevant "
     "TODOs, save each evidence-backed conclusion with MalDroid_save_finding, then call "
-    "MalDroid_save_checkpoint with a structured phase transition including objectives, completed work, "
-    "failed approaches, and next actions. Do not replace conclusions with a list of tool names."
+    "MalDroid_save_note with a synthesis of completed work, exact evidence paths and lines or "
+    "offsets, facts versus hypotheses, uncertainty, unresolved questions, and the exact next "
+    "action. Do not replace conclusions with a list of tool names."
 )
 STATE_DISCIPLINE_REMINDER = (
     "Maintain the case files while you investigate. Create concrete TODOs for the remaining plan "
-    "with MalDroid_save_todo, complete them as work finishes, and call MalDroid_save_finding as "
-    "soon as a supported fact or clearly labeled hypothesis emerges. A "
+    "with MalDroid_update_todo, complete them as work finishes, and call MalDroid_save_finding as "
+    "soon as a supported fact or clearly labeled hypothesis emerges. Notes are phase syntheses; a "
     "tool-call list alone is not meaningful progress. Continue the investigation after updating "
     "state."
 )
@@ -55,11 +53,6 @@ CONTINUATION_INSTRUCTION = (
 )
 
 AgentEventHandler = Callable[[str, dict[str, Any]], None]
-
-class AgentState(str, enum.Enum):
-    PLANNER = "planner"
-    WORKER = "worker"
-    VERIFIER = "verifier"
 
 
 class MalDroidAgent:
@@ -86,33 +79,10 @@ class MalDroidAgent:
         self._auto_profile_enabled = auto_profile_enabled
         self.external_mcp = external_mcp
         self.messages: list[dict[str, Any]] = []
-        self.state = AgentState.PLANNER
         model_event_setter = getattr(self.client, "set_event_handler", None)
         if model_event_setter is not None:
             model_event_setter(self._handle_model_event)
         self._reset_messages(previous_summary)
-        self._inject_state_prompt()
-
-    def transition_state(self, new_state: AgentState, reason: str) -> None:
-        if self.state == new_state:
-            return
-        self.state = new_state
-        self._inject_state_prompt(reason)
-        self._emit("state_transition", new_state=new_state.value, reason=reason)
-        self.sessions.record("state_transition", content={"new_state": new_state.value, "reason": reason})
-
-    def _inject_state_prompt(self, reason: str = "") -> None:
-        if self.state == AgentState.PLANNER:
-            content = "You are now in the PLANNER state. Create bounded TODOs for the investigation plan and select relevant tools or profiles. Do not gather evidence yet."
-        elif self.state == AgentState.WORKER:
-            content = "You are now in the WORKER state. Execute your plan, gather evidence, and record your findings."
-        else:
-            content = "You are now in the VERIFIER state. Challenge your conclusions, check evidence paths and ranges, and verify if the requested goal is fully met."
-        
-        msg = f"State Transition: {content}"
-        if reason:
-            msg += f"\nReason: {reason}"
-        self.messages.append({"role": "system", "content": msg})
 
     def _emit(self, event: str, **data: Any) -> None:
         if self.event_handler is not None:
@@ -151,8 +121,6 @@ class MalDroidAgent:
         state_reminder_sent = False
         investigation_calls = 0
         activity: list[dict[str, Any]] = []
-        recent_calls: list[tuple[str, str, str]] = []  # (name, arguments, status)
-        stuck_loop_count = 0
         while True:
             tools = self.available_tool_schemas()
             if not self._auto_profile_enabled:
@@ -179,7 +147,7 @@ class MalDroidAgent:
             if not assistant.tool_calls:
                 if not assistant.content:
                     return "The model returned an empty response. Run maldroid doctor --model-tool-test."
-                if investigation_performed and investigation_calls > 1 and not checkpoint_saved:
+                if investigation_performed and not checkpoint_saved:
                     if not checkpoint_requested:
                         self._emit("checkpoint_required")
                         self.messages.append({"role": "system", "content": CHECKPOINT_REMINDER})
@@ -220,35 +188,6 @@ class MalDroidAgent:
                     checkpoint_saved = False
                 if call.name in STRUCTURED_STATE_TOOLS and result.status == "completed":
                     structured_state_updated = True
-                
-                # AGENT-012: Tool-error recovery hints and limit identical retries
-                if result.error:
-                    hint = ""
-                    if result.error.code == "invalid_arguments":
-                        hint = "HINT: Check the schema and your JSON formatting. Do not repeat the same arguments."
-                    elif result.error.code == "unknown_tool" or result.error.code == "disabled_tool":
-                        hint = "HINT: Use a different tool from your available schema."
-                    else:
-                        hint = "HINT: The tool failed. Use an alternative tool or search approach."
-                    result.error.message += f"\n{hint}"
-                
-                # AGENT-013: Stuck-loop detection
-                current_call_sig = (call.name, call.arguments, result.status)
-                if recent_calls and recent_calls[-1] == current_call_sig:
-                    stuck_loop_count += 1
-                else:
-                    stuck_loop_count = 0
-                recent_calls.append(current_call_sig)
-
-                if stuck_loop_count >= 2:
-                    stuck_msg = "STUCK LOOP DETECTED: You have repeated the exact same tool call and received the same result multiple times. You MUST stop using this exact tool and argument combination. Switch to a different strategy, tool, or approach immediately."
-                    if result.error:
-                        result.error.message += f"\n{stuck_msg}"
-                    else:
-                        result.data = {"error": "Loop detected", "message": stuck_msg}
-                        result.status = "error"
-                    stuck_loop_count = 0 # reset to give them a chance to change
-
                 serialized = json.dumps(result.model_dump(mode="json"), ensure_ascii=False)
                 tool_message = {"role": "tool", "tool_call_id": call.id, "content": serialized}
                 self.messages.append(tool_message)
@@ -262,19 +201,6 @@ class MalDroidAgent:
                     selected = str(result.data.get("selected_profile", "generic"))
                     if selected != self.case.state.active_profile:
                         self.switch_profile(selected, automatic=True, reason=result.data)
-                
-                if (
-                    call.name == mcp_tool_name("transition_state")
-                    and result.status == "completed"
-                    and isinstance(result.data, dict)
-                ):
-                    try:
-                        new_state = AgentState(result.data.get("state"))
-                        reason = str(result.data.get("reason", ""))
-                        self.transition_state(new_state, reason)
-                    except ValueError:
-                        pass
-                        
                 if call.name in {
                     mcp_tool_name("register_evidence"),
                     mcp_tool_name("detect_profile"),
@@ -567,23 +493,10 @@ class MalDroidAgent:
         return self.estimate_tokens() / self.case.state.context_size
 
     def should_auto_compact(self) -> bool:
-        if self.context_ratio() >= self.config.limits.auto_compact_ratio:
-            if self._prune_context():
-                return self.context_ratio() >= self.config.limits.auto_compact_ratio
-            return True
-        return False
-
-    def _prune_context(self) -> bool:
-        """Drop the oldest tool result to free up context before full compaction."""
-        for i, msg in enumerate(self.messages):
-            if msg.get("role") == "tool" and msg.get("content") != '{"pruned": true}':
-                self.messages[i]["content"] = '{"pruned": true}'
-                self._emit("context_pruned", index=i)
-                return True
-        return False
+        return self.context_ratio() >= self.config.limits.auto_compact_ratio
 
     def compact(self) -> str:
-        self._emit("compaction_start", reason="Context ratio threshold exceeded despite pruning")
+        self._emit("compaction_start")
         prompt = {
             "role": "user",
             "content": (

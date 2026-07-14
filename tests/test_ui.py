@@ -76,7 +76,7 @@ def test_slash_completion_includes_commands_and_profiles() -> None:
     automatic = list(completer.get_completions(Document("/profile au"), CompleteEvent()))
     reasoning = list(completer.get_completions(Document("/reasoning hi"), CompleteEvent()))
 
-    assert [item.text for item in commands] == ["/context", "/continue"]
+    assert [item.text for item in commands] == ["/context"]
     assert [item.text for item in profiles] == ["react-native"]
     assert [item.text for item in automatic] == ["auto"]
     assert [item.text for item in reasoning] == ["high"]

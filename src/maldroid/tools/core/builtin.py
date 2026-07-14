@@ -84,27 +84,7 @@ class SelectProfileInput(Arguments):
 
 class SaveNoteInput(Arguments):
     text: str = Field(min_length=1, max_length=50000)
-    kind: Literal["general", "research_note", "decision", "hypothesis", "tool_error", "user_note"] = "research_note"
     evidence: list[EvidenceReference] = Field(default_factory=list)
-    related_finding_ids: list[str] = Field(default_factory=list)
-    related_todo_ids: list[str] = Field(default_factory=list)
-    related_evidence_ids: list[str] = Field(default_factory=list)
-    client_mutation_id: str | None = Field(default=None, description="Optional ID for idempotent retries")
-
-class SaveCheckpointInput(Arguments):
-    objective: str = Field(min_length=1)
-    completed_work: str = Field(min_length=1)
-    evidence_learned: str = Field(min_length=1)
-    findings_changed: str = Field(min_length=1)
-    todos_changed: str = Field(min_length=1)
-    failed_approaches: str = Field(min_length=1)
-    unresolved_questions: str = Field(min_length=1)
-    uncertainty: str = Field(min_length=1)
-    next_action: str = Field(min_length=1)
-    related_finding_ids: list[str] = Field(default_factory=list)
-    related_todo_ids: list[str] = Field(default_factory=list)
-    related_evidence_ids: list[str] = Field(default_factory=list)
-    client_mutation_id: str | None = Field(default=None, description="Optional ID for idempotent retries")
 
 
 class SaveFindingInput(Arguments):
@@ -113,67 +93,19 @@ class SaveFindingInput(Arguments):
     confidence: Literal["low", "medium", "high"] = "medium"
     severity: Literal["informational", "low", "medium", "high", "critical"] = "medium"
     status: Literal["tentative", "confirmed", "rejected", "resolved"] = "tentative"
-    verification_status: Literal["unverified", "verified", "failed"] = "unverified"
-    verifier_notes: str | None = None
     evidence: list[EvidenceReference] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
-    client_mutation_id: str | None = Field(default=None, description="Optional ID for idempotent retries")
 
 
 class UpdateFindingInput(Arguments):
     finding_id: str
-    title: str | None = Field(default=None, min_length=1, max_length=300)
-    summary: str | None = Field(default=None, min_length=1, max_length=20000)
-    confidence: Literal["low", "medium", "high"] | None = None
-    severity: Literal["informational", "low", "medium", "high", "critical"] | None = None
-    status: Literal["tentative", "confirmed", "rejected", "resolved", "archived"] | None = None
-    verification_status: Literal["unverified", "verified", "failed"] | None = None
-    verifier_notes: str | None = None
-    evidence: list[EvidenceReference] | None = None
-    tags: list[str] | None = None
-
-
-class UpdateNoteInput(Arguments):
-    note_id: str
-    text: str | None = Field(default=None, min_length=1, max_length=50000)
-    evidence: list[EvidenceReference] | None = None
-    kind: Literal["general", "research_note", "checkpoint", "decision", "hypothesis", "tool_error", "user_note"] | None = None
-    status: Literal["active", "archived"] | None = None
-    
-    objective: str | None = None
-    completed_work: str | None = None
-    evidence_learned: str | None = None
-    findings_changed: str | None = None
-    todos_changed: str | None = None
-    failed_approaches: str | None = None
-    unresolved_questions: str | None = None
-    uncertainty: str | None = None
-    next_action: str | None = None
-    
-    related_finding_ids: list[str] | None = None
-    related_todo_ids: list[str] | None = None
-    related_evidence_ids: list[str] | None = None
-
-
-class SaveTodoInput(Arguments):
-    text: str = Field(min_length=1, max_length=1000)
-    priority: Literal["low", "medium", "high"] = "medium"
-    dependencies: list[str] = Field(default_factory=list)
-    owner: str | None = None
-    client_mutation_id: str | None = Field(default=None, description="Optional ID for idempotent retries")
+    changes: dict[str, Any]
 
 
 class UpdateTodoInput(Arguments):
-    todo_id: str
-    text: str | None = Field(default=None, min_length=1, max_length=1000)
-    status: Literal["open", "blocked", "completed"] | None = None
-    priority: Literal["low", "medium", "high", "critical"] | None = None
-    dependencies: list[str] | None = None
-    owner: str | None = None
+    action: Literal["add", "complete", "reopen", "remove"]
+    text_or_id: str
 
-class TransitionStateInput(Arguments):
-    state: Literal["planner", "worker", "verifier"]
-    reason: str = Field(min_length=10, max_length=1000)
 
 class KnowledgeSearchInput(Arguments):
     query: str = Field(min_length=1, max_length=1000)
@@ -200,49 +132,6 @@ class LargeSearchInput(Arguments):
 class LargeChunkInput(Arguments):
     path: str
     chunk_number: int = Field(ge=1)
-
-
-class ListFindingsInput(Arguments):
-    status: str | None = Field(
-        default=None,
-        description="Filter by status: tentative, confirmed, rejected, resolved",
-    )
-    confidence: str | None = Field(
-        default=None,
-        description="Filter by confidence: low, medium, high",
-    )
-    tag: str | None = Field(default=None, description="Filter by tag")
-    page: int = Field(default=1, ge=1)
-    page_size: int = Field(default=20, ge=1, le=50)
-
-
-class GetFindingInput(Arguments):
-    finding_id: str = Field(min_length=1, max_length=50)
-
-
-class ListNotesInput(Arguments):
-    page: int = Field(default=1, ge=1)
-    page_size: int = Field(default=20, ge=1, le=50)
-
-
-class GetNoteInput(Arguments):
-    note_id: str = Field(min_length=1, max_length=50)
-
-
-class ListTodosInput(Arguments):
-    include_completed: bool = False
-    page: int = Field(default=1, ge=1)
-    page_size: int = Field(default=50, ge=1, le=100)
-
-
-class ValidateEvidenceReferenceInput(Arguments):
-    """REL-014: Validate an evidence reference before saving it in a Finding or Note."""
-
-    path: str = Field(description="Case-relative path to validate")
-    start_line: int | None = Field(default=None, ge=1, description="First line (1-indexed)")
-    end_line: int | None = Field(default=None, ge=1, description="Last line (inclusive)")
-    start_offset: int | None = Field(default=None, ge=0, description="Start byte offset")
-    end_offset: int | None = Field(default=None, ge=0, description="End byte offset")
 
 
 def list_case_files(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
@@ -415,23 +304,10 @@ def register_evidence(context: ToolContext, arguments: BaseModel) -> dict[str, A
 
 def read_case_state(context: ToolContext, _: BaseModel) -> dict[str, Any]:
     state = context.case.state
-    findings_preview = [
-        {
-            "id": f.id,
-            "title": f.title,
-            "status": f.status,
-            "confidence": f.confidence,
-            "severity": f.severity,
-            "tag_count": len(f.tags),
-            "evidence_count": len(f.evidence),
-        }
-        for f in state.findings
-    ]
     return {
         "active_profile": state.active_profile,
         "summary": state.summary,
         "finding_count": len(state.findings),
-        "findings": findings_preview,
         "open_todos": [item.model_dump() for item in state.todos if item.status == "open"],
         "recent_notes": [item.model_dump() for item in state.notes[-10:]],
     }
@@ -456,36 +332,7 @@ def select_case_profile(_: ToolContext, arguments: BaseModel) -> dict[str, Any]:
 
 def save_note(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
     values = SaveNoteInput.model_validate(arguments)
-    return context.investigation.save_note(
-        context.case, 
-        values.text, 
-        kind=values.kind,
-        evidence=values.evidence, 
-        related_finding_ids=values.related_finding_ids,
-        related_todo_ids=values.related_todo_ids,
-        related_evidence_ids=values.related_evidence_ids,
-        client_mutation_id=values.client_mutation_id
-    ).model_dump()
-
-
-def save_checkpoint(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
-    values = SaveCheckpointInput.model_validate(arguments)
-    return context.investigation.save_checkpoint(
-        context.case,
-        objective=values.objective,
-        completed_work=values.completed_work,
-        evidence_learned=values.evidence_learned,
-        findings_changed=values.findings_changed,
-        todos_changed=values.todos_changed,
-        failed_approaches=values.failed_approaches,
-        unresolved_questions=values.unresolved_questions,
-        uncertainty=values.uncertainty,
-        next_action=values.next_action,
-        related_finding_ids=values.related_finding_ids,
-        related_todo_ids=values.related_todo_ids,
-        related_evidence_ids=values.related_evidence_ids,
-        client_mutation_id=values.client_mutation_id,
-    ).model_dump()
+    return context.investigation.save_note(context.case, values.text, values.evidence).model_dump()
 
 
 def save_finding(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
@@ -497,78 +344,22 @@ def save_finding(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
         values.confidence,
         values.severity,
         values.status,
-        values.verification_status,
-        values.verifier_notes,
         values.evidence,
         values.tags,
-        values.client_mutation_id,
     ).model_dump()
 
 
 def update_finding(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
     values = UpdateFindingInput.model_validate(arguments)
     return context.investigation.update_finding(
-        context.case,
-        values.finding_id,
-        title=values.title,
-        summary=values.summary,
-        confidence=values.confidence,
-        severity=values.severity,
-        status=values.status,
-        verification_status=values.verification_status,
-        verifier_notes=values.verifier_notes,
-        evidence=values.evidence,
-        tags=values.tags,
+        context.case, values.finding_id, values.changes
     ).model_dump()
 
 
-def update_note(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
-    values = UpdateNoteInput.model_validate(arguments)
-    return context.investigation.update_note(
-        context.case,
-        values.note_id,
-        text=values.text,
-        evidence=values.evidence,
-        kind=values.kind,
-        status=values.status,
-        objective=values.objective,
-        completed_work=values.completed_work,
-        evidence_learned=values.evidence_learned,
-        findings_changed=values.findings_changed,
-        todos_changed=values.todos_changed,
-        failed_approaches=values.failed_approaches,
-        unresolved_questions=values.unresolved_questions,
-        uncertainty=values.uncertainty,
-        next_action=values.next_action,
-        related_finding_ids=values.related_finding_ids,
-        related_todo_ids=values.related_todo_ids,
-        related_evidence_ids=values.related_evidence_ids,
-    ).model_dump()
-
-
-def save_todo(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
-    values = SaveTodoInput.model_validate(arguments)
-    return context.investigation.save_todo(
-        context.case,
-        values.text,
-        priority=values.priority,
-        dependencies=values.dependencies,
-        owner=values.owner,
-        client_mutation_id=values.client_mutation_id,
-    ).model_dump()
-
-
-def update_todo(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
+def update_todo(context: ToolContext, arguments: BaseModel) -> dict[str, Any] | None:
     values = UpdateTodoInput.model_validate(arguments)
-    return context.investigation.update_todo(
-        context.case,
-        values.todo_id,
-        text=values.text,
-        status=values.status,
-        priority=values.priority,
-        dependencies=values.dependencies,
-        owner=values.owner,
-    ).model_dump()
+    result = context.investigation.update_todo(context.case, values.action, values.text_or_id)
+    return result.model_dump() if result else None
 
 
 def search_knowledge(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
@@ -612,86 +403,6 @@ def read_large_text_chunk(context: ToolContext, arguments: BaseModel) -> dict[st
     )
 
 
-def list_findings(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
-    values = ListFindingsInput.model_validate(arguments)
-    return context.investigation.list_findings(
-        context.case,
-        status=values.status,
-        confidence=values.confidence,
-        tag=values.tag,
-        page=values.page,
-        page_size=values.page_size,
-    )
-
-
-def get_finding(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
-    values = GetFindingInput.model_validate(arguments)
-    return context.investigation.get_finding(context.case, values.finding_id).model_dump()
-
-
-def list_notes(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
-    values = ListNotesInput.model_validate(arguments)
-    return context.investigation.list_notes(
-        context.case, page=values.page, page_size=values.page_size
-    )
-
-
-def get_note(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
-    values = GetNoteInput.model_validate(arguments)
-    return context.investigation.get_note(context.case, values.note_id).model_dump()
-
-
-def list_todos(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
-    values = ListTodosInput.model_validate(arguments)
-    return context.investigation.list_todos(
-        context.case,
-        include_completed=values.include_completed,
-        page=values.page,
-        page_size=values.page_size,
-    )
-
-
-def validate_evidence_reference(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
-    values = ValidateEvidenceReferenceInput.model_validate(arguments)
-    try:
-        path = context.read_path(values.path)
-    except Exception as e:
-        return {"valid": False, "error": str(e)}
-        
-    if not path.is_file():
-        return {"valid": False, "error": f"File not found or is not a regular file: {values.path}"}
-
-    if values.start_line is not None and values.end_line is not None:
-        if values.end_line < values.start_line:
-            return {"valid": False, "error": f"end_line ({values.end_line}) cannot be less than start_line ({values.start_line})"}
-        
-        try:
-            line_count = sum(1 for _ in path.open("r", encoding="utf-8", errors="ignore"))
-            if values.start_line > line_count:
-                return {"valid": False, "error": f"start_line ({values.start_line}) is beyond file length ({line_count} lines)"}
-            if values.end_line > line_count:
-                return {"valid": False, "error": f"end_line ({values.end_line}) is beyond file length ({line_count} lines)"}
-        except Exception as e:
-            return {"valid": False, "error": f"Error counting lines: {e}"}
-
-    if values.start_offset is not None and values.end_offset is not None:
-        if values.end_offset < values.start_offset:
-            return {"valid": False, "error": f"end_offset ({values.end_offset}) cannot be less than start_offset ({values.start_offset})"}
-        
-        file_size = path.stat().st_size
-        if values.start_offset > file_size:
-            return {"valid": False, "error": f"start_offset ({values.start_offset}) is beyond file size ({file_size} bytes)"}
-        if values.end_offset > file_size:
-            return {"valid": False, "error": f"end_offset ({values.end_offset}) is beyond file size ({file_size} bytes)"}
-
-    return {"valid": True, "message": "Evidence reference is valid."}
-def transition_state(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
-    args = TransitionStateInput.model_validate(arguments)
-    # The agent handles the actual transition by hooking into this tool's response,
-    # or we can let the agent inspect the arguments.
-    return {"status": "transitioning", "state": args.state, "reason": args.reason}
-
-
 def register_core_tools(registry: ToolRegistry) -> None:
     definitions: list[tuple[str, str, type[BaseModel], ToolHandler]] = [
         ("list_case_files", "List a bounded case file tree.", ListFilesInput, list_case_files),
@@ -700,12 +411,6 @@ def register_core_tools(registry: ToolRegistry) -> None:
             "Inspect file metadata without reading its contents.",
             FileInfoInput,
             get_file_info,
-        ),
-        (
-            "transition_state",
-            "Transition the agent state between planner, worker, and verifier phases.",
-            TransitionStateInput,
-            transition_state,
         ),
         (
             "read_file_range",
@@ -761,6 +466,25 @@ def register_core_tools(registry: ToolRegistry) -> None:
             Arguments,
             read_case_state,
         ),
+        ("save_note", "Save a persistent investigation note.", SaveNoteInput, save_note),
+        (
+            "save_finding",
+            "Save a structured evidence-backed finding.",
+            SaveFindingInput,
+            save_finding,
+        ),
+        (
+            "update_finding",
+            "Update an existing structured finding.",
+            UpdateFindingInput,
+            update_finding,
+        ),
+        (
+            "update_todo",
+            "Add, complete, reopen, or remove an investigation TODO.",
+            UpdateTodoInput,
+            update_todo,
+        ),
         (
             "search_knowledge",
             "Search bounded local research playbooks.",
@@ -790,29 +514,6 @@ def register_core_tools(registry: ToolRegistry) -> None:
             "Read one bounded chunk from an indexed source.",
             LargeChunkInput,
             read_large_text_chunk,
-        ),
-        (
-            "list_findings",
-            "List structured findings with optional filters and pagination.",
-            ListFindingsInput,
-            list_findings,
-        ),
-        ("get_finding", "Get a single finding by ID.", GetFindingInput, get_finding),
-        ("save_finding", "Save a new finding.", SaveFindingInput, save_finding),
-        ("update_finding", "Update an existing finding.", UpdateFindingInput, update_finding),
-        ("list_notes", "List investigation notes.", ListNotesInput, list_notes),
-        ("get_note", "Get a single investigation note.", GetNoteInput, get_note),
-        ("save_note", "Save an investigation note.", SaveNoteInput, save_note),
-        ("save_checkpoint", "Save a structured checkpoint representing a phase transition.", SaveCheckpointInput, save_checkpoint),
-        ("update_note", "Update an investigation note.", UpdateNoteInput, update_note),
-        ("list_todos", "List TODO items.", ListTodosInput, list_todos),
-        ("save_todo", "Save a new TODO item.", SaveTodoInput, save_todo),
-        ("update_todo", "Update an existing TODO item.", UpdateTodoInput, update_todo),
-        (
-            "validate_evidence_reference",
-            "Validate an evidence reference before saving it.",
-            ValidateEvidenceReferenceInput,
-            validate_evidence_reference,
         ),
     ]
     for name, description, model, handler in definitions:

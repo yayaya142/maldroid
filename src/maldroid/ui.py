@@ -44,18 +44,7 @@ COMMANDS: dict[str, str] = {
     "/files": "List registered case files",
     "/findings": "Show durable investigation findings",
     "/todo": "List or update TODO items",
-    "/plan": "Alias for /todo to view the investigation plan",
-    "/dashboard": "Show the investigation dashboard",
-    "/detail": "Show detailed, expandable view of recent activities or specific items",
-    "/report": "Export the investigation state to a Markdown report in the case directory",
-    "/timeline": "Show session replay and event timeline",
-    "/skip-todo": "Mark a TODO item as completed/skipped",
-    "/mark-blocked": "Mark a TODO item as blocked",
     "/note": "Save a durable progress note",
-    "/explain": "Explain the agent's last decision",
-    "/pause": "Pause autonomous investigation (or use Ctrl+C)",
-    "/cancel": "Cancel the currently executing tool (or use Ctrl+C)",
-    "/continue": "Resume autonomous investigation",
     "/checkpoints": "Show recent durable notes and session summary",
     "/history": "Show current session statistics",
     "/compact": "Save a summary and reclaim context",
@@ -226,17 +215,19 @@ class InteractiveChat:
             return
         except Exception as exc:
             self.console.print()
-            error_id = f"ERR-{int(time.time())}"
             self.console.print(
                 Panel(
                     Text.assemble(
-                        (f"[{error_id}] The active turn paused after an error.\n\n", "bold yellow"),
-                        ("Failed Component: ", "bold"), f"{exc.__class__.__name__}\n",
-                        ("Details: ", "bold"), f"{str(exc)}\n\n",
-                        ("State Impact: ", "bold cyan"), "Durable case state is preserved. No corruption occurred.\n",
-                        ("Next Steps: ", "bold cyan"), "Check /server status, verify dependencies, and press Enter to retry.",
+                        ("The active turn paused after automatic retries.\n", "bold yellow"),
+                        str(exc),
+                        "\n\n",
+                        (
+                            "The CLI is still running and durable case state is preserved. "
+                            "Check /server, then retry when the local dependency is available.",
+                            "dim",
+                        ),
                     ),
-                    title="Execution Interrupted",
+                    title="External dependency required",
                     border_style="yellow",
                 )
             )
@@ -384,24 +375,6 @@ class InteractiveChat:
                 padding=(1, 2),
             )
         )
-        
-        if not self.case.state.findings and not self.case.state.todos:
-            self.console.print(
-                Panel(
-                    Text.assemble(
-                        ("Welcome to your new MalDroid investigation!\n\n", "bold green"),
-                        "This case workspace is managed and tracked. Here is how it works:\n",
-                        ("Evidence: ", "bold cyan"), "Drop files or symlinks into the workspace.\n",
-                        ("Profiles: ", "bold cyan"), "MalDroid uses specific profiles (e.g. android-static) to guide analysis.\n",
-                        ("State: ", "bold cyan"), "The agent works autonomously but records explicit TODOs and Findings.\n",
-                        ("Commands: ", "bold cyan"), "Use `/dashboard` to view status, or type a natural language prompt to begin.\n\n",
-                        ("Try this: ", "dim"), "Analyze the main binary for hardcoded credentials."
-                    ),
-                    title="Getting Started",
-                    border_style="green",
-                    padding=(1, 2)
-                )
-            )
         self.console.print(
             "[dim]Enter[/dim] send  [dim]Alt+Enter[/dim] newline  "
             "[dim]Tab[/dim] complete  [dim]↑/↓[/dim] history  "
@@ -467,34 +440,8 @@ class InteractiveChat:
             self._render_tool_result(self.dispatcher.execute(mcp_tool_name("list_case_files"), {}))
         elif name == "/findings":
             self._show_findings()
-        elif name == "/todo" or name == "/plan":
+        elif name == "/todo":
             self._todo(rest)
-        elif name == "/dashboard":
-            self._show_dashboard()
-        elif name == "/detail":
-            self._show_detail(rest)
-        elif name == "/report":
-            self._export_report()
-        elif name == "/timeline":
-            self._show_timeline()
-        elif name == "/skip-todo":
-            if not rest:
-                self.console.print("Usage: [cyan]/skip-todo TODO_ID[/cyan]")
-            else:
-                self._todo(f"{rest} status completed")
-        elif name == "/mark-blocked":
-            if not rest:
-                self.console.print("Usage: [cyan]/mark-blocked TODO_ID[/cyan]")
-            else:
-                self._todo(f"{rest} status blocked")
-        elif name == "/explain":
-            self.console.print("[dim]Generating explanation...[/dim]")
-            self.console.print("The agent's state is currently: " + self.agent.state.value)
-        elif name in {"/pause", "/cancel"}:
-            self.console.print("[yellow]To interrupt the agent or cancel a tool, use Ctrl+C.[/yellow]")
-        elif name == "/continue":
-            self.console.print("[green]Resuming investigation...[/green]")
-            return False # allow loop to run agent again
         elif name == "/note":
             self._note(rest)
         elif name == "/checkpoints":
@@ -583,139 +530,6 @@ class InteractiveChat:
         for key, value in rows:
             table.add_row(key, value)
         self.console.print(Panel(table, title="Workspace status", border_style="cyan"))
-
-    def _show_dashboard(self) -> None:
-        from rich.layout import Layout
-        from rich.panel import Panel
-        from rich.table import Table
-
-        layout = Layout()
-        layout.split_column(
-            Layout(name="header", size=3),
-            Layout(name="main"),
-        )
-        layout["main"].split_row(
-            Layout(name="left"),
-            Layout(name="right"),
-        )
-
-        # Header
-        used, total, remaining, percent = self._context_numbers()
-        header = Text(f"MalDroid Dashboard: {self.case.metadata.name} ({self.case.metadata.case_id}) | Context: {percent:.1f}% used", style="bold cyan", justify="center")
-        layout["header"].update(Panel(header, border_style="blue"))
-
-        # Left: Findings
-        findings_table = Table(box=box.SIMPLE, show_header=False)
-        for item in self.case.state.findings[:5]:
-            findings_table.add_row(f"[{item.severity}]", item.title)
-        if not self.case.state.findings:
-            findings_table.add_row("[dim]No findings recorded[/dim]")
-        layout["left"].update(Panel(findings_table, title="Top Findings", border_style="cyan"))
-
-        # Right: TODOs
-        todos_table = Table(box=box.SIMPLE, show_header=False)
-        open_todos = [t for t in self.case.state.todos if t.status == "open"]
-        for item in open_todos[:5]:
-            todos_table.add_row(f"[{item.priority}]", item.text)
-        if not open_todos:
-            todos_table.add_row("[dim]No open TODOs[/dim]")
-        layout["right"].update(Panel(todos_table, title="Open TODOs", border_style="cyan"))
-
-        self.console.print(layout)
-
-    def _show_detail(self, target: str) -> None:
-        if not target:
-            self.console.print("Usage: [cyan]/detail recent[/cyan] or [cyan]/detail TODO_ID[/cyan]")
-            return
-            
-        from rich.panel import Panel
-        
-        if target.lower() == "recent":
-            self.console.print(Panel("Recent Activity Details", border_style="blue"))
-            self.console.print("Expanded activity details are not fully implemented yet in this interface.")
-            return
-            
-        # Try finding a matching TODO
-        matched = [t for t in self.case.state.todos if str(t.id) == target]
-        if matched:
-            t = matched[0]
-            self.console.print(Panel(f"TODO {t.id} Details:\nStatus: {t.status}\nText: {t.text}\nDependencies: {t.dependencies}", border_style="cyan"))
-            return
-            
-        self.console.print(f"[yellow]Target '{target}' not found for detailed expansion.[/yellow]")
-
-    def _export_report(self) -> None:
-        report_path = self.case.root / "report.md"
-        lines = [
-            f"# MalDroid Investigation Report: {self.case.metadata.name}",
-            f"**Case ID:** {self.case.metadata.case_id}",
-            f"**Created:** {self.case.metadata.created_at}",
-            f"**Profile:** {self.case.state.active_profile}",
-            "",
-            "## Findings",
-        ]
-        
-        for f in self.case.state.findings:
-            lines.extend([
-                f"### {f.title} [{f.severity}]",
-                f"**Confidence:** {f.confidence} | **Status:** {f.status} | **Verified:** {f.verification_status}",
-                f"{f.summary}",
-                "",
-                "**Evidence:**",
-                f"```json\n{f.evidence}\n```",
-                "",
-            ])
-            
-        lines.extend(["## Open TODOs"])
-        for t in self.case.state.todos:
-            if t.status == "open":
-                lines.extend([f"- [{t.priority}] {t.text}"])
-                
-        lines.extend(["", "## Notes"])
-        for n in self.case.state.notes:
-            lines.extend([f"- **{n.kind}**: {n.text}"])
-            
-        report_path.write_text("\n".join(lines), encoding="utf-8")
-        self.console.print(f"[bold green]Report exported to:[/bold green] {report_path}")
-
-    def _show_timeline(self) -> None:
-        import json
-        
-        path = self.agent.sessions.history_path
-        if not path.exists():
-            self.console.print("[dim]No timeline events recorded yet in this session.[/dim]")
-            return
-            
-        from rich.table import Table
-        table = Table(title="Session Timeline", show_lines=True)
-        table.add_column("Timestamp", style="dim")
-        table.add_column("Type", style="bold cyan")
-        table.add_column("Details")
-        
-        try:
-            with path.open("r", encoding="utf-8") as f:
-                for line in f:
-                    if not line.strip():
-                        continue
-                    event = json.loads(line)
-                    ts = event.get("timestamp", "").split("T")[-1].split(".")[0]
-                    ev_type = event.get("type", "unknown")
-                    content = event.get("content", {})
-                    
-                    details = ""
-                    if ev_type == "message" and event.get("role") == "user":
-                        details = f"[bold green]Prompt:[/bold green] {content.get('content', '')}"
-                    elif ev_type == "tool_call":
-                        details = f"[bold blue]Tool:[/bold blue] {content.get('name')} {content.get('arguments')}"
-                    elif ev_type == "checkpoint_required":
-                        details = "[yellow]Checkpoint threshold reached[/yellow]"
-                    else:
-                        details = str(content)[:100] + ("..." if len(str(content)) > 100 else "")
-                        
-                    table.add_row(ts, ev_type, details)
-            self.console.print(table)
-        except Exception as e:
-            self.console.print(f"[red]Could not read timeline:[/red] {e}")
 
     def _show_context(self) -> None:
         used, total, remaining, percent = self._context_numbers()
@@ -872,19 +686,11 @@ class InteractiveChat:
                 ]
             )
         if self.case.state.notes:
-            blocks.append(Text("Recent Checkpoints & Notes", style="bold cyan"))
+            blocks.append(Text("Recent durable notes", style="bold cyan"))
             for note in self.case.state.notes[-5:]:
-                if note.kind == "checkpoint":
-                    cp_text = f"[bold]Objective:[/bold] {note.objective}\n"
-                    cp_text += f"[bold]Completed Work:[/bold] {note.completed_work}\n"
-                    cp_text += f"[bold]Next Action:[/bold] {note.next_action}"
-                    if note.failed_approaches and note.failed_approaches.lower() not in ("none", "n/a"):
-                        cp_text += f"\n[bold yellow]Failed Approaches:[/bold yellow] {note.failed_approaches}"
-                    blocks.append(Panel(Text.from_markup(cp_text), title=f"Checkpoint {note.id} · {note.created_at}", border_style="blue"))
-                else:
-                    blocks.append(Text(f"[{note.kind}] {note.id} · {note.created_at}", style="dim"))
-                    blocks.append(Text(note.text))
-        self.console.print(Panel(Group(*blocks), title="State Progress", border_style="cyan"))
+                blocks.append(Text(f"{note.id} · {note.created_at}", style="dim"))
+                blocks.append(Text(note.text))
+        self.console.print(Panel(Group(*blocks), title="Checkpoints", border_style="cyan"))
 
     def _show_history(self) -> None:
         history_path = self.agent.sessions.history_path

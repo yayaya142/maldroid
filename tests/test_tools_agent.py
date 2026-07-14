@@ -36,9 +36,8 @@ def test_documented_system_prompt_matches_runtime_prompt() -> None:
     document = (Path(__file__).resolve().parents[1] / "SYSTEM_PROMPT.md").read_text(
         encoding="utf-8"
     )
-    assert "You operate in three explicit states (PLANNER, WORKER, VERIFIER)" in SYSTEM_PROMPT
-    prompt_text = document.split("```text")[1].split("```")[0].strip()
-    assert prompt_text == SYSTEM_PROMPT.strip()
+    assert SYSTEM_PROMPT.strip() in document
+    assert "MalDroid_read_case_state, then MalDroid_list_case_files" in SYSTEM_PROMPT
 
 
 def test_registry_profile_filtering(app_config: AppConfig) -> None:
@@ -293,11 +292,6 @@ class CheckpointingClient:
                         id="inspect-1",
                         name=mcp_tool_name("get_file_info"),
                         arguments='{"path":"sample.txt"}',
-                    ),
-                    ToolCall(
-                        id="inspect-2",
-                        name=mcp_tool_name("get_file_info"),
-                        arguments='{"path":"sample.txt"}',
                     )
                 ],
             )
@@ -348,11 +342,6 @@ class CheckpointIgnoringClient:
                 tool_calls=[
                     ToolCall(
                         id="inspect-1",
-                        name=mcp_tool_name("get_file_info"),
-                        arguments='{"path":"sample.txt"}',
-                    ),
-                    ToolCall(
-                        id="inspect-2",
                         name=mcp_tool_name("get_file_info"),
                         arguments='{"path":"sample.txt"}',
                     )
@@ -410,8 +399,8 @@ class StructuredStateClient:
                 tool_calls=[
                     ToolCall(
                         id="todo-add",
-                        name=mcp_tool_name("save_todo"),
-                        arguments='{"text":"Inspect sample metadata"}',
+                        name=mcp_tool_name("update_todo"),
+                        arguments='{"action":"add","text_or_id":"Inspect sample metadata"}',
                     )
                 ],
             )
@@ -439,7 +428,7 @@ class StructuredStateClient:
                     ToolCall(
                         id="todo-complete",
                         name=mcp_tool_name("update_todo"),
-                        arguments='{"todo_id":"TODO-0001", "status":"completed"}',
+                        arguments='{"action":"complete","text_or_id":"TODO-0001"}',
                     )
                 ],
             )

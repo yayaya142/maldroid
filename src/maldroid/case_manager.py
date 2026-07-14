@@ -86,36 +86,9 @@ class CaseManager:
         try:
             with metadata_path.open("rb") as handle:
                 metadata = CaseMetadata.model_validate(tomllib.load(handle))
+            state = CaseState.model_validate_json(state_path.read_text(encoding="utf-8"))
         except (OSError, ValueError, tomllib.TOMLDecodeError) as exc:
             raise CaseError(f"Cannot load case metadata from {root}: {exc}") from exc
-            
-        import json
-        try:
-            raw_state = json.loads(state_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as exc:
-            raise CaseError(f"Case state is truncated or corrupt: {exc}") from exc
-        except OSError as exc:
-            raise CaseError(f"Cannot read case state from {root}: {exc}") from exc
-
-        if raw_state.get("schema_version", 1) == 1:
-            for item in raw_state.get("findings", []):
-                item.setdefault("client_mutation_id", None)
-            for item in raw_state.get("notes", []):
-                item.setdefault("client_mutation_id", None)
-                item.setdefault("kind", "general")
-                item.setdefault("status", "active")
-                item.setdefault("updated_at", item.get("created_at"))
-            for item in raw_state.get("todos", []):
-                item.setdefault("client_mutation_id", None)
-                item.setdefault("priority", "medium")
-                item.setdefault("dependencies", [])
-                item.setdefault("owner", None)
-            raw_state["schema_version"] = 2
-
-        try:
-            state = CaseState.model_validate(raw_state)
-        except ValueError as exc:
-            raise CaseError(f"Case state schema validation failed: {exc}") from exc
         if Path(metadata.root).resolve() != root:
             metadata.root = str(root)
         metadata.last_opened_at = now_iso()
@@ -127,26 +100,6 @@ class CaseManager:
     def save(self, case: Case) -> None:
         case.internal.mkdir(parents=True, exist_ok=True)
         metadata = case.metadata
-        
-        # Calculate dynamic telemetry before saving
-        telemetry = case.state.telemetry
-        telemetry.orphan_references = 0
-        finding_ids = {f.id for f in case.state.findings}
-        todo_ids = {t.id for t in case.state.todos}
-        open_todos = sum(1 for t in case.state.todos if t.status == "open")
-        telemetry.stale_todos = open_todos
-        
-        for note in case.state.notes:
-            for fid in note.related_finding_ids:
-                if fid not in finding_ids:
-                    telemetry.orphan_references += 1
-            for tid in note.related_todo_ids:
-                if tid not in todo_ids:
-                    telemetry.orphan_references += 1
-                    
-        # Update state revision
-        case.state.state_revision += 1
-        
         toml = (
             f"schema_version = {metadata.schema_version}\n"
             f"case_id = {json.dumps(metadata.case_id)}\n"

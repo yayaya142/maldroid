@@ -80,15 +80,9 @@ mcp_app = typer.Typer(
     no_args_is_help=True,
     rich_markup_mode="rich",
 )
-case_app = typer.Typer(
-    help="Case maintenance: rebuild views and verify consistency.",
-    no_args_is_help=True,
-    rich_markup_mode="rich",
-)
 app.add_typer(config_app, name="config")
 app.add_typer(knowledge_app, name="knowledge")
 app.add_typer(mcp_app, name="mcp")
-app.add_typer(case_app, name="case")
 
 CONFIG_DESCRIPTIONS = {
     "general.cases_directory": "Directory where managed investigation cases are created.",
@@ -264,111 +258,37 @@ def open_command(
 
 
 @app.command()
-def resume(
-    case_id: str | None = typer.Argument(None, help="Optional case ID to resume. If omitted, prompts interactively."),
-) -> None:
-    """Resume a case."""
-    _run_guarded(lambda: _launch_resume(case_id), False, _console())
+def resume() -> None:
+    """Resume the most recently opened case."""
+    _run_guarded(lambda: _launch_resume(), False, _console())
 
 
-@app.command(
-    epilog=(
-        "Examples:\n"
-        "  maldroid cases               # open cases directory in file manager\n"
-        "  maldroid cases --list        # list cases in a table\n"
-        "  maldroid cases --json        # emit stable JSON output"
-    )
-)
+@app.command(epilog="Example: maldroid cases --json")
 def cases(
-    list_output: bool = typer.Option(
-        False, "--list", "-l", help="List cases in a table instead of opening the directory."
-    ),
     json_output: bool = typer.Option(False, "--json", help="Emit stable JSON output."),
 ) -> None:
-    """Open the cases directory in the system file manager.
-
-    Without flags, opens the configured cases directory so you can browse investigation
-    folders directly. Use --list or --json for the table/automation views.
-    """
-    import subprocess as _subprocess
-    import sys as _sys
-
-    from maldroid.config import resolved_cases_directory
-
+    """List known cases and compact investigation counts."""
     console = _console()
-    config = load_config()
-    manager = CaseManager(config)
-    cases_dir = resolved_cases_directory(config)
-
-    # --json always wins for automation
+    manager = CaseManager(load_config())
+    records = manager.list_cases()
     if json_output:
-        _emit_json(manager.list_cases())
+        _emit_json(records)
         return
-
-    # --list renders the table (legacy default preserved as explicit flag)
-    if list_output:
-        records = manager.list_cases()
-        table = Table(
-            "Name",
-            "Case ID",
-            "Path",
-            "Created",
-            "Last opened",
-            "Profile",
-            "Findings",
-            "Open TODO",
+    table = Table(
+        "Name", "Case ID", "Path", "Created", "Last opened", "Profile", "Findings", "Open TODO"
+    )
+    for item in records:
+        table.add_row(
+            str(item["name"]),
+            str(item["case_id"]),
+            str(item["path"]),
+            str(item["created_at"]),
+            str(item["last_opened_at"]),
+            str(item["profile"]),
+            str(item["findings"]),
+            str(item["open_todos"]),
         )
-        for item in records:
-            table.add_row(
-                str(item["name"]),
-                str(item["case_id"]),
-                str(item["path"]),
-                str(item["created_at"]),
-                str(item["last_opened_at"]),
-                str(item["profile"]),
-                str(item["findings"]),
-                str(item["open_todos"]),
-            )
-        console.print(table)
-        return
-
-    # Default behaviour: open the cases directory in the file manager
-    if not cases_dir.exists():
-        console.print(
-            f"[yellow]Cases directory does not exist yet:[/yellow] {cases_dir}\n"
-            "Run [bold]maldroid new[/bold] to create your first case."
-        )
-        return
-
-    console.print(f"[bold]Cases directory:[/bold] {cases_dir}")
-
-    # Detect the opener command for this platform
-    if _sys.platform == "darwin":
-        opener = ["open"]
-    else:
-        opener = ["xdg-open"]
-
-    opener_bin = shutil.which(opener[0])
-    if opener_bin is None:
-        console.print(
-            f"[yellow]No file manager opener found ([/yellow]{opener[0]}[yellow]).[/yellow]\n"
-            f"Cases directory: {cases_dir}"
-        )
-        return
-
-    try:
-        _subprocess.Popen(
-            [opener_bin, str(cases_dir)],
-            shell=False,
-            stdin=_subprocess.DEVNULL,
-            stdout=_subprocess.DEVNULL,
-            stderr=_subprocess.DEVNULL,
-        )
-        console.print(f"[green]Opened[/green] {cases_dir} in file manager.")
-    except OSError as exc:
-        console.print(
-            f"[yellow]Could not open file manager:[/yellow] {exc}\nCases directory: {cases_dir}"
-        )
+    console.print(table)
 
 
 @app.command(epilog="Example: maldroid profiles --json")
@@ -403,139 +323,6 @@ def tools_command(
         )
     else:
         _console().print("\n".join(registry.names(profile)))
-
-
-@case_app.command(
-    "rebuild-views",
-    epilog="Example: maldroid case rebuild-views /path/to/case",
-)
-def rebuild_views(
-    path: str = typer.Argument(..., help="Path to the MalDroid case directory."),
-    json_output: bool = typer.Option(False, "--json", help="Emit stable JSON result."),
-) -> None:
-    """Rebuild all Markdown views from canonical state.json.
-
-    Fixes missing or stale FINDINGS.md, CASE.md, and TODO.md without modifying
-    canonical state. Safe to run at any time.
-    """
-    config = load_config()
-    manager = CaseManager(config)
-    investigation = InvestigationManager(manager)
-    console = _console()
-    try:
-        case = manager.open(expand_path(Path(path)))
-        result = investigation.rebuild_views(case)
-        if json_output:
-            _emit_json({"status": "completed", "rebuilt": result})
-        else:
-            console.print(
-                f"[green]Views rebuilt[/green] for case: {case.root}\n"
-                + "\n".join(f"  {k}: {v}" for k, v in result.items())
-            )
-    except Exception as exc:
-        if json_output:
-            _emit_json({"status": "error", "message": str(exc)})
-        else:
-            console.print(f"[red]Error:[/red] {exc}")
-        raise typer.Exit(1) from None
-
-
-@case_app.command(
-    "check",
-    epilog="Example: maldroid case check /path/to/case --json",
-)
-def case_check(
-    path: str = typer.Argument(..., help="Path to the MalDroid case directory."),
-    repair: bool = typer.Option(
-        False, "--repair", help="Rebuild derived views if they are missing or stale."
-    ),
-    json_output: bool = typer.Option(False, "--json", help="Emit stable JSON diagnostics."),
-) -> None:
-    """Verify case integrity and optionally rebuild derived views.
-
-    Checks that state.json is valid, all Finding and Note IDs are consistent,
-    and derived Markdown views exist. Use --repair to rebuild stale or missing views.
-    """
-    config = load_config()
-    manager = CaseManager(config)
-    investigation = InvestigationManager(manager)
-    console = _console()
-    diagnostics: dict[str, object] = {}
-
-    try:
-        case = manager.open(expand_path(Path(path)))
-    except Exception as exc:
-        diagnostics["status"] = "error"
-        diagnostics["message"] = f"Cannot open case: {exc}"
-        if json_output:
-            _emit_json(diagnostics)
-        else:
-            console.print(f"[red]Cannot open case:[/red] {exc}")
-        raise typer.Exit(1) from None
-
-    issues: list[str] = []
-
-    # Check canonical state is valid JSON (it is if open() succeeded)
-    state_path = case.internal / "state.json"
-    diagnostics["state_json"] = "ok" if state_path.exists() else "missing"
-    if not state_path.exists():
-        issues.append("state.json is missing")
-
-    # Check derived views exist
-    for view_name in ("FINDINGS.md", "CASE.md", "TODO.md"):
-        view_path = case.root / "notes" / view_name
-        key = view_name.lower().replace(".", "_")
-        if view_path.exists():
-            diagnostics[key] = "ok"
-        else:
-            diagnostics[key] = "missing"
-            issues.append(f"{view_name} is missing")
-
-    # Check ID consistency
-    finding_ids = [f.id for f in case.state.findings]
-    if len(finding_ids) != len(set(finding_ids)):
-        issues.append("Duplicate Finding IDs detected")
-        diagnostics["duplicate_finding_ids"] = True
-    else:
-        diagnostics["duplicate_finding_ids"] = False
-
-    note_ids = [n.id for n in case.state.notes]
-    if len(note_ids) != len(set(note_ids)):
-        issues.append("Duplicate Note IDs detected")
-        diagnostics["duplicate_note_ids"] = True
-    else:
-        diagnostics["duplicate_note_ids"] = False
-
-    diagnostics["finding_count"] = len(case.state.findings)
-    diagnostics["note_count"] = len(case.state.notes)
-    diagnostics["todo_count"] = len(case.state.todos)
-    diagnostics["issues"] = issues
-
-    if repair and issues:
-        try:
-            rebuilt = investigation.rebuild_views(case)
-            diagnostics["repair"] = rebuilt
-            issues = [i for i in issues if "missing" not in i]
-            diagnostics["issues"] = issues
-        except Exception as exc:
-            diagnostics["repair_error"] = str(exc)
-
-    diagnostics["status"] = "ok" if not issues else "issues_found"
-
-    if json_output:
-        _emit_json(diagnostics)
-    else:
-        if not issues:
-            console.print(f"[green]Case OK[/green] — {case.root}")
-        else:
-            console.print(f"[yellow]Issues found[/yellow] in {case.root}:")
-            for issue in issues:
-                console.print(f"  [red]✗[/red] {issue}")
-            if not repair:
-                console.print("\nRun with [bold]--repair[/bold] to rebuild missing views.")
-
-    if issues and not repair:
-        raise typer.Exit(1)
 
 
 @mcp_app.command(
@@ -1085,37 +872,10 @@ def _launch(
     )
 
 
-def _launch_resume(case_id: str | None = None) -> None:
+def _launch_resume() -> None:
     config = load_config()
     manager = CaseManager(config)
-    
-    if case_id:
-        # Find case by ID
-        records = manager.list_cases()
-        matched = [r for r in records if r["case_id"] == case_id]
-        if not matched:
-            raise MalDroidError(f"Case '{case_id}' not found.")
-        from pathlib import Path
-        case = manager.open(Path(str(matched[0]["path"])))
-    else:
-        records = manager.list_cases()
-        if not records:
-            raise MalDroidError("No previous MalDroid case was found.")
-        if len(records) == 1:
-            case = manager.resume()
-        else:
-            from rich.prompt import Prompt
-            console = _console()
-            console.print("[bold cyan]Select a case to resume:[/bold cyan]")
-            for i, r in enumerate(records[:10]):
-                console.print(f"  [cyan]{i+1}[/cyan]. {r['name']} ({r['case_id']}) - {r['last_opened_at']}")
-            
-            choices = [str(i+1) for i in range(min(10, len(records)))]
-            selection = Prompt.ask("Enter case number", choices=choices, default="1")
-            selected_idx = int(selection) - 1
-            from pathlib import Path
-            case = manager.open(Path(str(records[selected_idx]["path"])))
-            
+    case = manager.resume()
     _run_case(config, case, manager, None, None, False)
 
 
