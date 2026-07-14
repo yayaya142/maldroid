@@ -63,6 +63,7 @@ class LlamaConfig(BaseModel):
     flash_attention: Literal["on", "off", "auto"] = "on"
     temperature: float = Field(default=0.2, ge=0.0, le=2.0)
     max_response_tokens: int = Field(default=4096, ge=128)
+    reasoning_level: Literal["off", "low", "medium", "high", "unlimited"] = "medium"
     api_key_enabled: bool = False
     ui_enabled: bool = True
     ui_mcp_proxy_enabled: bool = True

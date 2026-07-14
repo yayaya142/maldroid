@@ -22,6 +22,7 @@ def test_secure_server_command_preserves_performance_settings(app_config: AppCon
     assert arguments[arguments.index("-ngl") + 1] == "99"
     assert arguments[arguments.index("-b") + 1] == "512"
     assert "--api-key" not in arguments
+    assert "--reasoning-budget" not in arguments
     assert command.api_key is None
 
 

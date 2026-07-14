@@ -85,7 +85,8 @@ multiline input, rendered Markdown, live model/tool activity, elapsed time, and 
 with estimated context remaining, findings, TODOs, notes, and the active profile. Use Enter to send,
 Alt+Enter for a newline, Tab to complete, arrow keys for history, Ctrl+L to redraw, and Ctrl+D to
 exit. `/help` is the complete command index; `/context`, `/checkpoints`, `/history`, `/mcp`, and
-`/shortcuts` expose the most useful live views.
+`/shortcuts` expose the most useful live views. Reasoning defaults to `medium`; `/reasoning` shows
+all levels and `/reasoning high` changes the budget immediately without restarting llama-server.
 
 MalDroid does not rely on the local model to remember progress voluntarily. After meaningful tool
 use, the agent requires a durable `MalDroid_save_note` or finding checkpoint before accepting the
@@ -146,6 +147,7 @@ maldroid config show
 maldroid config show --json
 maldroid config get mcp.preferred_port
 maldroid config set llama.temperature 0.1
+maldroid config set llama.reasoning_level high
 maldroid config set llama.api_key_enabled true
 maldroid config set limits.auto_compact_ratio 0.72
 maldroid config validate

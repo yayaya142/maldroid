@@ -8,7 +8,7 @@ from typing import Any
 
 from maldroid.case_manager import Case
 from maldroid.config import AppConfig
-from maldroid.llama_client import ModelClient
+from maldroid.llama_client import REASONING_BUDGETS, ModelClient, ReasoningLevel
 from maldroid.prompts import SYSTEM_PROMPT, profile_prompt
 from maldroid.session_manager import SessionManager
 from maldroid.tools.dispatcher import ToolExecutor
@@ -179,6 +179,21 @@ class MalDroidAgent:
             }
         )
         self.sessions.record("profile_change", content={"profile": profile})
+
+    @property
+    def reasoning_level(self) -> ReasoningLevel:
+        value = getattr(self.client, "reasoning_level", self.config.llama.reasoning_level)
+        return value if value in REASONING_BUDGETS else self.config.llama.reasoning_level
+
+    def set_reasoning_level(self, level: ReasoningLevel) -> None:
+        setter = getattr(self.client, "set_reasoning_level", None)
+        if setter is None:
+            raise RuntimeError("The active model client does not support reasoning controls")
+        setter(level)
+        self.sessions.record(
+            "reasoning_change",
+            content={"level": level, "thinking_budget_tokens": REASONING_BUDGETS[level]},
+        )
 
     def estimate_tokens(self) -> int:
         serialized = json.dumps(

@@ -26,9 +26,29 @@ Keyboard controls:
 - Ctrl+C cancels the current input or response; Ctrl+D exits from an empty prompt.
 
 Use `/help` for the complete command table. The principal live views are `/status`, `/context`,
-`/tools`, `/findings`, `/todo`, `/checkpoints`, `/history`, `/server`, and `/mcp`. `/quit` is an
+`/reasoning`, `/tools`, `/findings`, `/todo`, `/checkpoints`, `/history`, `/server`, and `/mcp`. `/quit` is an
 alias for `/exit`. In non-interactive input or with `MALDROID_SIMPLE_INPUT=1`, MalDroid falls back
 to its reliable line-oriented prompt.
+
+### Reasoning control
+
+`llama.reasoning_level` defaults to `medium`. The terminal toolbar and `/status` show the active
+level. `/reasoning` lists the available levels; `/reasoning LEVEL` changes the current session
+immediately, while `maldroid config set llama.reasoning_level LEVEL` changes the persisted default.
+
+| Level | Per-request thinking budget |
+| --- | ---: |
+| `off` | 0 tokens |
+| `low` | 512 tokens |
+| `medium` | 1,536 tokens |
+| `high` | 3,072 tokens |
+| `unlimited` | no explicit limit |
+
+MalDroid sends the native llama.cpp `thinking_budget_tokens` request property. It intentionally
+does not set a command-line `--reasoning-budget`, because a command-line value would prevent live
+per-request adjustment. Reasoning support still depends on the selected model and chat template,
+and the overall `llama.max_response_tokens` limit applies to the complete generation. See the
+[official llama-server reasoning options](https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md#usage).
 
 ## Discovery and completion
 
@@ -66,6 +86,7 @@ maldroid config show
 maldroid config show --json
 maldroid config get llama.model
 maldroid config get llama.api_key_enabled
+maldroid config get llama.reasoning_level
 maldroid config set llama.api_key_enabled true
 maldroid config get mcp.preferred_port --json
 maldroid config set mcp.preferred_port 8765

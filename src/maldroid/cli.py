@@ -93,6 +93,7 @@ CONFIG_DESCRIPTIONS = {
     "llama.flash_attention": "Flash-attention mode: on, off, or auto.",
     "llama.temperature": "Sampling temperature for assistant responses.",
     "llama.max_response_tokens": "Maximum generated tokens per model response.",
+    "llama.reasoning_level": "Reasoning budget: off, low, medium, high, or unlimited.",
     "llama.api_key_enabled": "Enable a random per-run key for the loopback model API.",
     "llama.ui_enabled": "Serve the built-in llama.cpp WebUI.",
     "llama.ui_mcp_proxy_enabled": "Enable the experimental WebUI-to-MCP CORS proxy.",
@@ -762,6 +763,7 @@ def _run_case(
                 Path(config.llama.model).name,
                 config.llama.temperature,
                 config.llama.max_response_tokens,
+                config.llama.reasoning_level,
             )
             registry, local_dispatcher = _build_tool_runtime(config, case, manager)
             investigation = local_dispatcher.context.investigation
@@ -851,6 +853,7 @@ def _doctor_model_tool_test(config: AppConfig, console: Console) -> None:
             Path(config.llama.model).name,
             config.llama.temperature,
             config.llama.max_response_tokens,
+            config.llama.reasoning_level,
         )
         schema = {
             "type": "function",

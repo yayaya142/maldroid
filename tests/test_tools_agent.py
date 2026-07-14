@@ -288,3 +288,30 @@ def test_auto_compaction_threshold_is_configurable(app_config: AppConfig) -> Non
     agent = MalDroidAgent(app_config, case, FakeClient(), registry, dispatcher, sessions)
     agent.messages.append({"role": "user", "content": "x" * 190000})
     assert agent.should_auto_compact() is True
+
+
+class ReasoningClient(FakeClient):
+    reasoning_level = "unlimited"
+
+    def set_reasoning_level(self, level) -> None:
+        self.reasoning_level = level
+
+
+def test_agent_changes_reasoning_level_and_records_session(app_config: AppConfig) -> None:
+    manager, case, registry, dispatcher = make_dispatcher(app_config)
+    sessions = SessionManager(case, manager)
+    agent = MalDroidAgent(
+        app_config,
+        case,
+        ReasoningClient(),
+        registry,
+        dispatcher,
+        sessions,
+    )
+
+    agent.set_reasoning_level("high")
+
+    assert agent.reasoning_level == "high"
+    events = [json.loads(line) for line in sessions.history_path.read_text().splitlines()]
+    change = next(event for event in events if event["type"] == "reasoning_change")
+    assert change["content"] == {"level": "high", "thinking_budget_tokens": 3072}

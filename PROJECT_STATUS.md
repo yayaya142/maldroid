@@ -61,6 +61,9 @@ Last updated: 2026-07-14
 - Interactive chat now provides persistent case-local history, completion, multiline editing,
   keyboard controls, rendered Markdown, live model/MCP activity, timing, context-used/remaining
   estimates, and structured status, context, history, checkpoint, server, and MCP views.
+- Reasoning effort is controllable live through `/reasoning`, defaults to `medium`, appears in the
+  toolbar/status, persists through `llama.reasoning_level`, and uses llama.cpp's native dynamic
+  `thinking_budget_tokens` request field without requiring a server restart.
 
 ## Partial or environment-gated
 

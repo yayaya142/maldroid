@@ -71,9 +71,11 @@ def test_slash_completion_includes_commands_and_profiles() -> None:
     completer = MalDroidCompleter()
     commands = list(completer.get_completions(Document("/cont"), CompleteEvent()))
     profiles = list(completer.get_completions(Document("/profile rea"), CompleteEvent()))
+    reasoning = list(completer.get_completions(Document("/reasoning hi"), CompleteEvent()))
 
     assert [item.text for item in commands] == ["/context"]
     assert [item.text for item in profiles] == ["react-native"]
+    assert [item.text for item in reasoning] == ["high"]
 
 
 def test_toolbar_exposes_remaining_context_and_durable_state(app_config) -> None:

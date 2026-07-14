@@ -84,6 +84,10 @@ It renders model waits, tool start/result, checkpoint, and compaction activity w
 MCP dispatcher remain the source of execution truth. Prompt history and completion are local-only;
 the terminal UI has no additional network or filesystem authority.
 
+Reasoning effort is a per-request model-client property. The configured human-readable level maps
+to llama.cpp `thinking_budget_tokens`, can change between tool rounds without a server restart, and
+is recorded as a session event. No command-line reasoning budget is set, preserving dynamic control.
+
 ## Context and retrieval
 
 Conversation size is conservatively estimated. At 72% usage by default, the UI automatically saves

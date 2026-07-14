@@ -29,6 +29,7 @@ def test_default_model_performance_settings() -> None:
     assert config.llama.ui_enabled is True
     assert config.llama.ui_mcp_proxy_enabled is True
     assert config.llama.built_in_tools_enabled is True
+    assert config.llama.reasoning_level == "medium"
     assert config.limits.auto_compact_ratio == 0.72
 
 
@@ -68,3 +69,5 @@ def test_config_get_reset_and_invalid_values() -> None:
     assert reset.mcp.preferred_port == 8765
     with pytest.raises(Exception, match="Invalid value"):
         set_config_value(AppConfig(), "general.evidence_mode", "maybe")
+    with pytest.raises(Exception, match="Invalid value"):
+        set_config_value(AppConfig(), "llama.reasoning_level", "extreme")

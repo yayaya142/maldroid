@@ -3,9 +3,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 from openai import OpenAI
+
+ReasoningLevel = Literal["off", "low", "medium", "high", "unlimited"]
+REASONING_BUDGETS: dict[ReasoningLevel, int] = {
+    "off": 0,
+    "low": 512,
+    "medium": 1536,
+    "high": 3072,
+    "unlimited": -1,
+}
 
 
 @dataclass
@@ -51,11 +60,18 @@ class LocalLlamaClient:
         model: str,
         temperature: float = 0.2,
         max_tokens: int = 4096,
+        reasoning_level: ReasoningLevel = "medium",
     ):
         self.client = OpenAI(base_url=base_url, api_key=api_key or "local-no-auth")
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens
+        self.reasoning_level = reasoning_level
+
+    def set_reasoning_level(self, level: ReasoningLevel) -> None:
+        if level not in REASONING_BUDGETS:
+            raise ValueError(f"Unknown reasoning level: {level}")
+        self.reasoning_level = level
 
     def complete(
         self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
@@ -65,6 +81,9 @@ class LocalLlamaClient:
             "messages": messages,
             "temperature": self.temperature,
             "max_tokens": self.max_tokens,
+            "extra_body": {
+                "thinking_budget_tokens": REASONING_BUDGETS[self.reasoning_level],
+            },
         }
         if tools:
             request["tools"] = tools

@@ -62,6 +62,9 @@ Run target-machine acceptance with the authorized Gemma 4 model and an external 
   input, keyboard shortcuts, Markdown responses, live model/tool/checkpoint events, response
   timing, context remaining, and structured slash-command views. Non-TTY input retains the simple
   prompt path.
+- Reasoning defaults to `medium` and can change live through `/reasoning` using llama.cpp's native
+  per-request `thinking_budget_tokens`. The toolbar, welcome panel, and status view expose the active
+  level; session logs record changes and persistent defaults use `llama.reasoning_level`.
 
 ## Verification
 
@@ -72,10 +75,10 @@ Verified in the local isolated Python 3.12 venv:
 ```
 
 Results: the consolidated release check passed. Ruff formatting and lint passed; mypy passed for 34
-source files; 61 tests passed. Project hygiene, installer dry-run, browser
+source files; 68 tests passed. Project hygiene, installer dry-run, browser
 MCP origin/CORS coverage, termination-signal cleanup, namespaced tool discovery, enforced and
-automatic checkpoints, compaction fallback, terminal completion/status/event coverage, JSON parsing
-tests, protocol integration, and wheel build verification passed. The wheel is
+automatic checkpoints, compaction fallback, terminal completion/status/event coverage, dynamic
+reasoning-budget request tests, JSON parsing tests, protocol integration, and wheel build verification passed. The wheel is
 `dist/maldroid-0.1.0-py3-none-any.whl`.
 
 ## Known limitations

@@ -38,6 +38,7 @@ COMMANDS: dict[str, str] = {
     "/help": "Show commands and keyboard shortcuts",
     "/status": "Show the complete workspace status",
     "/context": "Show context usage and estimated capacity remaining",
+    "/reasoning": "Show or change the model reasoning level",
     "/profile": "Show or change the active analysis profile",
     "/tools": "List tools available to the active profile",
     "/files": "List registered case files",
@@ -69,6 +70,12 @@ class MalDroidCompleter(Completer):
             for profile in PROFILES:
                 if profile.startswith(fragment):
                     yield Completion(profile, start_position=-len(fragment))
+            return
+        if before.startswith("/reasoning "):
+            fragment = before.removeprefix("/reasoning ").lower()
+            for level in ("off", "low", "medium", "high", "unlimited"):
+                if level.startswith(fragment):
+                    yield Completion(level, start_position=-len(fragment))
             return
         if " " in before:
             return
@@ -259,6 +266,7 @@ class InteractiveChat:
         details.add_column()
         details.add_row("Case", self.case.metadata.name)
         details.add_row("Profile", self.case.state.active_profile)
+        details.add_row("Reasoning", self.agent.reasoning_level)
         details.add_row("Model", model)
         details.add_row("llama.cpp", self._server_label(server_status))
         details.add_row("MCP", self.mcp_endpoint)
@@ -287,6 +295,8 @@ class InteractiveChat:
             [
                 ("class:toolbar.key", f" {self.case.state.active_profile} "),
                 ("class:bottom-toolbar", "│ "),
+                ("class:toolbar.key", f"reason {self.agent.reasoning_level}"),
+                ("class:bottom-toolbar", " │ "),
                 (style, f"ctx {percent:.0f}% · ~{remaining:,} left"),
                 ("class:bottom-toolbar", " │ "),
                 ("class:toolbar.key", f"{len(self.case.state.findings)} findings"),
@@ -319,6 +329,8 @@ class InteractiveChat:
             self._show_status()
         elif name == "/context":
             self._show_context()
+        elif name == "/reasoning":
+            self._reasoning(rest)
         elif name == "/profile":
             self._profile(rest)
         elif name == "/tools":
@@ -395,6 +407,7 @@ class InteractiveChat:
             ("Case ID", self.case.metadata.case_id),
             ("Workspace", str(self.case.root)),
             ("Profile", self.case.state.active_profile),
+            ("Reasoning", self.agent.reasoning_level),
             ("Model", self.case.state.model_path or "not configured"),
             ("Context", f"~{used:,} / {total:,} tokens ({percent:.1f}%)"),
             ("Remaining", f"~{remaining:,} tokens"),
@@ -449,6 +462,33 @@ class InteractiveChat:
         self.agent.switch_profile(name)
         self.case_manager.save(self.case)
         self.console.print(f"[green]✓[/green] Active profile: [bold]{name}[/bold]")
+
+    def _reasoning(self, level: str) -> None:
+        levels = {
+            "off": "No thinking budget; answer immediately",
+            "low": "Up to 512 reasoning tokens for quick tasks",
+            "medium": "Up to 1,536 reasoning tokens for normal analysis",
+            "high": "Up to 3,072 reasoning tokens for difficult analysis",
+            "unlimited": "No explicit reasoning-token limit",
+        }
+        if not level:
+            table = Table(box=box.SIMPLE, show_header=False, padding=(0, 2))
+            for name, description in levels.items():
+                marker = "●" if name == self.agent.reasoning_level else "○"
+                table.add_row(marker, name, description)
+            self.console.print(Panel(table, title="Reasoning level", border_style="cyan"))
+            self.console.print(
+                "[dim]Change for this session with /reasoning LEVEL; persist with "
+                "maldroid config set llama.reasoning_level LEVEL.[/dim]"
+            )
+            return
+        if level not in levels:
+            self.console.print("[red]Unknown reasoning level.[/red] Choose: " + ", ".join(levels))
+            return
+        self.agent.set_reasoning_level(level)  # type: ignore[arg-type]
+        self.console.print(
+            f"[green]✓[/green] Reasoning changed to [bold]{level}[/bold] for this session."
+        )
 
     def _show_tools(self) -> None:
         tools = self.registry.enabled(self.case.state.active_profile)

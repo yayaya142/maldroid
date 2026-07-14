@@ -58,3 +58,6 @@
   completion, multiline editing, keyboard shortcuts, Markdown rendering, a live context-remaining
   toolbar, visible MCP tool activity, response timing, structured status views, checkpoints, and a
   non-TTY fallback.
+- Added live reasoning control with `off`, `low`, `medium`, `high`, and `unlimited` levels, a
+  balanced `medium` default, native per-request llama.cpp thinking budgets, toolbar/status display,
+  slash completion, persistent configuration, and audited session changes.
