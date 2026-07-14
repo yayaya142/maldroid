@@ -45,6 +45,7 @@ COMMANDS: dict[str, str] = {
     "/findings": "Show durable investigation findings",
     "/todo": "List or update TODO items",
     "/plan": "Alias for /todo to view the investigation plan",
+    "/dashboard": "Show the investigation dashboard",
     "/skip-todo": "Mark a TODO item as completed/skipped",
     "/mark-blocked": "Mark a TODO item as blocked",
     "/note": "Save a durable progress note",
@@ -449,6 +450,8 @@ class InteractiveChat:
             self._show_findings()
         elif name == "/todo" or name == "/plan":
             self._todo(rest)
+        elif name == "/dashboard":
+            self._show_dashboard()
         elif name == "/skip-todo":
             if not rest:
                 self.console.print("Usage: [cyan]/skip-todo TODO_ID[/cyan]")
@@ -555,6 +558,45 @@ class InteractiveChat:
         for key, value in rows:
             table.add_row(key, value)
         self.console.print(Panel(table, title="Workspace status", border_style="cyan"))
+
+    def _show_dashboard(self) -> None:
+        from rich.layout import Layout
+        from rich.panel import Panel
+        from rich.table import Table
+
+        layout = Layout()
+        layout.split_column(
+            Layout(name="header", size=3),
+            Layout(name="main"),
+        )
+        layout["main"].split_row(
+            Layout(name="left"),
+            Layout(name="right"),
+        )
+
+        # Header
+        used, total, remaining, percent = self._context_numbers()
+        header = Text(f"MalDroid Dashboard: {self.case.metadata.name} ({self.case.metadata.case_id}) | Context: {percent:.1f}% used", style="bold cyan", justify="center")
+        layout["header"].update(Panel(header, border_style="blue"))
+
+        # Left: Findings
+        findings_table = Table(box=box.SIMPLE, show_header=False)
+        for item in self.case.state.findings[:5]:
+            findings_table.add_row(f"[{item.severity}]", item.title)
+        if not self.case.state.findings:
+            findings_table.add_row("[dim]No findings recorded[/dim]")
+        layout["left"].update(Panel(findings_table, title="Top Findings", border_style="cyan"))
+
+        # Right: TODOs
+        todos_table = Table(box=box.SIMPLE, show_header=False)
+        open_todos = [t for t in self.case.state.todos if t.status == "open"]
+        for item in open_todos[:5]:
+            todos_table.add_row(f"[{item.priority}]", item.text)
+        if not open_todos:
+            todos_table.add_row("[dim]No open TODOs[/dim]")
+        layout["right"].update(Panel(todos_table, title="Open TODOs", border_style="cyan"))
+
+        self.console.print(layout)
 
     def _show_context(self) -> None:
         used, total, remaining, percent = self._context_numbers()

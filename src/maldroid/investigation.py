@@ -292,14 +292,22 @@ class InvestigationManager:
         if text is not None: changes["text"] = text
         if evidence is not None: changes["evidence"] = evidence
         if kind is not None: changes["kind"] = kind
-        if status is not None: changes["status"] = status
-        if objective is not None: changes["objective"] = objective
-        if completed_work is not None: changes["completed_work"] = completed_work
-        if evidence_learned is not None: changes["evidence_learned"] = evidence_learned
-        if findings_changed is not None: changes["findings_changed"] = findings_changed
-        if todos_changed is not None: changes["todos_changed"] = todos_changed
-        if failed_approaches is not None: changes["failed_approaches"] = failed_approaches
-        if unresolved_questions is not None: changes["unresolved_questions"] = unresolved_questions
+        if status is not None:
+            changes["status"] = status
+        if objective is not None:
+            changes["objective"] = objective
+        if completed_work is not None:
+            changes["completed_work"] = completed_work
+        if evidence_learned is not None:
+            changes["evidence_learned"] = evidence_learned
+        if findings_changed is not None:
+            changes["findings_changed"] = findings_changed
+        if todos_changed is not None:
+            changes["todos_changed"] = todos_changed
+        if failed_approaches is not None:
+            changes["failed_approaches"] = failed_approaches
+        if unresolved_questions is not None:
+            changes["unresolved_questions"] = unresolved_questions
         if uncertainty is not None:
             changes["uncertainty"] = uncertainty
         if next_action is not None:
