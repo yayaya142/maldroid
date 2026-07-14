@@ -32,3 +32,5 @@
 - Validated the complete GitHub Actions pipeline on macOS and Kali rolling.
 - Made installation independent of inherited user `pip` indexes by using isolated public PyPI by
   default, with an explicit `MALDROID_PIP_INDEX_URL` override for approved private mirrors.
+- Added a concise, documented system prompt with deterministic case startup, bounded file handling,
+  MCP-only tool use, evidence safety, and persistent investigation guidance.

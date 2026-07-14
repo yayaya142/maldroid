@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from maldroid.agent import MalDroidAgent
 from maldroid.case_manager import CaseManager
@@ -9,6 +10,7 @@ from maldroid.investigation import InvestigationManager
 from maldroid.knowledge_manager import KnowledgeManager
 from maldroid.llama_client import AssistantMessage, ToolCall
 from maldroid.paths import PathPolicy
+from maldroid.prompts import SYSTEM_PROMPT
 from maldroid.session_manager import SessionManager
 from maldroid.tools.dispatcher import ToolDispatcher
 from maldroid.tools.models import ToolContext
@@ -28,6 +30,14 @@ def make_dispatcher(app_config: AppConfig):
         path_policy=PathPolicy(case.root),
     )
     return manager, case, registry, ToolDispatcher(registry, context)
+
+
+def test_documented_system_prompt_matches_runtime_prompt() -> None:
+    document = (Path(__file__).resolve().parents[1] / "SYSTEM_PROMPT.md").read_text(
+        encoding="utf-8"
+    )
+    assert SYSTEM_PROMPT.strip() in document
+    assert "read_case_state, then list_case_files" in SYSTEM_PROMPT
 
 
 def test_registry_profile_filtering(app_config: AppConfig) -> None:

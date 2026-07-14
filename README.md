@@ -55,6 +55,10 @@ maldroid doctor --show-command
 maldroid doctor --model-tool-test
 ```
 
+The built-in chat supplies its system prompt automatically. [`SYSTEM_PROMPT.md`](SYSTEM_PROMPT.md)
+contains the same short prompt in a ready-to-paste form for direct llama.cpp or external MCP client
+sessions.
+
 ## Daily use
 
 ```bash

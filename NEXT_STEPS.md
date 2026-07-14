@@ -10,6 +10,8 @@
    Verify the public clone from `https://github.com/yayaya142/maldroid.git` in a clean directory.
    Confirm installation succeeds despite unrelated global `pip` index configuration; use
    `MALDROID_PIP_INDEX_URL` only when an approved private mirror is intentionally required.
+   Verify `SYSTEM_PROMPT.md` in one direct external-client session and confirm the model starts with
+   `read_case_state` and `list_case_files` before bounded evidence reads.
 2. `REL-002` — Run the full suite and installer lifecycle on Kali rolling and Apple Silicon.
 3. `COMPAT-001` — Expand benign multi-architecture ELF and versioned Blutter fixtures on target
    platforms and record exact external-tool versions.

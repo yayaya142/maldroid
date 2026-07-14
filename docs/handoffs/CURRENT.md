@@ -34,6 +34,8 @@ Run target-machine acceptance with the authorized Gemma 4 model and an external 
 - Installation now uses public PyPI through pip isolated mode by default, preventing inherited
   global indexes from breaking build dependency resolution. Approved private mirrors require the
   explicit `MALDROID_PIP_INDEX_URL` override.
+- `SYSTEM_PROMPT.md` mirrors the tested built-in system prompt and is ready to paste into direct
+  llama.cpp or external MCP client sessions; it defines case startup and bounded file handling.
 
 ## Verification
 
@@ -47,7 +49,7 @@ PYTHON="$PWD/.venv/bin/python" ./install.sh --dry-run
 ```
 
 Results: the consolidated `./scripts/dev release-check` passed. Ruff formatting and lint passed;
-mypy passed for 34 source files; 43 tests passed with 67% line coverage. Project hygiene,
+mypy passed for 34 source files; 44 tests passed with 67% line coverage. Project hygiene,
 installer dry-run, JSON parsing tests, nested help/version/config UX, MCP protocol integration, and
 wheel build/archive verification passed. The wheel is `dist/maldroid-0.1.0-py3-none-any.whl`.
 

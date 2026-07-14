@@ -38,6 +38,8 @@ Last updated: 2026-07-14
   the complete test suite, and installer dry-run.
 - The installer uses an isolated, deterministic package index and cannot be redirected by ambient
   user `pip` configuration; private mirrors require an explicit MalDroid-specific override.
+- Built-in chat and the ready-to-paste `SYSTEM_PROMPT.md` share the same tested, case-aware system
+  prompt for MCP file workflows and evidence handling.
 
 ## Partial or environment-gated
 
