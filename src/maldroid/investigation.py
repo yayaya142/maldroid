@@ -229,12 +229,18 @@ class InvestigationManager:
         if title is not None: changes["title"] = title
         if summary is not None: changes["summary"] = summary
         if confidence is not None: changes["confidence"] = confidence
-        if severity is not None: changes["severity"] = severity
-        if status is not None: changes["status"] = status
-        if verification_status is not None: changes["verification_status"] = verification_status
-        if verifier_notes is not None: changes["verifier_notes"] = verifier_notes
-        if evidence is not None: changes["evidence"] = evidence
-        if tags is not None: changes["tags"] = tags
+        if severity is not None:
+            changes["severity"] = severity
+        if status is not None:
+            changes["status"] = status
+        if verification_status is not None:
+            changes["verification_status"] = verification_status
+        if verifier_notes is not None:
+            changes["verifier_notes"] = verifier_notes
+        if evidence is not None:
+            changes["evidence"] = evidence
+        if tags is not None:
+            changes["tags"] = tags
         updated = Finding.model_validate(
             {**finding.model_dump(), **changes, "updated_at": now_iso()}
         )
@@ -289,9 +295,12 @@ class InvestigationManager:
             raise CaseError(f"Note not found: {note_id}")
             
         changes = {}
-        if text is not None: changes["text"] = text
-        if evidence is not None: changes["evidence"] = evidence
-        if kind is not None: changes["kind"] = kind
+        if text is not None:
+            changes["text"] = text
+        if evidence is not None:
+            changes["evidence"] = evidence
+        if kind is not None:
+            changes["kind"] = kind
         if status is not None:
             changes["status"] = status
         if objective is not None:

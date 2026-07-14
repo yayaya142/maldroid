@@ -46,6 +46,7 @@ COMMANDS: dict[str, str] = {
     "/todo": "List or update TODO items",
     "/plan": "Alias for /todo to view the investigation plan",
     "/dashboard": "Show the investigation dashboard",
+    "/detail": "Show detailed, expandable view of recent activities or specific items",
     "/skip-todo": "Mark a TODO item as completed/skipped",
     "/mark-blocked": "Mark a TODO item as blocked",
     "/note": "Save a durable progress note",
@@ -452,6 +453,8 @@ class InteractiveChat:
             self._todo(rest)
         elif name == "/dashboard":
             self._show_dashboard()
+        elif name == "/detail":
+            self._show_detail(rest)
         elif name == "/skip-todo":
             if not rest:
                 self.console.print("Usage: [cyan]/skip-todo TODO_ID[/cyan]")
@@ -597,6 +600,27 @@ class InteractiveChat:
         layout["right"].update(Panel(todos_table, title="Open TODOs", border_style="cyan"))
 
         self.console.print(layout)
+
+    def _show_detail(self, target: str) -> None:
+        if not target:
+            self.console.print("Usage: [cyan]/detail recent[/cyan] or [cyan]/detail TODO_ID[/cyan]")
+            return
+            
+        from rich.panel import Panel
+        
+        if target.lower() == "recent":
+            self.console.print(Panel("Recent Activity Details", border_style="blue"))
+            self.console.print("Expanded activity details are not fully implemented yet in this interface.")
+            return
+            
+        # Try finding a matching TODO
+        matched = [t for t in self.case.state.todos if str(t.id) == target]
+        if matched:
+            t = matched[0]
+            self.console.print(Panel(f"TODO {t.id} Details:\nStatus: {t.status}\nText: {t.text}\nDependencies: {t.dependencies}", border_style="cyan"))
+            return
+            
+        self.console.print(f"[yellow]Target '{target}' not found for detailed expansion.[/yellow]")
 
     def _show_context(self) -> None:
         used, total, remaining, percent = self._context_numbers()
