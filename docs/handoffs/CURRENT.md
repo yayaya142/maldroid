@@ -29,8 +29,8 @@ Run target-machine acceptance with the authorized Gemma 4 model and an external 
   image upgrades must be deliberate compatibility tasks.
 - Process lifecycle and direct loopback health checks are tested independently to avoid hosted
   macOS nested-listener stalls while retaining assertions for the exact health endpoint.
-- Public GitHub Actions run `29319488601` passed on macOS 15/Python 3.12 and Kali rolling before the
-  target moved to macOS 26; the current commit must establish the new macOS 26 baseline.
+- Public GitHub Actions run `29320731148` passed on macOS 26/Python 3.12 and Kali rolling, including
+  lint, format checks, all tests, and installer dry-run.
 
 ## Verification
 

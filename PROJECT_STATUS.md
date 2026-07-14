@@ -34,9 +34,8 @@ Last updated: 2026-07-14
   release and future OS upgrades remain deliberate.
 - Process termination and direct loopback health behavior have independent deterministic tests;
   neither test depends on nested listener availability in hosted CI.
-- The last completed GitHub Actions baseline passed on macOS 15 with Python 3.12 and Kali rolling,
-  including lint, formatting, the complete test suite, and installer dry-run. macOS 26 validation
-  is active for the current change.
+- GitHub Actions passes on macOS 26 with Python 3.12 and Kali rolling, including lint, formatting,
+  the complete test suite, and installer dry-run.
 
 ## Partial or environment-gated
 
