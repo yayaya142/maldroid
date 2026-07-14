@@ -54,6 +54,10 @@ Run target-machine acceptance with the authorized Gemma 4 model and an external 
   path and registers an interpreter-exit fallback for the managed llama-server process group.
 - The registry centrally publishes every managed tool as `MalDroid_<tool_name>`; prompts, internal
   slash commands, tests, CLI inventory, audit events, and external MCP discovery use that prefix.
+- Investigation turns cannot silently end without durable progress: the agent requests a
+  `MalDroid_save_note`/finding checkpoint and automatically saves the draft when ignored.
+- Context compacts automatically at `limits.auto_compact_ratio=0.72`. A failed model summary falls
+  back to findings, recent notes, open TODOs, active profile, and the previous durable summary.
 
 ## Verification
 
@@ -64,10 +68,10 @@ Verified in the local isolated Python 3.12 venv:
 ```
 
 Results: the consolidated release check passed. Ruff formatting and lint passed; mypy passed for 34
-source files; 53 tests passed with 68% line coverage. Project hygiene, installer dry-run, browser
-MCP origin/CORS coverage, termination-signal cleanup, namespaced tool discovery, JSON parsing tests,
-nested help/version/config UX, protocol integration, and wheel build verification passed. The wheel is
-`dist/maldroid-0.1.0-py3-none-any.whl`.
+source files; 57 tests passed with 70% line coverage. Project hygiene, installer dry-run, browser
+MCP origin/CORS coverage, termination-signal cleanup, namespaced tool discovery, enforced and
+automatic checkpoints, compaction fallback, JSON parsing tests, protocol integration, and wheel
+build verification passed. The wheel is `dist/maldroid-0.1.0-py3-none-any.whl`.
 
 ## Known limitations
 

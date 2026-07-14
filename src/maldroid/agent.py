@@ -11,7 +11,24 @@ from maldroid.llama_client import ModelClient
 from maldroid.prompts import SYSTEM_PROMPT, profile_prompt
 from maldroid.session_manager import SessionManager
 from maldroid.tools.dispatcher import ToolExecutor
+from maldroid.tools.models import mcp_tool_name
 from maldroid.tools.registry import ToolRegistry
+
+CHECKPOINT_TOOLS = {
+    mcp_tool_name("save_note"),
+    mcp_tool_name("save_finding"),
+    mcp_tool_name("update_finding"),
+}
+NON_INVESTIGATION_TOOLS = {
+    mcp_tool_name("read_case_state"),
+    mcp_tool_name("list_case_files"),
+}
+CHECKPOINT_REMINDER = (
+    "A durable progress checkpoint is required before the final answer. Call "
+    "MalDroid_save_note now. Record completed work, exact evidence paths and lines or offsets, "
+    "facts versus hypotheses, uncertainty, unresolved questions, and the exact next action. "
+    "Do not rely on conversation history alone."
+)
 
 
 class MalDroidAgent:
@@ -54,7 +71,13 @@ class MalDroidAgent:
         self.messages.append({"role": "user", "content": text})
         self.sessions.record("message", role="user", content=text)
         tools = self.registry.schemas(self.case.state.active_profile)
-        for _ in range(self.config.limits.max_tool_rounds):
+        tool_rounds = 0
+        investigation_performed = False
+        checkpoint_saved = False
+        checkpoint_requested = False
+        checkpoint_extension_used = False
+        activity: list[str] = []
+        while True:
             assistant = self.client.complete(self.messages, tools)
             history = assistant.as_history_message()
             self.messages.append(history)
@@ -62,7 +85,31 @@ class MalDroidAgent:
             if not assistant.tool_calls:
                 if not assistant.content:
                     return "The model returned an empty response. Run maldroid doctor --model-tool-test."
+                if investigation_performed and not checkpoint_saved:
+                    if not checkpoint_requested:
+                        self.messages.append({"role": "system", "content": CHECKPOINT_REMINDER})
+                        self.sessions.record("checkpoint_required", content={})
+                        checkpoint_requested = True
+                        continue
+                    self._save_automatic_checkpoint(assistant.content, activity)
                 return assistant.content
+            if tool_rounds >= self.config.limits.max_tool_rounds:
+                is_checkpoint_only = all(
+                    call.name in CHECKPOINT_TOOLS for call in assistant.tool_calls
+                )
+                if checkpoint_requested and is_checkpoint_only and not checkpoint_extension_used:
+                    checkpoint_extension_used = True
+                else:
+                    if investigation_performed and not checkpoint_saved:
+                        self._save_automatic_checkpoint(
+                            "Tool round limit reached before a final response.", activity
+                        )
+                    return (
+                        "The tool-call round limit was reached. Progress was saved as a durable "
+                        "checkpoint; refine the request or inspect saved tool output."
+                    )
+            else:
+                tool_rounds += 1
             for call in assistant.tool_calls:
                 self.sessions.record(
                     "tool_call",
@@ -70,11 +117,37 @@ class MalDroidAgent:
                     content={"id": call.id, "name": call.name, "arguments": call.arguments},
                 )
                 result = self.dispatcher.execute(call.name, call.arguments)
+                activity.append(f"{call.name} ({result.status})")
+                if call.name in CHECKPOINT_TOOLS:
+                    if result.status == "completed" and investigation_performed:
+                        checkpoint_saved = True
+                elif call.name not in NON_INVESTIGATION_TOOLS:
+                    investigation_performed = True
                 serialized = json.dumps(result.model_dump(mode="json"), ensure_ascii=False)
                 tool_message = {"role": "tool", "tool_call_id": call.id, "content": serialized}
                 self.messages.append(tool_message)
                 self.sessions.record("tool_result", role="tool", content=tool_message)
-        return "The tool-call round limit was reached. Refine the request or inspect saved tool output."
+
+    def _save_automatic_checkpoint(self, draft: str, activity: list[str] | None = None) -> None:
+        tool_summary = ""
+        if activity:
+            tool_summary = "\n\nTools executed:\n" + "\n".join(
+                f"- {item}" for item in activity[-20:]
+            )
+        text = (
+            "Automatic progress checkpoint because the model did not call MalDroid_save_note.\n\n"
+            + draft
+            + tool_summary
+        )
+        text = text[:40000]
+        result = self.dispatcher.execute(mcp_tool_name("save_note"), {"text": text})
+        self.sessions.record(
+            "automatic_checkpoint",
+            content={
+                "status": result.status,
+                "error": result.error.model_dump() if result.error else None,
+            },
+        )
 
     def switch_profile(self, profile: str) -> None:
         self.case.state.active_profile = profile
@@ -90,22 +163,58 @@ class MalDroidAgent:
         serialized = json.dumps(self.messages, ensure_ascii=False)
         return max(1, len(serialized) // 4)
 
+    def context_ratio(self) -> float:
+        return self.estimate_tokens() / self.case.state.context_size
+
+    def should_auto_compact(self) -> bool:
+        return self.context_ratio() >= self.config.limits.auto_compact_ratio
+
     def compact(self) -> str:
         prompt = {
             "role": "user",
             "content": (
-                "Create a concise structured session summary. Preserve confirmed findings, hypotheses, "
-                "open TODO items, important evidence paths and line ranges, active profile, and uncertainty."
+                "Create a concise structured session summary. Preserve completed work, confirmed "
+                "findings, hypotheses, open TODO items, important evidence paths and line ranges, "
+                "failed approaches, active profile, uncertainty, and the exact next action."
             ),
         }
-        summary_message = self.client.complete(self.messages + [prompt], [])
-        summary = (
-            summary_message.content or self.case.state.summary or "No session summary was produced."
-        )
+        try:
+            summary_message = self.client.complete(self.messages + [prompt], [])
+            summary = summary_message.content or self._durable_fallback_summary()
+        except Exception as exc:
+            summary = self._durable_fallback_summary(f"Model compaction failed: {exc}")
         self.sessions.record("compaction", content={"summary": summary})
         self.sessions.save_summary(summary)
         self._reset_messages(summary)
         return summary
+
+    def _durable_fallback_summary(self, warning: str = "") -> str:
+        sections = [f"Active profile: {self.case.state.active_profile}"]
+        if warning:
+            sections.append(warning)
+        if self.case.state.findings:
+            sections.append(
+                "Findings:\n"
+                + "\n".join(
+                    f"- {item.id} [{item.status}/{item.confidence}]: {item.title} — {item.summary}"
+                    for item in self.case.state.findings[-20:]
+                )
+            )
+        if self.case.state.notes:
+            sections.append(
+                "Recent progress notes:\n"
+                + "\n".join(f"- {item.id}: {item.text}" for item in self.case.state.notes[-20:])
+            )
+        open_todos = [item for item in self.case.state.todos if item.status == "open"]
+        if open_todos:
+            sections.append(
+                "Open TODOs:\n" + "\n".join(f"- {item.id}: {item.text}" for item in open_todos)
+            )
+        if self.case.state.summary:
+            sections.append("Previous summary:\n" + self.case.state.summary)
+        if len(sections) == 1:
+            sections.append("No durable investigation progress has been recorded yet.")
+        return "\n\n".join(sections)[:40000]
 
     def clear(self) -> None:
         self.sessions.record("clear", content={})

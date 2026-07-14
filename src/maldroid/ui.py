@@ -61,16 +61,17 @@ class InteractiveChat:
                 if not self._slash(text):
                     break
                 continue
-            estimate = self.agent.estimate_tokens()
-            ratio = estimate / self.case.state.context_size
-            if ratio >= 0.85:
-                self.console.print("Context usage is above 85%. Run /compact before continuing.")
-                continue
-            if ratio >= 0.75:
+            if self.agent.should_auto_compact():
                 self.console.print(
-                    "[yellow]Context usage is above 75%; consider /compact.[/yellow]"
+                    "[yellow]Context checkpoint reached; compacting automatically.[/yellow]"
                 )
+                self.agent.compact()
             self.console.print(self.agent.respond(text))
+            if self.agent.should_auto_compact():
+                self.console.print(
+                    "[yellow]Saving progress and compacting context automatically.[/yellow]"
+                )
+                self.agent.compact()
 
     def _slash(self, command: str) -> bool:
         name, _, rest = command.partition(" ")

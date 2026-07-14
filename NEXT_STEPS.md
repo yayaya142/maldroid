@@ -17,7 +17,9 @@
    In WebUI, verify the owner can select built-in tools and that `doctor` labels their host-level
    shell and file authority clearly. After upgrading the installed package, verify that the
    automatically started MCP endpoint connects from the WebUI at `/mcp` with no second terminal,
-   both directly and with the per-connection proxy enabled.
+   both directly and with the per-connection proxy enabled. Run one evidence-inspection turn and
+   confirm a durable checkpoint appears even if the model initially omits `MalDroid_save_note`;
+   lower `limits.auto_compact_ratio` temporarily and confirm automatic compaction resumes from it.
 2. `REL-002` — Run the full suite and installer lifecycle on Kali rolling and Apple Silicon.
 3. `COMPAT-001` — Expand benign multi-architecture ELF and versioned Blutter fixtures on target
    platforms and record exact external-tool versions.

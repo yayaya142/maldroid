@@ -29,6 +29,7 @@ def test_default_model_performance_settings() -> None:
     assert config.llama.ui_enabled is True
     assert config.llama.ui_mcp_proxy_enabled is True
     assert config.llama.built_in_tools_enabled is True
+    assert config.limits.auto_compact_ratio == 0.72
 
 
 @pytest.mark.parametrize(

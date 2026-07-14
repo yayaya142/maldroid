@@ -53,6 +53,11 @@ Last updated: 2026-07-14
   llama-server process group; normal interpreter exit has an additional cleanup hook.
 - Every exposed managed MCP tool is namespaced with the `MalDroid_` prefix across discovery,
   execution, prompts, audit records, CLI inventory, and documentation.
+- Meaningful investigation turns now require a durable note/finding checkpoint. The agent prompts
+  once, then saves the ignored draft automatically through MCP so continuity does not depend on
+  local-model discipline.
+- Context automatically compacts at configurable 72% usage, with deterministic recovery from
+  findings, recent notes, open TODOs, profile, and prior summary if model summarization fails.
 
 ## Partial or environment-gated
 

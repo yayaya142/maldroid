@@ -83,6 +83,12 @@ detected.
 The chat supports `/help`, `/status`, `/profile`, `/tools`, `/files`, `/findings`, `/todo`, `/note`,
 `/compact`, `/clear`, `/server`, `/knowledge`, and `/exit`.
 
+MalDroid does not rely on the local model to remember progress voluntarily. After meaningful tool
+use, the agent requires a durable `MalDroid_save_note` or finding checkpoint before accepting the
+final answer. If the model ignores that instruction, its draft is saved automatically as a progress
+note. Context is compacted automatically at 72% usage by default, with durable case state used as a
+fallback if model summarization fails.
+
 ## MCP tools
 
 Every normal interactive run starts a loopback-only MCP Streamable HTTP server and prints its exact
@@ -137,6 +143,7 @@ maldroid config show --json
 maldroid config get mcp.preferred_port
 maldroid config set llama.temperature 0.1
 maldroid config set llama.api_key_enabled true
+maldroid config set limits.auto_compact_ratio 0.72
 maldroid config validate
 maldroid config reset llama.temperature --yes
 maldroid config path

@@ -100,6 +100,10 @@ maldroid tools --profile react-native --json
 `doctor --show-command` redacts the random API secret whenever authentication is enabled.
 `--model-tool-test` is interactive and intentionally cannot be combined with `--json`.
 
+`limits.auto_compact_ratio` defaults to `0.72` and accepts values from `0.5` through `0.8`.
+Automatic compaction preserves full JSONL history and builds the new context from the generated
+summary or, if generation fails, durable findings, notes, TODOs, profile, and prior summary.
+
 ## Exit behavior
 
 `/exit`, Ctrl-C, terminal-close `SIGHUP`, and `SIGTERM` all enter the same cleanup path. MalDroid

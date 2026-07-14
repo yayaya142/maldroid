@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from maldroid.agent import MalDroidAgent
+from maldroid.agent import CHECKPOINT_REMINDER, MalDroidAgent
 from maldroid.case_manager import CaseManager
 from maldroid.config import AppConfig
 from maldroid.investigation import InvestigationManager
@@ -134,3 +134,134 @@ def test_agent_tool_call_round_trip(app_config: AppConfig) -> None:
     assert assistant["reasoning_content"] == "bounded reasoning"
     events = [json.loads(line) for line in sessions.history_path.read_text().splitlines()]
     assert {event["type"] for event in events} >= {"tool_call", "tool_result"}
+
+
+class CheckpointingClient:
+    def __init__(self) -> None:
+        self.calls = 0
+        self.messages = []
+
+    def complete(self, messages, tools):
+        self.calls += 1
+        self.messages = messages
+        if self.calls == 1:
+            return AssistantMessage(
+                content=None,
+                tool_calls=[
+                    ToolCall(
+                        id="inspect-1",
+                        name=mcp_tool_name("get_file_info"),
+                        arguments='{"path":"sample.txt"}',
+                    )
+                ],
+            )
+        if self.calls == 2:
+            return AssistantMessage(content="The sample is a small text artifact.")
+        if self.calls == 3:
+            assert any(message.get("content") == CHECKPOINT_REMINDER for message in messages)
+            return AssistantMessage(
+                content=None,
+                tool_calls=[
+                    ToolCall(
+                        id="note-1",
+                        name=mcp_tool_name("save_note"),
+                        arguments=(
+                            '{"text":"Inspected sample.txt metadata. Next: read relevant lines."}'
+                        ),
+                    )
+                ],
+            )
+        return AssistantMessage(content="Checkpoint saved; inspect relevant lines next.")
+
+
+def test_agent_requires_durable_checkpoint_after_investigation(app_config: AppConfig) -> None:
+    manager, case, registry, dispatcher = make_dispatcher(app_config)
+    (case.root / "sample.txt").write_text("evidence\n", encoding="utf-8")
+    sessions = SessionManager(case, manager)
+    client = CheckpointingClient()
+    agent = MalDroidAgent(app_config, case, client, registry, dispatcher, sessions)
+
+    response = agent.respond("Inspect the sample")
+
+    assert response == "Checkpoint saved; inspect relevant lines next."
+    assert client.calls == 4
+    assert case.state.notes[-1].text.startswith("Inspected sample.txt metadata")
+    events = [json.loads(line) for line in sessions.history_path.read_text().splitlines()]
+    assert "checkpoint_required" in {event["type"] for event in events}
+
+
+class CheckpointIgnoringClient:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def complete(self, messages, tools):
+        self.calls += 1
+        if self.calls == 1:
+            return AssistantMessage(
+                content=None,
+                tool_calls=[
+                    ToolCall(
+                        id="inspect-1",
+                        name=mcp_tool_name("get_file_info"),
+                        arguments='{"path":"sample.txt"}',
+                    )
+                ],
+            )
+        return AssistantMessage(content="Metadata inspected; read the suspicious range next.")
+
+
+def test_agent_saves_automatic_checkpoint_when_model_ignores_reminder(
+    app_config: AppConfig,
+) -> None:
+    manager, case, registry, dispatcher = make_dispatcher(app_config)
+    (case.root / "sample.txt").write_text("evidence\n", encoding="utf-8")
+    sessions = SessionManager(case, manager)
+    agent = MalDroidAgent(
+        app_config,
+        case,
+        CheckpointIgnoringClient(),
+        registry,
+        dispatcher,
+        sessions,
+    )
+
+    response = agent.respond("Inspect the sample")
+
+    assert response == "Metadata inspected; read the suspicious range next."
+    assert case.state.notes[-1].text.startswith("Automatic progress checkpoint")
+    assert "read the suspicious range next" in case.state.notes[-1].text
+    assert "MalDroid_get_file_info (completed)" in case.state.notes[-1].text
+
+
+class FailingCompactionClient:
+    @staticmethod
+    def complete(messages, tools):
+        raise RuntimeError("context exhausted")
+
+
+def test_compaction_falls_back_to_durable_case_state(app_config: AppConfig) -> None:
+    manager, case, registry, dispatcher = make_dispatcher(app_config)
+    dispatcher.execute(mcp_tool_name("save_note"), {"text": "Resume at sample.txt line 42."})
+    sessions = SessionManager(case, manager)
+    agent = MalDroidAgent(
+        app_config,
+        case,
+        FailingCompactionClient(),
+        registry,
+        dispatcher,
+        sessions,
+    )
+
+    summary = agent.compact()
+
+    assert "Model compaction failed" in summary
+    assert "Resume at sample.txt line 42" in summary
+    assert case.state.summary == summary
+
+
+def test_auto_compaction_threshold_is_configurable(app_config: AppConfig) -> None:
+    manager, case, registry, dispatcher = make_dispatcher(app_config)
+    sessions = SessionManager(case, manager)
+    agent = MalDroidAgent(app_config, case, FakeClient(), registry, dispatcher, sessions)
+    agent.messages.append({"role": "user", "content": "x" * 190000})
+    assert agent.should_auto_compact() is True

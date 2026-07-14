@@ -23,7 +23,7 @@ Every public name is centrally namespaced with the `MalDroid_` prefix.
 | `MalDroid_extract_strings` | `path`, `minimum_length` | Preview and output file | Static extraction, timeout, no execution |
 | `MalDroid_register_evidence` | `path`, `mode`, `calculate_hash` | Evidence record | Tool input must already be case-visible; external registration is CLI-controlled |
 | `MalDroid_read_case_state` | none | Summary, counts, open TODOs, recent notes | Excludes full histories and evidence content |
-| `MalDroid_save_note` | `text`, `evidence` | Stable note | Case-only write |
+| `MalDroid_save_note` | `text`, `evidence` | Stable note | Case-only write; required after meaningful investigation turns |
 | `MalDroid_save_finding` | title, summary, confidence, severity, status, evidence, tags | Stable finding | Validated enums and evidence shape |
 | `MalDroid_update_finding` | `finding_id`, `changes` | Updated finding | Field allowlist |
 | `MalDroid_update_todo` | action, `text_or_id` | TODO or removal result | Validated actions |

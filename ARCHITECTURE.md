@@ -73,11 +73,17 @@ The request contains a short system prompt, one small active-profile instruction
 summary, active conversation, and only core plus active-profile schemas. Parallel calls are off.
 Each returned call is sent through the official MCP client, validated by both MCP input schemas and
 the dispatcher, executed serially, serialized as a `tool` role message, persisted, and sent back.
-Eight tool rounds is the hard default. Prose that resembles a tool call is never executed.
+Eight investigation tool rounds is the hard default, with at most one additional persistence call
+reserved for a required checkpoint. After meaningful investigation activity, a final response is
+not accepted until the model saves a note/finding checkpoint. If it ignores the reminder, the agent
+saves its draft response automatically through the audited MCP note tool. Prose that resembles a
+tool call is never executed.
 
 ## Context and retrieval
 
-Conversation size is conservatively estimated. The UI warns at 75% and blocks ordinary requests at
-85% pending compaction. Compaction saves full history and creates a structured summary without
-deleting findings or TODOs. Large evidence enters context only through search results, bounded
-ranges, indexed chunks, or modules. Knowledge uses matching excerpts rather than prompt injection.
+Conversation size is conservatively estimated. At 72% usage by default, the UI automatically saves
+a structured summary and starts a compact context before or after the next turn. If model-based
+summarization fails, findings, recent notes, open TODOs, profile, and the prior summary form a
+deterministic fallback. Compaction never deletes full session history, findings, notes, or TODOs.
+Large evidence enters context only through search results, bounded ranges, indexed chunks, or
+modules. Knowledge uses matching excerpts rather than prompt injection.

@@ -50,3 +50,7 @@
   terminal closure does not leave llama-server process groups or MCP listeners behind.
 - Namespaced every managed MCP tool with the `MalDroid_` prefix for clear discovery alongside tools
   from other connected MCP servers.
+- Added enforced progress checkpointing after meaningful investigation work: the model must save a
+  note or finding, and ignored checkpoint requests fall back to an automatic audited note.
+- Added configurable automatic context compaction at 72% usage and a deterministic durable-state
+  summary fallback when the local model cannot summarize an exhausted context.

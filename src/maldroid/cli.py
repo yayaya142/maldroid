@@ -105,6 +105,7 @@ CONFIG_DESCRIPTIONS = {
     "limits.max_file_tree_entries": "Global upper bound for file-tree results.",
     "limits.command_timeout_seconds": "Timeout for external tools and MCP calls.",
     "limits.max_tool_rounds": "Maximum sequential tool rounds per user request.",
+    "limits.auto_compact_ratio": "Context usage ratio that triggers automatic compaction.",
     "external_tools.blutter": "Optional path to an explicitly configured Blutter adapter.",
     "mcp.host": "Fixed loopback host for the Python MCP server.",
     "mcp.preferred_port": "Fixed MCP port; defaults to 8765 and never falls back.",
