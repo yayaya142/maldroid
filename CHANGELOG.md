@@ -61,3 +61,10 @@
 - Added live reasoning control with `off`, `low`, `medium`, `high`, and `unlimited` levels, a
   balanced `medium` default, native per-request llama.cpp thinking budgets, toolbar/status display,
   slash completion, persistent configuration, and audited session changes.
+- Replaced the eight-round terminal stop with an autonomous multi-phase controller that saves MCP
+  checkpoints, compacts context, restores the original objective, and continues for up to 128 tool
+  rounds by default; transient model requests now retry with bounded backoff.
+- Added streamed reasoning/content/tool-call reconstruction and live in-progress telemetry for
+  generated tokens, context consumption, time, phase, tools, errors, and estimated capacity left.
+- Hardened MCP result normalization so structured, wrapped, and plain-text error responses preserve
+  the actual tool failure instead of degrading to “MCP returned no ToolResult payload.”

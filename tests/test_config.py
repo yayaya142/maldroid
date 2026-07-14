@@ -31,6 +31,9 @@ def test_default_model_performance_settings() -> None:
     assert config.llama.built_in_tools_enabled is True
     assert config.llama.reasoning_level == "medium"
     assert config.limits.auto_compact_ratio == 0.72
+    assert config.limits.max_tool_rounds == 8
+    assert config.limits.max_task_phases == 16
+    assert config.limits.model_retry_attempts == 3
 
 
 @pytest.mark.parametrize(

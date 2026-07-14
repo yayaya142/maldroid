@@ -315,3 +315,97 @@ def test_agent_changes_reasoning_level_and_records_session(app_config: AppConfig
     events = [json.loads(line) for line in sessions.history_path.read_text().splitlines()]
     change = next(event for event in events if event["type"] == "reasoning_change")
     assert change["content"] == {"level": "high", "thinking_budget_tokens": 3072}
+
+
+class LongTaskClient:
+    def __init__(self) -> None:
+        self.tool_turns = 0
+        self.compactions = 0
+
+    def complete(self, messages, tools):
+        if not tools:
+            self.compactions += 1
+            return AssistantMessage(content="Phase summary with exact next action.")
+        if self.tool_turns < 3:
+            self.tool_turns += 1
+            return AssistantMessage(
+                content=None,
+                tool_calls=[
+                    ToolCall(
+                        id=f"long-{self.tool_turns}",
+                        name=mcp_tool_name("get_file_info"),
+                        arguments='{"path":"sample.txt"}',
+                    )
+                ],
+            )
+        return AssistantMessage(content="The long investigation is complete.")
+
+
+def test_agent_rolls_long_task_into_next_phase_without_stopping(
+    app_config: AppConfig,
+) -> None:
+    data = app_config.model_dump()
+    data["limits"]["max_tool_rounds"] = 2
+    data["limits"]["max_task_phases"] = 3
+    config = AppConfig.model_validate(data)
+    manager, case, registry, dispatcher = make_dispatcher(config)
+    (case.root / "sample.txt").write_text("evidence\n", encoding="utf-8")
+    sessions = SessionManager(case, manager)
+    client = LongTaskClient()
+    reported = []
+    agent = MalDroidAgent(
+        config,
+        case,
+        client,
+        registry,
+        dispatcher,
+        sessions,
+        event_handler=lambda event, details: reported.append((event, details)),
+    )
+
+    response = agent.respond("Complete a multi-phase investigation")
+
+    assert response == "The long investigation is complete."
+    assert client.tool_turns == 3
+    assert client.compactions == 1
+    assert any(event == "phase_rollover" for event, _ in reported)
+    assert any(note.text.startswith("Autonomous phase 1 checkpoint") for note in case.state.notes)
+
+
+class FlakyClient:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def complete(self, messages, tools):
+        self.calls += 1
+        if self.calls == 1:
+            raise ConnectionError("temporary local server disconnect")
+        return AssistantMessage(content="Recovered and completed.")
+
+
+def test_agent_retries_transient_model_failure(
+    app_config: AppConfig,
+    monkeypatch,
+) -> None:
+    manager, case, registry, dispatcher = make_dispatcher(app_config)
+    sessions = SessionManager(case, manager)
+    client = FlakyClient()
+    delays = []
+    reported = []
+    monkeypatch.setattr("maldroid.agent.time.sleep", delays.append)
+    agent = MalDroidAgent(
+        app_config,
+        case,
+        client,
+        registry,
+        dispatcher,
+        sessions,
+        event_handler=lambda event, details: reported.append((event, details)),
+    )
+
+    response = agent.respond("Finish despite a transient disconnect")
+
+    assert response == "Recovered and completed."
+    assert client.calls == 2
+    assert delays == [1.0]
+    assert any(event == "model_retry" for event, _ in reported)

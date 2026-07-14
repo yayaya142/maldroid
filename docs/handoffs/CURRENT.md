@@ -65,6 +65,15 @@ Run target-machine acceptance with the authorized Gemma 4 model and an external 
 - Reasoning defaults to `medium` and can change live through `/reasoning` using llama.cpp's native
   per-request `thinking_budget_tokens`. The toolbar, welcome panel, and status view expose the active
   level; session logs record changes and persistent defaults use `llama.reasoning_level`.
+- The former eight-round stop is now an autonomous phase rollover: an MCP note and compacted summary
+  preserve state, the original objective is restored, and work continues without user input. The
+  default guard is 16 phases/128 rounds, plus three bounded retries for transient model failures.
+- Local model responses stream structured content, reasoning, tool-call fragments, and usage into
+  the agent. The active status line displays elapsed time, generated tokens, context usage, and
+  remaining capacity while the model is working.
+- MCP result parsing now accepts direct, wrapped, and text-encoded ToolResult payloads and preserves
+  plain MCP errors. A real HTTP regression covers successful case-local evidence registration and
+  invalid-path error propagation.
 
 ## Verification
 
@@ -75,10 +84,11 @@ Verified in the local isolated Python 3.12 venv:
 ```
 
 Results: the consolidated release check passed. Ruff formatting and lint passed; mypy passed for 34
-source files; 68 tests passed. Project hygiene, installer dry-run, browser
+source files; 73 tests passed. Project hygiene, installer dry-run, browser
 MCP origin/CORS coverage, termination-signal cleanup, namespaced tool discovery, enforced and
-automatic checkpoints, compaction fallback, terminal completion/status/event coverage, dynamic
-reasoning-budget request tests, JSON parsing tests, protocol integration, and wheel build verification passed. The wheel is
+automatic and phase checkpoints, autonomous continuation, model retry, compaction fallback,
+streaming token/tool reconstruction, live terminal telemetry, dynamic reasoning-budget request
+tests, MCP result variants, JSON parsing, protocol integration, and wheel build verification passed. The wheel is
 `dist/maldroid-0.1.0-py3-none-any.whl`.
 
 ## Known limitations

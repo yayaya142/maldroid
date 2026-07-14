@@ -108,6 +108,11 @@ class InteractiveChat:
         self.mcp_endpoint = mcp_endpoint
         self._status: Status | None = None
         self._turn_tools = 0
+        self._turn_errors = 0
+        self._active_phase = 1
+        self._turn_started = 0.0
+        self._turn_generated_tokens = 0
+        self._current_generation_tokens = 0
         self._prompt_session: PromptSession[str] | None = None
         self.agent.event_handler = self._handle_agent_event
 
@@ -190,12 +195,17 @@ class InteractiveChat:
 
     def _run_turn(self, text: str) -> None:
         self._turn_tools = 0
+        self._turn_errors = 0
+        self._active_phase = 1
+        self._turn_generated_tokens = 0
+        self._current_generation_tokens = 0
         if self.agent.should_auto_compact():
             self.console.print(
                 "[yellow]Context threshold reached — creating a checkpoint…[/yellow]"
             )
             self.agent.compact()
         started = time.monotonic()
+        self._turn_started = started
         try:
             with self.console.status("[bold cyan]Thinking…[/bold cyan]", spinner="dots") as status:
                 self._status = status
@@ -219,7 +229,22 @@ class InteractiveChat:
 
     def _handle_agent_event(self, event: str, data: dict[str, Any]) -> None:
         if event == "model_start":
-            self._update_status("Thinking…")
+            self._current_generation_tokens = 0
+            phase = int(data.get("phase", 1))
+            self._active_phase = phase
+            round_number = int(data.get("total_tool_rounds", 0)) + 1
+            self._update_status(f"Thinking · phase {phase} · round {round_number}")
+        elif event == "generation_progress":
+            self._current_generation_tokens = int(data.get("completion_tokens_estimate", 0))
+            activity = (
+                "Reasoning"
+                if int(data.get("reasoning_characters", 0)) > int(data.get("content_characters", 0))
+                else "Generating"
+            )
+            self._update_status(activity + "…")
+        elif event == "generation_complete":
+            self._turn_generated_tokens += int(data.get("completion_tokens", 0))
+            self._current_generation_tokens = 0
         elif event == "tool_start":
             self._turn_tools += 1
             name = self._short_tool_name(str(data.get("name", "tool")))
@@ -240,6 +265,7 @@ class InteractiveChat:
                     suffix += " · preview truncated"
                 self.console.print(f"  [green]✓[/green] [dim]{name}{suffix}[/dim]")
             else:
+                self._turn_errors += 1
                 error = str(data.get("error") or "unknown error")
                 self.console.print(f"  [red]✗ {name}:[/red] {error}")
         elif event == "checkpoint_required":
@@ -247,6 +273,31 @@ class InteractiveChat:
             self.console.print("[yellow]◆ Ensuring progress is recorded before answering[/yellow]")
         elif event == "automatic_checkpoint":
             self.console.print("[yellow]◆ Automatic progress checkpoint saved[/yellow]")
+        elif event == "phase_checkpoint":
+            phase = data.get("phase", "?")
+            rounds = data.get("total_tool_rounds", "?")
+            self.console.print(
+                f"[yellow]◆ Autonomous phase {phase} checkpoint saved after {rounds} rounds[/yellow]"
+            )
+        elif event == "phase_rollover":
+            phase = int(data.get("completed_phase", 1)) + 1
+            self._update_status(f"Preparing autonomous phase {phase}…")
+            self.console.print(
+                f"[cyan]↻ Continuing automatically in phase {phase}; no input required.[/cyan]"
+            )
+        elif event == "model_retry":
+            attempt = int(data.get("attempt", 1)) + 1
+            maximum = data.get("max_attempts", "?")
+            delay = data.get("delay_seconds", 0)
+            self._current_generation_tokens = 0
+            self.console.print(
+                f"[yellow]↻ Model request interrupted; retrying {attempt}/{maximum} "
+                f"in {delay:g}s.[/yellow]"
+            )
+        elif event == "safety_ceiling":
+            self.console.print(
+                "[yellow]◆ Autonomous safety ceiling reached; preparing a durable result.[/yellow]"
+            )
         elif event == "compaction_start":
             self._update_status("Compacting context…")
         elif event == "compaction_complete":
@@ -256,7 +307,16 @@ class InteractiveChat:
 
     def _update_status(self, message: str) -> None:
         if self._status is not None:
-            self._status.update(f"[bold cyan]{message}[/bold cyan]")
+            generated = self._turn_generated_tokens + self._current_generation_tokens
+            used = self.agent.estimate_tokens() + self._current_generation_tokens
+            total = max(1, self.case.state.context_size)
+            remaining = max(0, total - used)
+            elapsed = max(0.0, time.monotonic() - self._turn_started)
+            self._status.update(
+                f"[bold cyan]{message}[/bold cyan] [dim]· {elapsed:.0f}s · "
+                f"out ≈{generated:,} tok · ctx ≈{used:,}/{total:,} · "
+                f"≈{remaining:,} left[/dim]"
+            )
 
     def _show_welcome(self) -> None:
         server_status = self.server.status()
@@ -310,8 +370,12 @@ class InteractiveChat:
     def _show_turn_footer(self, elapsed: float) -> None:
         _, _, remaining, percent = self._context_numbers()
         color = "yellow" if percent >= 70 else "dim"
+        phase_label = "phase" if self._active_phase == 1 else "phases"
+        error_label = "error" if self._turn_errors == 1 else "errors"
         self.console.print(
             f"[{color}]── {elapsed:.1f}s · {self._turn_tools} tools · "
+            f"{self._active_phase} {phase_label} · {self._turn_errors} {error_label} · "
+            f"≈{self._turn_generated_tokens:,} generated tokens · "
             f"context {percent:.1f}% · ~{remaining:,} tokens left[/{color}]\n"
         )
 

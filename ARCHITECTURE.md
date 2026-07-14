@@ -73,8 +73,10 @@ The request contains a short system prompt, one small active-profile instruction
 summary, active conversation, and only core plus active-profile schemas. Parallel calls are off.
 Each returned call is sent through the official MCP client, validated by both MCP input schemas and
 the dispatcher, executed serially, serialized as a `tool` role message, persisted, and sent back.
-Eight investigation tool rounds is the hard default, with at most one additional persistence call
-reserved for a required checkpoint. After meaningful investigation activity, a final response is
+Eight investigation tool rounds form one autonomous phase rather than a terminal limit. At a phase
+boundary the controller saves an MCP checkpoint, compacts context, restores the original objective,
+and continues without user input. The default 16-phase ceiling permits 128 rounds while retaining a
+finite runaway guard. Transient model calls use bounded retries. After meaningful investigation activity, a final response is
 not accepted until the model saves a note/finding checkpoint. If it ignores the reminder, the agent
 saves its draft response automatically through the audited MCP note tool. Prose that resembles a
 tool call is never executed.
@@ -83,6 +85,11 @@ The terminal layer subscribes to bounded agent lifecycle events rather than pars
 It renders model waits, tool start/result, checkpoint, and compaction activity while the agent and
 MCP dispatcher remain the source of execution truth. Prompt history and completion are local-only;
 the terminal UI has no additional network or filesystem authority.
+
+The local model client streams content, reasoning, tool-call fragments, and final usage. Tool calls
+are reconstructed only from structured API deltas. The terminal uses streaming events for live
+token/context telemetry; the complete reconstructed assistant message remains the sole history and
+tool-loop input.
 
 Reasoning effort is a per-request model-client property. The configured human-readable level maps
 to llama.cpp `thinking_budget_tokens`, can change between tool rounds without a server restart, and

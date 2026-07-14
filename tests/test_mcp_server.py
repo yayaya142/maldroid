@@ -84,6 +84,32 @@ def test_mcp_lists_profile_tools_and_executes_through_http(app_config: AppConfig
         server.stop()
 
 
+def test_mcp_registers_case_local_evidence_and_preserves_error_payload(
+    app_config: AppConfig,
+) -> None:
+    server, dispatcher = make_server(app_config)
+    source = dispatcher.context.case.root / "index.android.bundle"
+    source.write_text("console.log('fixture');\n", encoding="utf-8")
+    endpoint = server.start()
+    try:
+        client = McpToolClient(endpoint)
+        registered = client.execute(
+            mcp_tool_name("register_evidence"),
+            {"path": source.name, "mode": "copy", "calculate_hash": True},
+        )
+        assert registered.status == "completed"
+        assert registered.data["case_path"].startswith("evidence/")
+
+        invalid = client.execute(
+            mcp_tool_name("register_evidence"),
+            {"path": "missing.bundle", "mode": "copy"},
+        )
+        assert invalid.status == "error"
+        assert invalid.error and invalid.error.code != "invalid_mcp_result"
+    finally:
+        server.stop()
+
+
 def test_mcp_accepts_llama_webui_origin_and_cors_preflight(app_config: AppConfig) -> None:
     server, _dispatcher = make_server(app_config)
     endpoint = server.start()

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import time
 from io import StringIO
+from unittest.mock import Mock
 
 from prompt_toolkit.completion import CompleteEvent
 from prompt_toolkit.document import Document
@@ -104,3 +106,25 @@ def test_live_tool_event_is_human_readable(app_config) -> None:
     assert "read_file_range" in rendered
     assert "sample.txt" in rendered
     assert "completed" not in rendered
+
+
+def test_live_generation_status_shows_token_consumption(app_config) -> None:
+    chat, _ = make_chat(app_config)
+    status = Mock()
+    chat._status = status
+    chat._turn_started = time.monotonic()
+
+    chat._handle_agent_event(
+        "generation_progress",
+        {
+            "completion_tokens_estimate": 25,
+            "content_characters": 20,
+            "reasoning_characters": 80,
+        },
+    )
+
+    rendered = status.update.call_args.args[0]
+    assert "Reasoning" in rendered
+    assert "out ≈25 tok" in rendered
+    assert "ctx ≈" in rendered
+    assert "left" in rendered

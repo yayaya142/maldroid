@@ -13,8 +13,33 @@ tokenization.
 
 Model waits use a live spinner. Every MCP call appears as it starts and finishes, including errors,
 saved full-output paths, and truncation status. Assistant Markdown is rendered after the turn, then
-a footer reports elapsed time, tool count, and context remaining. Input history is persisted inside
-the case at `.maldroid/input-history`.
+a footer reports elapsed time, phase and tool counts, recovered errors, generated tokens, and
+context remaining. During streamed reasoning and response generation, the active bottom line
+updates continuously with elapsed time, approximate output tokens, total context consumption, and
+estimated tokens remaining. Exact completion usage is used when llama.cpp supplies it; otherwise
+the display is explicitly approximate. Input history is persisted inside the case at
+`.maldroid/input-history`.
+
+### Long-running agent controller
+
+A user request is not stopped merely because one tool window is exhausted. The default controller
+runs eight tool rounds per phase, writes a durable MCP checkpoint, compacts the conversation, then
+continues the original objective automatically. Sixteen phases are available by default, providing
+a 128-round safety ceiling. At that ceiling the agent saves state and produces a useful partial
+result instead of losing work.
+
+Transient model-request failures are retried three times with bounded backoff. Individual tool
+errors are returned to the model so it can correct arguments or choose a safe alternative. MCP
+error responses are normalized from structured, wrapped, and plain-text result variants, avoiding
+the unhelpful generic “no ToolResult payload” failure when the server supplied an error message.
+
+Controller settings are validated and discoverable:
+
+```bash
+maldroid config get limits.max_tool_rounds
+maldroid config get limits.max_task_phases
+maldroid config get limits.model_retry_attempts
+```
 
 Keyboard controls:
 

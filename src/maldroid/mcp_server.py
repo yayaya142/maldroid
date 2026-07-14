@@ -257,16 +257,50 @@ class McpToolClient:
                 read_timeout_seconds=timedelta(seconds=self.timeout_seconds),
             )
         if response.structuredContent is not None:
-            return ToolResult.model_validate(response.structuredContent)
+            parsed = self._parse_result_payload(response.structuredContent)
+            if parsed is not None:
+                return parsed
+        text_blocks: list[str] = []
         for block in response.content:
             if isinstance(block, types.TextContent):
-                try:
-                    return ToolResult.model_validate_json(block.text)
-                except ValueError:
-                    continue
+                text_blocks.append(block.text)
+                parsed = self._parse_result_payload(block.text)
+                if parsed is not None:
+                    return parsed
+        if response.isError and text_blocks:
+            return ToolResult(
+                status="error",
+                error=ToolError(
+                    code="mcp_tool_error",
+                    message="\n".join(text_blocks)[:8000],
+                ),
+            )
         return ToolResult(
             status="error",
             error=ToolError(
-                code="invalid_mcp_result", message="MCP returned no ToolResult payload."
+                code="invalid_mcp_result",
+                message=(
+                    "MCP returned a result that did not match the ToolResult schema. "
+                    f"Content block types: {[type(block).__name__ for block in response.content]}"
+                ),
             ),
         )
+
+    @staticmethod
+    def _parse_result_payload(payload: Any) -> ToolResult | None:
+        candidate = payload
+        if isinstance(candidate, str):
+            try:
+                candidate = json.loads(candidate)
+            except json.JSONDecodeError:
+                return None
+        if isinstance(candidate, dict):
+            for wrapper in ("result", "tool_result", "data"):
+                nested = candidate.get(wrapper)
+                if isinstance(nested, dict) and "status" in nested:
+                    candidate = nested
+                    break
+        try:
+            return ToolResult.model_validate(candidate)
+        except (TypeError, ValueError):
+            return None

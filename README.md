@@ -88,6 +88,12 @@ exit. `/help` is the complete command index; `/context`, `/checkpoints`, `/histo
 `/shortcuts` expose the most useful live views. Reasoning defaults to `medium`; `/reasoning` shows
 all levels and `/reasoning high` changes the budget immediately without restarting llama-server.
 
+Long investigations run through an autonomous phase controller. Every configured tool-round window
+creates a durable checkpoint, compacts context, and continues the same objective without returning
+to the prompt. The default ceiling is 16 phases of 8 tool rounds (128 rounds), with three automatic
+retries for transient model-server failures. During streaming generation, the active status line
+shows elapsed time, generated tokens, context consumption, and estimated tokens remaining.
+
 MalDroid does not rely on the local model to remember progress voluntarily. After meaningful tool
 use, the agent requires a durable `MalDroid_save_note` or finding checkpoint before accepting the
 final answer. If the model ignores that instruction, its draft is saved automatically as a progress

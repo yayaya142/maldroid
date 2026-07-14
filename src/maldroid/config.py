@@ -102,6 +102,8 @@ class LimitsConfig(BaseModel):
     max_file_tree_entries: int = Field(default=500, ge=1, le=10000)
     command_timeout_seconds: int = Field(default=120, ge=1, le=3600)
     max_tool_rounds: int = Field(default=8, ge=1, le=32)
+    max_task_phases: int = Field(default=16, ge=2, le=64)
+    model_retry_attempts: int = Field(default=3, ge=1, le=10)
     auto_compact_ratio: float = Field(default=0.72, ge=0.5, le=0.8)
 
 

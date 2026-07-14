@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import json
+import time
 from collections.abc import Callable
 from typing import Any
 
 from maldroid.case_manager import Case
 from maldroid.config import AppConfig
-from maldroid.llama_client import REASONING_BUDGETS, ModelClient, ReasoningLevel
+from maldroid.llama_client import REASONING_BUDGETS, AssistantMessage, ModelClient, ReasoningLevel
 from maldroid.prompts import SYSTEM_PROMPT, profile_prompt
 from maldroid.session_manager import SessionManager
 from maldroid.tools.dispatcher import ToolExecutor
@@ -29,6 +30,12 @@ CHECKPOINT_REMINDER = (
     "MalDroid_save_note now. Record completed work, exact evidence paths and lines or offsets, "
     "facts versus hypotheses, uncertainty, unresolved questions, and the exact next action. "
     "Do not rely on conversation history alone."
+)
+CONTINUATION_INSTRUCTION = (
+    "Continue the same user task autonomously from the durable checkpoint. Do not ask the user to "
+    "repeat the objective and do not stop merely to report progress. Inspect the saved case state, "
+    "continue using bounded tools, distinguish facts from hypotheses, and finish only when the "
+    "requested investigation is complete or a genuine external dependency requires user action."
 )
 
 AgentEventHandler = Callable[[str, dict[str, Any]], None]
@@ -54,11 +61,17 @@ class MalDroidAgent:
         self.sessions = sessions
         self.event_handler = event_handler
         self.messages: list[dict[str, Any]] = []
+        model_event_setter = getattr(self.client, "set_event_handler", None)
+        if model_event_setter is not None:
+            model_event_setter(self._handle_model_event)
         self._reset_messages(previous_summary)
 
     def _emit(self, event: str, **data: Any) -> None:
         if self.event_handler is not None:
             self.event_handler(event, data)
+
+    def _handle_model_event(self, event: str, data: dict[str, Any]) -> None:
+        self._emit(event, **data)
 
     def _reset_messages(self, summary: str = "") -> None:
         self.messages = [
@@ -80,15 +93,22 @@ class MalDroidAgent:
         self.messages.append({"role": "user", "content": text})
         self.sessions.record("message", role="user", content=text)
         tools = self.registry.schemas(self.case.state.active_profile)
-        tool_rounds = 0
+        phase = 1
+        phase_tool_rounds = 0
+        total_tool_rounds = 0
         investigation_performed = False
         checkpoint_saved = False
         checkpoint_requested = False
-        checkpoint_extension_used = False
         activity: list[str] = []
         while True:
-            self._emit("model_start", tool_round=tool_rounds)
-            assistant = self.client.complete(self.messages, tools)
+            self._emit(
+                "model_start",
+                phase=phase,
+                phase_tool_round=phase_tool_rounds,
+                total_tool_rounds=total_tool_rounds,
+                input_tokens_estimate=self.estimate_tokens(),
+            )
+            assistant = self._complete_with_retries(self.messages, tools)
             history = assistant.as_history_message()
             self.messages.append(history)
             self.sessions.record("message", role="assistant", content=history)
@@ -104,23 +124,8 @@ class MalDroidAgent:
                         continue
                     self._save_automatic_checkpoint(assistant.content, activity)
                 return assistant.content
-            if tool_rounds >= self.config.limits.max_tool_rounds:
-                is_checkpoint_only = all(
-                    call.name in CHECKPOINT_TOOLS for call in assistant.tool_calls
-                )
-                if checkpoint_requested and is_checkpoint_only and not checkpoint_extension_used:
-                    checkpoint_extension_used = True
-                else:
-                    if investigation_performed and not checkpoint_saved:
-                        self._save_automatic_checkpoint(
-                            "Tool round limit reached before a final response.", activity
-                        )
-                    return (
-                        "The tool-call round limit was reached. Progress was saved as a durable "
-                        "checkpoint; refine the request or inspect saved tool output."
-                    )
-            else:
-                tool_rounds += 1
+            phase_tool_rounds += 1
+            total_tool_rounds += 1
             for call in assistant.tool_calls:
                 self.sessions.record(
                     "tool_call",
@@ -147,6 +152,113 @@ class MalDroidAgent:
                 tool_message = {"role": "tool", "tool_call_id": call.id, "content": serialized}
                 self.messages.append(tool_message)
                 self.sessions.record("tool_result", role="tool", content=tool_message)
+            if phase_tool_rounds >= self.config.limits.max_tool_rounds:
+                self._save_phase_checkpoint(text, activity, phase, total_tool_rounds)
+                if phase >= self.config.limits.max_task_phases:
+                    return self._finish_at_safety_ceiling(text, total_tool_rounds)
+                self._emit(
+                    "phase_rollover",
+                    completed_phase=phase,
+                    total_tool_rounds=total_tool_rounds,
+                )
+                self.compact()
+                phase += 1
+                phase_tool_rounds = 0
+                investigation_performed = False
+                checkpoint_saved = False
+                checkpoint_requested = False
+                activity = []
+                self.messages.append(
+                    {
+                        "role": "system",
+                        "content": CONTINUATION_INSTRUCTION
+                        + "\n\nOriginal objective:\n"
+                        + text[:12000],
+                    }
+                )
+
+    def _complete_with_retries(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+    ) -> AssistantMessage:
+        attempts = self.config.limits.model_retry_attempts
+        for attempt in range(1, attempts + 1):
+            try:
+                return self.client.complete(messages, tools)
+            except KeyboardInterrupt:
+                raise
+            except Exception as exc:
+                if attempt >= attempts:
+                    raise
+                delay = min(4.0, float(2 ** (attempt - 1)))
+                self._emit(
+                    "model_retry",
+                    attempt=attempt,
+                    max_attempts=attempts,
+                    delay_seconds=delay,
+                    error=str(exc),
+                )
+                self.sessions.record(
+                    "model_retry",
+                    content={"attempt": attempt, "delay_seconds": delay, "error": str(exc)},
+                )
+                time.sleep(delay)
+        raise RuntimeError("Model retry loop exited unexpectedly")
+
+    def _save_phase_checkpoint(
+        self,
+        objective: str,
+        activity: list[str],
+        phase: int,
+        total_tool_rounds: int,
+    ) -> None:
+        tools = "\n".join(f"- {item}" for item in activity[-40:]) or "- none recorded"
+        text = (
+            f"Autonomous phase {phase} checkpoint after {total_tool_rounds} tool rounds.\n\n"
+            f"Original objective:\n{objective[:8000]}\n\n"
+            f"Recent tool activity:\n{tools}\n\n"
+            "The agent is continuing automatically from this checkpoint. Consult findings, TODOs, "
+            "tool outputs, and the session summary for detailed evidence and the exact next action."
+        )
+        result = self.dispatcher.execute(mcp_tool_name("save_note"), {"text": text[:40000]})
+        self.sessions.record(
+            "phase_checkpoint",
+            content={
+                "phase": phase,
+                "total_tool_rounds": total_tool_rounds,
+                "status": result.status,
+                "error": result.error.model_dump() if result.error else None,
+            },
+        )
+        self._emit(
+            "phase_checkpoint",
+            phase=phase,
+            total_tool_rounds=total_tool_rounds,
+            status=result.status,
+        )
+
+    def _finish_at_safety_ceiling(self, objective: str, total_tool_rounds: int) -> str:
+        self.messages.append(
+            {
+                "role": "system",
+                "content": (
+                    "The autonomous safety ceiling has been reached after "
+                    f"{total_tool_rounds} tool rounds. Do not call more tools. Provide a useful "
+                    "current result: completed work, evidence, remaining uncertainty, and the exact "
+                    "external blocker or next action. Original objective:\n" + objective[:12000]
+                ),
+            }
+        )
+        self._emit("safety_ceiling", total_tool_rounds=total_tool_rounds)
+        assistant = self._complete_with_retries(self.messages, [])
+        history = assistant.as_history_message()
+        self.messages.append(history)
+        self.sessions.record("message", role="assistant", content=history)
+        return assistant.content or (
+            "The autonomous safety ceiling was reached. Progress is preserved in the case "
+            "checkpoint and session log."
+        )
 
     def _save_automatic_checkpoint(self, draft: str, activity: list[str] | None = None) -> None:
         tool_summary = ""
