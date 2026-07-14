@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -134,10 +135,9 @@ def test_process_manager_health_and_shutdown(
     monkeypatch.setenv("HTTP_PROXY", "http://127.0.0.1:9")
     monkeypatch.setenv("no_proxy", "")
     monkeypatch.setenv("NO_PROXY", "")
-    server_script = tmp_path / "fake-llama-server"
-    server_script.write_text(
-        """#!/usr/bin/env python3
-import json, sys
+    server_module = tmp_path / "fake_llama_server.py"
+    server_module.write_text(
+        """import json, sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 port = int(sys.argv[sys.argv.index('--port') + 1])
 class Handler(BaseHTTPRequestHandler):
@@ -151,6 +151,11 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args): pass
 HTTPServer(('127.0.0.1', port), Handler).serve_forever()
 """,
+        encoding="utf-8",
+    )
+    server_script = tmp_path / "fake-llama-server"
+    server_script.write_text(
+        f'#!/bin/sh\nexec {shlex.quote(sys.executable)} {shlex.quote(str(server_module))} "$@"\n',
         encoding="utf-8",
     )
     server_script.chmod(0o755)

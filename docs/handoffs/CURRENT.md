@@ -23,6 +23,8 @@ Make the first public macOS and Kali GitHub Actions run pass after publishing th
   health probes. Tests now normalize ANSI, and production health checks use direct loopback HTTP.
 - The macOS workflow now forces bootstrap to use the Python 3.12 runtime selected by setup-python;
   it no longer silently selects a preinstalled Homebrew Python 3.14.
+- The process lifecycle fixture now invokes its fake server with pytest's exact interpreter rather
+  than resolving `python3` through the macOS runner PATH.
 
 ## Verification
 

@@ -28,6 +28,8 @@ Last updated: 2026-07-14
   assertions are portable across ANSI behavior on Linux and macOS.
 - GitHub macOS CI now uses the declared setup-python 3.12 runtime deterministically; Kali uses its
   rolling distribution Python.
+- Cross-platform process lifecycle tests launch their fake server with pytest's exact interpreter,
+  avoiding runner-specific `env python3` resolution.
 
 ## Partial or environment-gated
 

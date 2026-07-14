@@ -23,3 +23,5 @@
   connections that cannot inherit proxy routing.
 - Pinned the macOS bootstrap to the Python 3.12 runtime selected by GitHub Actions instead of an
   unrelated preinstalled Homebrew interpreter, and upgraded Actions to their Node 24 releases.
+- Made the fake llama-server integration fixture use pytest's exact Python interpreter so process
+  lifecycle tests do not depend on the macOS runner's shell PATH.
