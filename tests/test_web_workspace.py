@@ -59,8 +59,12 @@ def test_web_shell_exposes_chat_theme_sidebar_restore_and_file_controls(tmp_path
     assert 'id="file-filter"' in page
     assert ".composer-disabled.hidden+.composer{display:block}" in styles
     assert "body.sidebar-collapsed .mobile-menu{display:grid}" in styles
+    assert "minmax(0,1fr)" in styles
+    assert "@media(max-width:900px)" in styles
+    assert ".inspector.open{transform:none}" in styles
     assert 'localStorage.setItem("maldroid-theme"' in script
     assert "collapsedDirectories" in script
+    assert "syncPaneState" in script
 
 
 def test_web_project_creation_listing_and_bounded_file_preview(tmp_path: Path) -> None:

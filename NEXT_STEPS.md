@@ -11,6 +11,10 @@ Completed out of sequence by explicit owner reprioritization: `WEB-002` fixes th
 composer, adds persistent Light Mode, upgrades Files navigation, and makes sidebar collapse fully
 reversible. Physical active-model/browser acceptance remains in `PLATFORM-011`.
 
+Completed out of sequence by explicit owner reprioritization: `WEB-003` replaces fixed Web widths
+with a responsive 100%-zoom grid and compact-screen drawers for Projects and the full inspector.
+Physical active-model acceptance remains in `PLATFORM-011`.
+
 1. `PLATFORM-011` — Install the long-investigation and Web-workspace upgrade on the owner's macOS
    host. Verify `maldroid` mode selection, `maldroid server`, exclusive CLI/Web locking, project
    creation/switching, Hebrew input/output RTL, settings, bounded file preview, live activity,

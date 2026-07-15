@@ -16,6 +16,12 @@ these do not enter case or model configuration. The Files inspector renders the 
 inventory as a searchable, collapsible tree, while all reads still pass through `PathPolicy`.
 Composer visibility follows explicit runtime state; CSS cannot infer or override model readiness.
 
+The desktop grid uses clamped project/inspector widths and a zero-minimum flexible chat column, so
+it cannot overflow merely because the browser is at 100% zoom. At 900 CSS pixels and below the
+chat becomes the sole layout column; Projects and the full Files/Research/Activity inspector become
+independent keyboard-accessible drawers. Height breakpoints compact nonessential welcome content
+without shrinking the chat composer or model controls.
+
 ## Update lifecycle
 
 The explicit `maldroid update` maintenance path is separate from investigation execution. It clones

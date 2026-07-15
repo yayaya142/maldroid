@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Rebuilt the Web workspace as a fluid 100%-zoom layout with clamped desktop columns, a centered
+  flexible chat, compact-height rules, and project/inspector drawers for laptop, tablet, and phone
+  widths without horizontal overflow.
 - Fixed the Web chat composer being permanently hidden after project activation; added persistent
   Light Mode, a searchable/collapsible Files explorer, and a reliable collapsed-sidebar restore
   control with corrected grid placement.

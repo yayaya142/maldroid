@@ -4,6 +4,10 @@ Last updated: 2026-07-15
 
 ## Completed
 
+- Web responsive layout now supports normal 100% zoom across desktop, compact laptop, tablet, and
+  phone widths. Projects/Files use clamped desktop columns; at 900px and below Chat becomes full
+  width and both side panes become independently closable drawers. Tested viewport widths have no
+  document-level horizontal overflow.
 - Web usability follow-up: the chat composer now becomes visibly available when runtime startup
   completes, Dark/Light appearance persists locally, Files has filtering and collapsible accessible
   rows, and a collapsed project sidebar can be restored without breaking the three-column grid.

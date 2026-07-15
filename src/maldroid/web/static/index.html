@@ -34,7 +34,7 @@
           <div id="runtime-status" class="status-pill idle"><i></i><span>Model offline</span></div>
           <button class="secondary-button" data-action="command-palette">⌘ Actions</button>
           <button id="theme-toggle" class="icon-button" data-action="toggle-theme" aria-label="Switch to light mode" title="Switch to light mode">☀</button>
-          <button class="icon-button" data-action="toggle-inspector" aria-label="Toggle inspector">◫</button>
+          <button id="inspector-toggle" class="icon-button" data-action="toggle-inspector" aria-label="Open inspector" aria-expanded="true">◫</button>
         </div>
       </header>
 
@@ -76,6 +76,7 @@
         <button class="active" data-tab="files">Files</button>
         <button data-tab="research">Research</button>
         <button data-tab="activity">Activity <b id="activity-count">0</b></button>
+        <button class="icon-button inspector-close" data-action="toggle-inspector" aria-label="Close inspector">×</button>
       </div>
       <section id="panel-files" class="inspector-panel active">
         <div class="panel-toolbar file-toolbar"><span>CASE EXPLORER</span><div><small id="file-count">0 items</small><button class="icon-button" data-action="refresh-files" title="Refresh files">↻</button></div></div>

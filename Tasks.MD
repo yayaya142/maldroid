@@ -2581,6 +2581,14 @@ searchable and collapsible keyboard-accessible explorer, and always provide a vi
 the project sidebar after collapse. Pane changes must preserve the three-column layout and the same
 dispatcher/path-policy boundary.
 
+## 41C. Responsive Web layout
+
+The Web workspace must remain usable at 100% browser zoom on desktop, laptop, tablet, and phone
+viewports. Desktop pane widths must be fluid and bounded, Chat must remain centered without a fixed
+minimum that creates overflow, and compact widths must expose Projects plus Files/Research/Activity
+as reversible drawers. Short screens may remove decoration but must retain Chat and controls. The
+document itself must never require horizontal scrolling at supported breakpoints.
+
 ## 42. Definition of done
 
 The project is complete only when:

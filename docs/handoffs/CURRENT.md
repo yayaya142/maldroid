@@ -1,9 +1,9 @@
 # Current Handoff
 
-Task: `WEB-002`
+Task: `WEB-003`
 Next task: `PLATFORM-011`
 
-Implementation commit: `a5022bc`
+Implementation commit: pending
 
 ## Outcome
 
@@ -33,6 +33,21 @@ CLI; `maldroid cli` selects the terminal explicitly.
 - Local browser verification covered 1280×720 Dark and Light rendering, exact light background,
   collapse/restore state, grid columns, and browser console errors. Only the Codex Electron host's
   generic development CSP warning appeared; the MalDroid page logged no application error.
+
+## Responsive 100%-zoom follow-up
+
+- Replaced the fixed 268/372px side panes and 420px chat minimum with clamped fluid columns and a
+  `minmax(0, 1fr)` chat column. The shell uses the dynamic viewport height and cannot exceed the
+  viewport width through its grid definition.
+- At 900px and below, Chat is the only document column. Projects and the complete
+  Files/Research/Activity inspector are fixed drawers with independent open/close controls,
+  synchronized ARIA state, mutually exclusive opening, and resize-safe desktop/mobile state.
+- At 560px and short-screen breakpoints, secondary header/status and decorative welcome elements
+  compact while project access, inspector access, theme, and the eventual composer remain present.
+- Browser verification at 100% covered 1280×720, 1024×768, 900×700, 768×700, and 390×844. Every
+  viewport reported `scrollWidth <= innerWidth`; the 1024 layout measured 216px Projects, 516px
+  Chat, and 292px inspector, while compact widths gave Chat the full viewport. Drawer open/close
+  geometry was also verified. The viewport override was reset afterward.
 
 ## Repeated-output recovery
 
@@ -196,8 +211,8 @@ Release gate:
 
 The current final run passed Ruff formatting/lint, mypy for 43 source files, 136 tests with 71%
 coverage, project hygiene, installer dry-run, wheel build, and archive verification. The wheel is
-`dist/maldroid-0.1.0-py3-none-any.whl` (154,037 bytes, SHA-256
-`6b9675b3d6275ce13a4f985ec136a5f0b99fed9cdfaf0ddd41005b20a0d3e05b`) and contains the updated
+`dist/maldroid-0.1.0-py3-none-any.whl` (154,539 bytes, SHA-256
+`3b919942f6579581186b516b23482fa7aff6710a52c5a1c30082ab82a70e8e91`) and contains the updated
 composer, theme, Files explorer, repetition guard, updater, Web server, and all three static assets.
 `node --check src/maldroid/web/static/app.js` also passed.
 

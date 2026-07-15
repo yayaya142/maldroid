@@ -48,6 +48,8 @@ function bindUI() {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); showActionMenu($("[data-action='command-palette']")); }
     if (event.key === "Escape") hideMenu();
   });
+  window.addEventListener("resize", syncPaneState);
+  syncPaneState();
 }
 
 function connectSocket() {
@@ -93,7 +95,7 @@ async function activateProject(caseId) {
   state.activeId = caseId; renderProjects();
   if (!state.socket || state.socket.readyState !== WebSocket.OPEN) return toast("Workspace connection is reconnecting.", true);
   state.socket.send(JSON.stringify({ type: "activate", case_id: caseId }));
-  if (innerWidth <= 780) $(".sidebar").classList.remove("open");
+  if (innerWidth <= 900) $(".sidebar").classList.remove("open");
 }
 
 function renderWorkspace() {
@@ -253,9 +255,9 @@ async function runCommand(action,payload){if(!state.workspace.active)return toas
 async function handleAction(action,target){
   if(action==="new-project"){ $("#project-error").textContent=""; $("#project-dialog").showModal(); }
   else if(action==="settings"){fillSettings();renderConnectors();$("#settings-dialog").showModal()}
-  else if(action==="toggle-sidebar"){if(innerWidth<=780){document.body.classList.remove("sidebar-collapsed");$(".sidebar").classList.toggle("open")}else document.body.classList.toggle("sidebar-collapsed");syncSidebarToggle()}
+  else if(action==="toggle-sidebar"){if(innerWidth<=900){document.body.classList.remove("sidebar-collapsed");$(".inspector").classList.remove("open");$(".sidebar").classList.toggle("open")}else document.body.classList.toggle("sidebar-collapsed");syncPaneState()}
   else if(action==="toggle-theme")setTheme(state.theme === "dark" ? "light" : "dark");
-  else if(action==="toggle-inspector")document.body.classList.toggle("inspector-collapsed");
+  else if(action==="toggle-inspector"){if(innerWidth<=900){document.body.classList.remove("inspector-collapsed");$(".sidebar").classList.remove("open");$(".inspector").classList.toggle("open")}else document.body.classList.toggle("inspector-collapsed");syncPaneState()}
   else if(action==="refresh-files")await loadFiles(); else if(action==="close-preview")$("#file-preview").classList.add("hidden");
   else if(action==="clear-activity"){state.activities=[];state.unread=0;renderActivity()}
   else if(action==="profile")showChoiceMenu(target,["auto","generic","react-native","native"],state.workspace.case?.profile,choice=>runCommand("profile",{profile:choice}));
@@ -293,7 +295,7 @@ function formatBytes(bytes=0){if(bytes<1024)return`${bytes} B`;if(bytes<1048576)
 function fileIcon(item){if(item.type==="directory")return"▰";if(item.type==="symlink")return"↗";const extension=item.path.split(".").pop().toLowerCase();if(["js","jsx","ts","tsx"].includes(extension))return"JS";if(["java","kt","smali"].includes(extension))return"J";if(["c","cc","cpp","h","hpp"].includes(extension))return"C";if(["so","elf","bin","dex"].includes(extension))return"◆";if(["json","toml","yaml","yml","xml"].includes(extension))return"{}";if(["md","txt","log"].includes(extension))return"≡";return"·"}
 function initializeTheme(){const saved=localStorage.getItem("maldroid-theme");setTheme(saved==="light"?"light":"dark")}
 function setTheme(theme){state.theme=theme==="light"?"light":"dark";document.documentElement.dataset.theme=state.theme;localStorage.setItem("maldroid-theme",state.theme);const button=$("#theme-toggle"),light=state.theme==="light";if(button){button.textContent=light?"☾":"☀";button.setAttribute("aria-label",light?"Switch to dark mode":"Switch to light mode");button.title=button.getAttribute("aria-label")}if($("#theme-setting"))$("#theme-setting").value=state.theme}
-function syncSidebarToggle(){const collapsed=document.body.classList.contains("sidebar-collapsed"),button=$(".mobile-menu");button.textContent=collapsed?"☰":"☰";button.setAttribute("aria-label",collapsed?"Open projects":"Open projects")}
+function syncPaneState(){const compact=innerWidth<=900,sidebarOpen=compact?$(".sidebar").classList.contains("open"):!document.body.classList.contains("sidebar-collapsed"),inspectorOpen=compact?$(".inspector").classList.contains("open"):!document.body.classList.contains("inspector-collapsed");const menu=$(".mobile-menu"),inspector=$("#inspector-toggle");menu.setAttribute("aria-label",sidebarOpen?"Close projects":"Open projects");menu.setAttribute("aria-expanded",String(sidebarOpen));inspector.setAttribute("aria-label",inspectorOpen?"Close inspector":"Open inspector");inspector.setAttribute("aria-expanded",String(inspectorOpen))}
 function formatActionResult(action,data){const title=`${capitalize(action)} result`;if(action==="report"&&data?.path)return`${title}\n\nResearch report rebuilt at: ${data.path}`;if(action==="tools"&&data?.tools)return`${title}\n\n${data.count} tools available:\n${data.tools.map(x=>`• ${shortTool(x.name)} — ${x.description||""}`).join("\n")}`;return`${title}\n\n${JSON.stringify(data,null,2)}`}
 function capitalize(value=""){return value.charAt(0).toUpperCase()+value.slice(1)}
 function isRTL(text){const rtl=(text.match(/[\u0590-\u08ff]/g)||[]).length,letters=(text.match(/[A-Za-z\u0590-\u08ff]/g)||[]).length;return letters>0&&rtl/letters>.3}

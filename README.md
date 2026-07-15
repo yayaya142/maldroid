@@ -101,6 +101,10 @@ center pane; Actions are optional direct operations, not the chat entry point. T
 supports persistent Dark and Light appearance, a searchable/collapsible file tree, and a header
 restore button whenever the project sidebar is collapsed.
 
+The layout is designed for normal 100% browser zoom: Projects and Files use fluid widths on desktop,
+the chat stays centered in its remaining space, and both side panes become header-controlled drawers
+on compact laptop, tablet, and phone widths instead of forcing horizontal overflow.
+
 Opening an existing directory creates only `.maldroid/` initially. Opening a file creates a
 managed case and registers a symlink by default. No analysis starts merely because an artifact is
 detected.

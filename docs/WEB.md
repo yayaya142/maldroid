@@ -56,6 +56,16 @@ Settings. The preference is stored only in the local browser. Collapsing the pro
 a restore button to the workspace header; it remains available above the center pane at desktop
 and mobile widths.
 
+## Responsive layout
+
+Use the browser at normal 100% zoom. On wide and standard laptop windows, Projects, centered Chat,
+and the inspector share fluid columns. Their widths are clamped so the chat cannot be pushed beyond
+the viewport. At 900 CSS pixels and below, Chat occupies the full screen while the ☰ and inspector
+buttons open Projects and Files/Research/Activity as separate drawers with their own close controls.
+Small-height and phone layouts reduce decorative welcome content while retaining the composer,
+theme control, project access, and inspector access. No supported breakpoint requires horizontal
+page scrolling.
+
 The Model settings panel also controls automatic repeated-output recovery. It is enabled by
 default. When triggered, Activity shows the stopped generation and new session; the same request
 continues with durable and bounded recent context, without placing the repeated partial response in
