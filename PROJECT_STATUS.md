@@ -167,8 +167,8 @@ Last updated: 2026-07-15
 
 ## Current test status
 
-The local 140-test suite and release gate pass with 72% coverage. GitHub Actions run `29439876995`
-passes `WEB-005` on macOS 26 and Kali, including dependency bootstrap, lint, formatting, all tests,
+The local 140-test suite and release gate pass with 72% coverage. GitHub Actions run `29440563970`
+passes `WEB-006` on macOS 26 and Kali, including dependency bootstrap, lint, formatting, all tests,
 coverage, and installer dry-run. See
 `docs/handoffs/CURRENT.md` for exact commands and environment-gated acceptance work.
 
@@ -176,4 +176,5 @@ coverage, and installer dry-run. See
 
 Run Web/CLI parity acceptance on the owner's macOS host, then execute one long React Native case and
 one Native/Ghidra MCP case. Verify RTL chat, project switching, file preview, semantic checkpoints,
-report quality, context receipts, direct triage commands, and MCP connectors against real calls.
+latest-turn file markers, log visibility, report quality, context receipts, direct triage commands,
+and MCP connectors against real calls.
