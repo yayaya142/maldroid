@@ -3,7 +3,7 @@
 Task: `WEB-005`
 Next task: `PLATFORM-011`
 
-Implementation commit: pending
+Implementation commit: `f239e59`
 
 ## Outcome
 
