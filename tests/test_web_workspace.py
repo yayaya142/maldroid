@@ -45,6 +45,24 @@ def test_web_settings_expose_enabled_repetition_recovery(tmp_path: Path) -> None
     assert 'data-key="llama.repetition_recovery_enabled"' in page
 
 
+def test_web_shell_exposes_chat_theme_sidebar_restore_and_file_controls(tmp_path: Path) -> None:
+    workspace = WebWorkspace(web_config(tmp_path))
+    with authorized_client(workspace) as client:
+        page = client.get("/").text
+        styles = client.get("/assets/styles.css").text
+        script = client.get("/assets/app.js").text
+
+    assert 'id="message-input"' in page
+    assert "Message MalDroid" in page
+    assert 'id="theme-toggle"' in page
+    assert 'id="theme-setting"' in page
+    assert 'id="file-filter"' in page
+    assert ".composer-disabled.hidden+.composer{display:block}" in styles
+    assert "body.sidebar-collapsed .mobile-menu{display:grid}" in styles
+    assert 'localStorage.setItem("maldroid-theme"' in script
+    assert "collapsedDirectories" in script
+
+
 def test_web_project_creation_listing_and_bounded_file_preview(tmp_path: Path) -> None:
     source = tmp_path / "decompiled-app"
     source.mkdir()

@@ -4,6 +4,9 @@ Last updated: 2026-07-15
 
 ## Completed
 
+- Web usability follow-up: the chat composer now becomes visibly available when runtime startup
+  completes, Dark/Light appearance persists locally, Files has filtering and collapsible accessible
+  rows, and a collapsed project sidebar can be restored without breaking the three-column grid.
 - Runaway word, phrase, and character repetition is now detected on bounded answer/reasoning stream
   tails. The stream is closed before partial output reaches history, and the same objective resumes
   in a fresh session with durable state plus bounded recent tool results. Recovery defaults on,
@@ -148,7 +151,7 @@ Last updated: 2026-07-15
 
 ## Current test status
 
-The local 135-test suite and release gate pass with 71% coverage. GitHub Actions run `29434717235`
+The local 136-test suite and release gate pass with 71% coverage. GitHub Actions run `29434717235`
 passes the repetition-recovery handoff on macOS 26 and Kali, including dependency bootstrap, lint,
 formatting, all tests, coverage, and installer dry-run. See
 `docs/handoffs/CURRENT.md` for exact commands and environment-gated acceptance work.

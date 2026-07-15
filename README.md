@@ -96,6 +96,11 @@ settings, reports, and external MCP connector management. It stays local on `127
 a random per-run browser token, and uses the same case runtime and path policy as the CLI. See
 [`docs/WEB.md`](docs/WEB.md).
 
+After an investigation finishes loading, use the clearly labeled message box at the bottom of the
+center pane; Actions are optional direct operations, not the chat entry point. The Web workspace
+supports persistent Dark and Light appearance, a searchable/collapsible file tree, and a header
+restore button whenever the project sidebar is collapsed.
+
 Opening an existing directory creates only `.maldroid/` initially. Opening a file creates a
 managed case and registers a symlink by default. No analysis starts merely because an artifact is
 detected.

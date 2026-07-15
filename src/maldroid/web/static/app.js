@@ -1,6 +1,6 @@
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
-const state = { bootstrap: null, workspace: { active: false }, activeId: null, socket: null, busy: false, activities: [], unread: 0 };
+const state = { bootstrap: null, workspace: { active: false }, activeId: null, socket: null, busy: false, activities: [], unread: 0, files: [], collapsedDirectories: new Set(), selectedFile: null, fileFilter: "", theme: "dark" };
 
 async function api(path, options = {}) {
   const response = await fetch(path, { ...options, headers: { "Content-Type": "application/json", ...(options.headers || {}) } });
@@ -10,6 +10,7 @@ async function api(path, options = {}) {
 }
 
 async function boot() {
+  initializeTheme();
   try {
     state.bootstrap = await api("/api/bootstrap");
     state.workspace = state.bootstrap.workspace;
@@ -35,6 +36,8 @@ function bindUI() {
     if (!event.target.closest("#menu") && !event.target.closest("[data-action='profile'],[data-action='reasoning'],[data-action='command-palette']")) hideMenu();
   });
   $("#message-input").addEventListener("input", resizeComposer);
+  $("#file-filter").addEventListener("input", (event) => { state.fileFilter = event.target.value.trim().toLowerCase(); renderFiles(); });
+  $("#theme-setting").addEventListener("change", (event) => setTheme(event.target.value));
   $("#message-input").addEventListener("keydown", (event) => {
     if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); sendMessage(); }
   });
@@ -58,7 +61,7 @@ function connectSocket() {
 async function handleSocket(message) {
   if (message.type === "activity") { addActivity(message.event, message.data); updateProgress(message.event, message.data); return; }
   if (message.type === "runtime_start") { setBusy(true, "Starting local model", "Loading llama.cpp and case-scoped MCP tools…"); return; }
-  if (message.type === "runtime_ready") { state.workspace = message.workspace; state.activeId = state.workspace.case.case_id; setBusy(false); renderWorkspace(); await refreshBootstrap(); await loadProjectData(state.activeId); toast("Local model and MCP workspace are ready."); return; }
+  if (message.type === "runtime_ready") { state.workspace = message.workspace; state.activeId = state.workspace.case.case_id; setBusy(false); renderWorkspace(); await refreshBootstrap(); await loadProjectData(state.activeId); $("#message-input").focus(); toast("Local model and MCP workspace are ready. You can message MalDroid below."); return; }
   if (message.type === "turn_start") { setBusy(true, "Thinking", "Planning the next research step…"); return; }
   if (message.type === "assistant") { addMessage("assistant", message.content); state.workspace = message.workspace; setBusy(false); renderWorkspace(); renderResearch(); return; }
   if (message.type === "error") { setBusy(false); toast(message.error, true); }
@@ -102,6 +105,7 @@ function renderWorkspace() {
   $("#messages").classList.toggle("hidden", !current);
   $("#composer-disabled").classList.toggle("hidden", Boolean(active));
   $("#composer").classList.toggle("hidden", !active);
+  $("#composer-disabled").textContent = current ? "Starting the local model and research tools…" : "Open an investigation to begin";
   const status = $("#runtime-status"); status.className = `status-pill ${active ? "" : "idle"}`; $("span", status).textContent = active ? "Model ready" : "Model offline";
   if (active) {
     $("#profile-button").textContent = `${capitalize(state.workspace.profile_mode)} · ${state.workspace.case.profile}⌄`;
@@ -115,6 +119,11 @@ function renderWorkspace() {
 async function loadProjectData(caseId) {
   const messages = await api(`/api/projects/${encodeURIComponent(caseId)}/history`);
   const container = $("#messages"); container.replaceChildren(); messages.messages.forEach(item => addMessage(item.role, item.content, item.timestamp, false));
+  if (!messages.messages.length && state.workspace.active) {
+    const empty = el("div", "conversation-empty");
+    empty.append(el("strong", "", "Start the conversation"), el("span", "", "Use the message box below to describe what you want MalDroid to investigate."));
+    container.append(empty);
+  }
   await loadFiles(); renderResearch(); scrollMessages();
 }
 
@@ -180,17 +189,48 @@ async function loadFiles() {
   const tree = $("#file-tree"); if (!state.activeId) return;
   tree.className = "file-tree empty-state"; tree.textContent = "Loading case files…";
   try {
-    const result = await api(`/api/projects/${encodeURIComponent(state.activeId)}/files?depth=8`); tree.replaceChildren(); tree.className="file-tree";
-    for (const item of result.data?.entries || []) {
-      const depth=Math.max(0,item.path.split("/").length-1), row=el("div",`file-row ${item.type}`); row.style.paddingLeft=`${6+depth*13}px`;
-      row.append(el("i","",item.type==="directory"?"▾":item.type==="symlink"?"↗":"·"),el("span","file-label",item.path.split("/").pop()));
-      if(item.type==="file"){row.title=item.path;row.addEventListener("click",()=>openFile(item.path));row.append(el("small","",formatBytes(item.size)));} tree.append(row);
-    }
-    if (result.data?.truncated) tree.prepend(el("div","empty-state",`Showing the first ${result.data.limit} entries.`));
+    const result = await api(`/api/projects/${encodeURIComponent(state.activeId)}/files?depth=8`);
+    state.files = result.data?.entries || [];
+    state.filesTruncated = Boolean(result.data?.truncated);
+    state.filesLimit = result.data?.limit || state.files.length;
+    renderFiles();
   } catch(error){tree.textContent=error.message;}
 }
 
+function renderFiles() {
+  const tree = $("#file-tree"), query = state.fileFilter;
+  tree.replaceChildren(); tree.className = "file-tree";
+  const visible = state.files.filter(item => {
+    if (query) return item.path.toLowerCase().includes(query);
+    const parents = item.path.split("/").slice(0, -1);
+    return !parents.some((_, index) => state.collapsedDirectories.has(parents.slice(0, index + 1).join("/")));
+  });
+  $("#file-count").textContent = query ? `${visible.length} matches` : `${state.files.length} items`;
+  if (state.filesTruncated) tree.append(el("div", "file-limit", `Showing the first ${state.filesLimit} entries`));
+  for (const item of visible) {
+    const depth = Math.max(0, item.path.split("/").length - 1), directory = item.type === "directory";
+    const row = el("div", `file-row ${item.type}${state.selectedFile === item.path ? " selected" : ""}`);
+    row.style.paddingLeft = `${5 + depth * 14}px`; row.title = item.path;
+    row.append(
+      el("span", "file-disclosure", directory ? (state.collapsedDirectories.has(item.path) ? "▸" : "▾") : ""),
+      el("span", "file-icon", fileIcon(item)),
+      el("span", "file-label", item.path.split("/").pop())
+    );
+    if (directory) {
+      row.tabIndex = 0; row.setAttribute("role", "button"); row.setAttribute("aria-expanded", String(!state.collapsedDirectories.has(item.path)));
+      const toggle = () => { state.collapsedDirectories.has(item.path) ? state.collapsedDirectories.delete(item.path) : state.collapsedDirectories.add(item.path); renderFiles(); };
+      row.addEventListener("click", toggle); row.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); toggle(); } });
+    } else if (item.type === "file") {
+      const open = () => openFile(item.path); row.tabIndex = 0; row.setAttribute("role", "button");
+      row.addEventListener("click", open); row.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); open(); } }); row.append(el("small", "", formatBytes(item.size)));
+    }
+    tree.append(row);
+  }
+  if (!visible.length) tree.append(el("div", "file-empty", query ? `No files match “${state.fileFilter}”.` : "This investigation has no visible files."));
+}
+
 async function openFile(path) {
+  state.selectedFile = path; renderFiles();
   const preview=$("#file-preview"); preview.classList.remove("hidden"); $("#preview-name").textContent=path; $("#preview-meta").textContent="Loading bounded preview…"; $("#preview-content").textContent="";
   try { const result=await api(`/api/projects/${encodeURIComponent(state.activeId)}/file?path=${encodeURIComponent(path)}&start=1&end=500`); if(result.status!=="completed") throw new Error(result.error?.message||"Preview failed"); const data=result.data; $("#preview-meta").textContent=data.lines?`${data.returned_lines} lines · bounded preview`:`${data.length || 4096} bytes · hexadecimal preview`; $("#preview-content").textContent=data.lines?data.lines.map(x=>`${String(x.line).padStart(6)}  ${x.text}`).join("\n"):JSON.stringify(data,null,2); } catch(error){$("#preview-content").textContent=error.message;}
 }
@@ -213,7 +253,8 @@ async function runCommand(action,payload){if(!state.workspace.active)return toas
 async function handleAction(action,target){
   if(action==="new-project"){ $("#project-error").textContent=""; $("#project-dialog").showModal(); }
   else if(action==="settings"){fillSettings();renderConnectors();$("#settings-dialog").showModal()}
-  else if(action==="toggle-sidebar"){innerWidth<=780?$(".sidebar").classList.toggle("open"):document.body.classList.toggle("sidebar-collapsed")}
+  else if(action==="toggle-sidebar"){if(innerWidth<=780){document.body.classList.remove("sidebar-collapsed");$(".sidebar").classList.toggle("open")}else document.body.classList.toggle("sidebar-collapsed");syncSidebarToggle()}
+  else if(action==="toggle-theme")setTheme(state.theme === "dark" ? "light" : "dark");
   else if(action==="toggle-inspector")document.body.classList.toggle("inspector-collapsed");
   else if(action==="refresh-files")await loadFiles(); else if(action==="close-preview")$("#file-preview").classList.add("hidden");
   else if(action==="clear-activity"){state.activities=[];state.unread=0;renderActivity()}
@@ -249,6 +290,10 @@ function shortTool(value=""){return value.replace(/^MalDroid_/,"").replace(/^MCP
 function activityDetail(data){if(data.arguments)return Object.entries(data.arguments).slice(0,2).map(([k,v])=>`${k}: ${String(v).slice(0,60)}`).join(" · ");if(data.error)return String(data.error).slice(0,120);if(data.action)return data.action;return data.status||"Local workspace"}
 function relativeTime(value){const seconds=Math.max(0,(Date.now()-new Date(value).getTime())/1000);if(seconds<60)return"just now";if(seconds<3600)return`${Math.floor(seconds/60)}m ago`;if(seconds<86400)return`${Math.floor(seconds/3600)}h ago`;return`${Math.floor(seconds/86400)}d ago`}
 function formatBytes(bytes=0){if(bytes<1024)return`${bytes} B`;if(bytes<1048576)return`${(bytes/1024).toFixed(1)} KB`;return`${(bytes/1048576).toFixed(1)} MB`}
+function fileIcon(item){if(item.type==="directory")return"▰";if(item.type==="symlink")return"↗";const extension=item.path.split(".").pop().toLowerCase();if(["js","jsx","ts","tsx"].includes(extension))return"JS";if(["java","kt","smali"].includes(extension))return"J";if(["c","cc","cpp","h","hpp"].includes(extension))return"C";if(["so","elf","bin","dex"].includes(extension))return"◆";if(["json","toml","yaml","yml","xml"].includes(extension))return"{}";if(["md","txt","log"].includes(extension))return"≡";return"·"}
+function initializeTheme(){const saved=localStorage.getItem("maldroid-theme");setTheme(saved==="light"?"light":"dark")}
+function setTheme(theme){state.theme=theme==="light"?"light":"dark";document.documentElement.dataset.theme=state.theme;localStorage.setItem("maldroid-theme",state.theme);const button=$("#theme-toggle"),light=state.theme==="light";if(button){button.textContent=light?"☾":"☀";button.setAttribute("aria-label",light?"Switch to dark mode":"Switch to light mode");button.title=button.getAttribute("aria-label")}if($("#theme-setting"))$("#theme-setting").value=state.theme}
+function syncSidebarToggle(){const collapsed=document.body.classList.contains("sidebar-collapsed"),button=$(".mobile-menu");button.textContent=collapsed?"☰":"☰";button.setAttribute("aria-label",collapsed?"Open projects":"Open projects")}
 function formatActionResult(action,data){const title=`${capitalize(action)} result`;if(action==="report"&&data?.path)return`${title}\n\nResearch report rebuilt at: ${data.path}`;if(action==="tools"&&data?.tools)return`${title}\n\n${data.count} tools available:\n${data.tools.map(x=>`• ${shortTool(x.name)} — ${x.description||""}`).join("\n")}`;return`${title}\n\n${JSON.stringify(data,null,2)}`}
 function capitalize(value=""){return value.charAt(0).toUpperCase()+value.slice(1)}
 function isRTL(text){const rtl=(text.match(/[\u0590-\u08ff]/g)||[]).length,letters=(text.match(/[A-Za-z\u0590-\u08ff]/g)||[]).length;return letters>0&&rtl/letters>.3}

@@ -31,8 +31,12 @@ pages. There is no non-loopback option.
   loading the new one.
 - The center pane contains multilingual chat and live agent progress. Individual Hebrew and Arabic
   messages are rendered RTL automatically; the application chrome remains English and LTR.
+- Once the model is ready, the labeled `Message MalDroid` composer is always visible at the bottom
+  of the center pane. Enter sends and Shift+Enter inserts a newline; Actions are optional shortcuts.
 - The right inspector provides bounded case files and previews, structured research state, direct
   triage/report actions, and a live activity stream without exposing hidden model reasoning.
+- The Files tab provides name/path filtering, collapsible directories, type-aware icons, item
+  counts, selected-file state, keyboard navigation, and bounded previews with line numbers.
 
 ## Feature parity
 
@@ -46,6 +50,11 @@ state views.
 Settings cover model paths and performance, context and research limits, cases, ports, and MCP
 connectors. Persistent settings can only be changed while the model runtime is stopped. External
 MCP URLs retain the same loopback and credential restrictions as the CLI.
+
+Appearance can be switched between Dark and Light from either the header icon or Workspace
+Settings. The preference is stored only in the local browser. Collapsing the project sidebar adds
+a restore button to the workspace header; it remains available above the center pane at desktop
+and mobile widths.
 
 The Model settings panel also controls automatic repeated-output recovery. It is enabled by
 default. When triggered, Activity shows the stopped generation and new session; the same request

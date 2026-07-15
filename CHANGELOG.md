@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Fixed the Web chat composer being permanently hidden after project activation; added persistent
+  Light Mode, a searchable/collapsible Files explorer, and a reliable collapsed-sidebar restore
+  control with corrected grid placement.
 - Added enabled-by-default streaming repetition detection and bounded automatic recovery in a fresh
   session, preserving durable investigation state without retaining the repeated partial output.
 - Added `maldroid update`: fixed-official-repository depth-one clone, temporary source cleanup,

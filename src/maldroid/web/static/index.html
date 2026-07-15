@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="dark">
+  <meta name="color-scheme" content="dark light">
   <title>MalDroid Workspace</title>
   <link rel="stylesheet" href="/assets/styles.css">
 </head>
@@ -33,6 +33,7 @@
         <div class="header-actions">
           <div id="runtime-status" class="status-pill idle"><i></i><span>Model offline</span></div>
           <button class="secondary-button" data-action="command-palette">⌘ Actions</button>
+          <button id="theme-toggle" class="icon-button" data-action="toggle-theme" aria-label="Switch to light mode" title="Switch to light mode">☀</button>
           <button class="icon-button" data-action="toggle-inspector" aria-label="Toggle inspector">◫</button>
         </div>
       </header>
@@ -56,6 +57,7 @@
         <div class="composer-wrap">
           <div id="composer-disabled" class="composer-disabled">Open an investigation to begin</div>
           <div class="composer" id="composer">
+            <div class="composer-kicker"><i></i><span>Message MalDroid</span></div>
             <textarea id="message-input" rows="1" dir="auto" placeholder="Ask MalDroid to investigate…" aria-label="Message"></textarea>
             <div class="composer-footer">
               <div class="composer-options">
@@ -76,7 +78,8 @@
         <button data-tab="activity">Activity <b id="activity-count">0</b></button>
       </div>
       <section id="panel-files" class="inspector-panel active">
-        <div class="panel-toolbar"><span>CASE EXPLORER</span><button class="icon-button" data-action="refresh-files" title="Refresh files">↻</button></div>
+        <div class="panel-toolbar file-toolbar"><span>CASE EXPLORER</span><div><small id="file-count">0 items</small><button class="icon-button" data-action="refresh-files" title="Refresh files">↻</button></div></div>
+        <div class="file-search"><span>⌕</span><input id="file-filter" type="search" placeholder="Filter files by name or path…" aria-label="Filter case files"></div>
         <div id="file-tree" class="file-tree empty-state">No project selected.</div>
         <div id="file-preview" class="file-preview hidden">
           <div class="preview-header"><div><strong id="preview-name"></strong><span id="preview-meta"></span></div><button class="icon-button" data-action="close-preview">×</button></div>
@@ -137,6 +140,7 @@
           <section data-settings-panel="workspace">
             <label>Cases directory<input data-key="general.cases_directory"></label>
             <div class="field-row"><label>Web port<input type="number" data-key="web.port"></label><label>Model port<input type="number" data-key="llama.preferred_port"></label></div>
+            <label>Appearance<select id="theme-setting"><option value="dark">Dark</option><option value="light">Light</option></select></label>
             <label class="check-label"><input type="checkbox" data-key="web.open_browser"> Open browser when the Web workspace starts</label>
           </section>
           <section data-settings-panel="research">

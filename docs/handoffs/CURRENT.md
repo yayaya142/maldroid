@@ -1,9 +1,9 @@
 # Current Handoff
 
-Task: `MODEL-010`
+Task: `WEB-002`
 Next task: `PLATFORM-011`
 
-Implementation commit: `a55a8ab`
+Implementation commit: pending
 
 ## Outcome
 
@@ -15,6 +15,24 @@ The repository now also has a modern local Web product surface. `maldroid server
 three-pane workspace with investigation conversations, multilingual/RTL chat, bounded files,
 research state, activity, settings, reports, and MCP connectors. Bare `maldroid` asks for Web or
 CLI; `maldroid cli` selects the terminal explicitly.
+
+## Web usability follow-up
+
+- Fixed the root cause of the missing chat box: the legacy adjacent-sibling CSS rule continued to
+  hide the composer after runtime activation. Explicit active/hidden state now wins, the composer is
+  labeled `Message MalDroid`, an empty conversation explains where to start, and readiness focuses
+  the input with a clear toast.
+- Added persistent Dark/Light appearance through the header and Workspace Settings. The preference
+  stays in browser `localStorage` and does not pollute case or model configuration.
+- Rebuilt Files presentation around the existing bounded API: name/path filter, result count,
+  collapsible directories, type-aware icons, selected-file highlight, keyboard controls, truncation
+  notice, and the same bounded preview.
+- A collapsed project sidebar now exposes the existing header menu button on desktop. Explicit grid
+  columns prevent the workspace and inspector from shifting when the sidebar is hidden; mobile
+  placement remains single-column.
+- Local browser verification covered 1280×720 Dark and Light rendering, exact light background,
+  collapse/restore state, grid columns, and browser console errors. Only the Codex Electron host's
+  generic development CSP warning appeared; the MalDroid page logged no application error.
 
 ## Repeated-output recovery
 
@@ -161,13 +179,14 @@ Focused and full tests:
 ./scripts/dev test tests/test_cases_evidence.py tests/test_tools_agent.py tests/test_mcp_server.py
 ./scripts/dev test tests/test_large_react_native.py tests/test_framework_profiles.py tests/test_triage_tools.py
 ./scripts/dev test tests/test_ui.py tests/test_triage_tools.py
+./scripts/dev test tests/test_web_workspace.py tests/test_ui.py
 ./scripts/dev test
 ```
 
 Results: all focused suites passed. Repetition-specific coverage includes Hebrew words, phrases,
 Unicode character runs, normal prose/code/JSON false-positive fixtures, disabled behavior, stream
 closure, fresh-session continuation, objective carry-over, and bounded exhaustion. The current full
-suite passed with `135 passed`.
+suite passed with `136 passed`; the focused Web/UI suite passed with `16 passed`.
 
 Release gate:
 
@@ -175,11 +194,11 @@ Release gate:
 ./scripts/dev release-check
 ```
 
-The current final run passed Ruff formatting/lint, mypy for 43 source files, 135 tests with 71%
+The current final run passed Ruff formatting/lint, mypy for 43 source files, 136 tests with 71%
 coverage, project hygiene, installer dry-run, wheel build, and archive verification. The wheel is
-`dist/maldroid-0.1.0-py3-none-any.whl` (151,882 bytes, SHA-256
-`20833e600564140094fde2085d826c1bc2abd9755ae961ea0c6a5eab9ed18a6a`) and contains the repetition
-guard, updater, Web server, and all three static assets.
+`dist/maldroid-0.1.0-py3-none-any.whl` (154,037 bytes, SHA-256
+`6b9675b3d6275ce13a4f985ec136a5f0b99fed9cdfaf0ddd41005b20a0d3e05b`) and contains the updated
+composer, theme, Files explorer, repetition guard, updater, Web server, and all three static assets.
 `node --check src/maldroid/web/static/app.js` also passed.
 
 GitHub Actions run `29433131792` passed on macOS 26 and Kali for commit `2f6a537`. Both jobs passed

@@ -7,6 +7,10 @@ Completed out of sequence by explicit owner reprioritization: `MODEL-010` adds e
 streaming repetition detection, clean-session recovery with bounded carry-over, CLI/Web activity,
 and the Web Settings toggle. Physical Gemma tuning is included in `PLATFORM-011`.
 
+Completed out of sequence by explicit owner reprioritization: `WEB-002` fixes the hidden chat
+composer, adds persistent Light Mode, upgrades Files navigation, and makes sidebar collapse fully
+reversible. Physical active-model/browser acceptance remains in `PLATFORM-011`.
+
 1. `PLATFORM-011` — Install the long-investigation and Web-workspace upgrade on the owner's macOS
    host. Verify `maldroid` mode selection, `maldroid server`, exclusive CLI/Web locking, project
    creation/switching, Hebrew input/output RTL, settings, bounded file preview, live activity,

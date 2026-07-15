@@ -2573,6 +2573,14 @@ restore durable state plus bounded recent tool results and the active objective,
 automatic recovery attempts so the controller cannot loop indefinitely. Expose an English Web
 Settings toggle and a validated CLI configuration key; default the feature to enabled.
 
+## 41B. Web usability and appearance
+
+The active Web workspace must present an unmistakable chat composer without requiring an Action.
+It must support browser-persistent Dark and Light appearance, expose bounded case files through a
+searchable and collapsible keyboard-accessible explorer, and always provide a visible way to restore
+the project sidebar after collapse. Pane changes must preserve the three-column layout and the same
+dispatcher/path-policy boundary.
+
 ## 42. Definition of done
 
 The project is complete only when:
@@ -2649,4 +2657,3 @@ Build it.
 אני רוצה שכל מה שקשור לפייתון וזה יהיה בסביבה ויראוטלית עם venu (יש בצורה אוטומטית כבר בלי לבלבל את הAGENT) 
 
 2-  אני יודע שזה כבר מופיע אבל אני רוצה שתבצע מחקר מקיף על כל סוגי השפות שיש בשביל לדעת איך לעשות להם REVESE נכון ולחקור נכון.
-

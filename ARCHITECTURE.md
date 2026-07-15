@@ -11,6 +11,11 @@ uses authenticated same-origin HTTP/WebSocket endpoints for projects, bounded fi
 research state, actions, settings, and activity. It never receives a direct unrestricted file API.
 A global file lease prevents concurrent CLI/Web model runtimes.
 
+The browser owns presentation-only preferences such as dark/light appearance and collapsed panes;
+these do not enter case or model configuration. The Files inspector renders the bounded dispatcher
+inventory as a searchable, collapsible tree, while all reads still pass through `PathPolicy`.
+Composer visibility follows explicit runtime state; CSS cannot infer or override model readiness.
+
 ## Update lifecycle
 
 The explicit `maldroid update` maintenance path is separate from investigation execution. It clones
