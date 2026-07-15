@@ -29,6 +29,11 @@ Completed out of sequence by explicit owner reprioritization: `WEB-006` marks la
 their parent directories in the Web Files explorer and hides routine log paths behind a persisted
 presentation-only toggle. Physical active-model acceptance remains in `PLATFORM-011`.
 
+Completed out of sequence by explicit owner reprioritization: `WEB-007` gives both desktop side
+panes one shared responsive width so Chat is exactly viewport-centered at 100% zoom while Files
+controls and compact-screen drawers remain usable. Physical active-model acceptance remains in
+`PLATFORM-011`.
+
 1. `PLATFORM-011` — Install the long-investigation and Web-workspace upgrade on the owner's macOS
    host. Verify `maldroid` mode selection, `maldroid server`, exclusive CLI/Web locking, project
    creation/switching, Hebrew input/output RTL, settings, bounded file preview, latest-turn file

@@ -68,10 +68,11 @@ and mobile widths.
 
 ## Responsive layout
 
-Use the browser at normal 100% zoom. On wide and standard laptop windows, Projects, centered Chat,
-and the inspector share fluid columns. Their widths are clamped so the chat cannot be pushed beyond
-the viewport. At 900 CSS pixels and below, Chat occupies the full screen while the ☰ and inspector
-buttons open Projects and Files/Research/Activity as separate drawers with their own close controls.
+Use the browser at normal 100% zoom. On wide and standard laptop windows, Projects and the inspector
+use the same clamped fluid width. This places Chat at the exact viewport center while keeping the
+Files controls usable and preventing overflow. At 900 CSS pixels and below, Chat occupies the full
+screen while the ☰ and inspector buttons open Projects and Files/Research/Activity as separate
+drawers with their own close controls.
 Small-height and phone layouts reduce decorative welcome content while retaining the composer,
 theme control, project access, and inspector access. No supported breakpoint requires horizontal
 page scrolling.

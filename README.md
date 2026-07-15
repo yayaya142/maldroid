@@ -106,9 +106,9 @@ a green ring so work remains visible in a collapsed tree. Routine log files are 
 and can be revealed with the **Logs hidden** control. This is a browser-only view preference and
 does not remove files or limit the model's bounded case access.
 
-The layout is designed for normal 100% browser zoom: Projects and Files use fluid widths on desktop,
-the chat stays centered in its remaining space, and both side panes become header-controlled drawers
-on compact laptop, tablet, and phone widths instead of forcing horizontal overflow.
+The layout is designed for normal 100% browser zoom: Projects and Files use equal fluid widths on
+desktop so the chat is centered on the viewport, and both side panes become header-controlled
+drawers on compact laptop, tablet, and phone widths instead of forcing horizontal overflow.
 
 During long turns, a central Live Work panel confirms that the local model is active with elapsed
 time, phase, tool count, approximate token telemetry, and recent operational steps. It deliberately

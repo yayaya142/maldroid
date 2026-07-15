@@ -4,6 +4,10 @@ Last updated: 2026-07-15
 
 ## Completed
 
+- The desktop Web shell now gives Projects and the inspector one shared responsive width, placing
+  the Chat column at the exact viewport center at 100% zoom. Browser measurements from 1024px
+  through 1920px report a 0px center offset with no document, Files-control, or tab overflow;
+  compact widths retain the existing drawer layout.
 - The Web Files explorer now highlights files used in the latest model turn with a green marker
   and marks containing directories with a green ring. Routine log paths are hidden by default
   behind a persistent reveal control; this changes presentation only, not bounded model access.

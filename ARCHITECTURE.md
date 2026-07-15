@@ -19,11 +19,13 @@ the next turn or case switch. Log-path suppression and its persisted reveal togg
 browser presentation: the dispatcher inventory, audit data, and model/tool authority are unchanged.
 Composer visibility follows explicit runtime state; CSS cannot infer or override model readiness.
 
-The desktop grid uses clamped project/inspector widths and a zero-minimum flexible chat column, so
-it cannot overflow merely because the browser is at 100% zoom. At 900 CSS pixels and below the
-chat becomes the sole layout column; Projects and the full Files/Research/Activity inspector become
-independent keyboard-accessible drawers. Height breakpoints compact nonessential welcome content
-without shrinking the chat composer or model controls.
+The desktop grid uses one shared clamped width for both project and inspector panes plus a
+zero-minimum flexible chat column. Equal side columns keep Chat mathematically centered on the
+viewport at 100% zoom without sacrificing the Files inspector or causing document overflow. At
+900 CSS pixels and below the chat becomes the sole layout column; Projects and the full
+Files/Research/Activity inspector become independent keyboard-accessible drawers. Height
+breakpoints compact nonessential welcome content without shrinking the chat composer or model
+controls.
 
 During startup and active turns, the center pane consumes the same bounded WebSocket activity
 events as the Activity inspector to render Live Work telemetry. Elapsed time is browser-local;

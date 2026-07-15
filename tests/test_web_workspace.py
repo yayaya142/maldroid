@@ -62,6 +62,8 @@ def test_web_shell_exposes_chat_theme_sidebar_restore_and_file_controls(tmp_path
     assert "Used in latest turn" in page
     assert ".composer-disabled.hidden+.composer{display:block}" in styles
     assert "body.sidebar-collapsed .mobile-menu{display:grid}" in styles
+    assert "--side-pane:clamp(240px,23vw,320px)" in styles
+    assert "--sidebar:var(--side-pane);--inspector:var(--side-pane)" in styles
     assert "minmax(0,1fr)" in styles
     assert "@media(max-width:900px)" in styles
     assert ".inspector.open{transform:none}" in styles

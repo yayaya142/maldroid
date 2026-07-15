@@ -1,9 +1,9 @@
 # Current Handoff
 
-Task: `WEB-006`
+Task: `WEB-007`
 Next task: `PLATFORM-011`
 
-Implementation commit: `f231ec4`
+Implementation commit: this handoff commit
 
 ## Outcome
 
@@ -17,6 +17,21 @@ research state, activity, settings, reports, and MCP connectors. Bare `maldroid`
 CLI; `maldroid cli` selects the terminal explicitly.
 
 ## Web usability follow-up
+
+### Exact 100%-zoom centering
+
+- The remaining centering defect was caused by asymmetric desktop columns: Projects used
+  `clamp(216px, 19vw, 268px)` while the inspector used `clamp(292px, 27vw, 372px)`. Chat was centered
+  only inside the leftover grid space, leaving its visual center 38–55px left of the viewport center.
+- Both side panes now derive from one `clamp(240px, 23vw, 320px)` width. This preserves the former
+  combined side-column budget at common laptop widths while making the desktop grid symmetric.
+- Real packaged-browser measurements at 100% zoom covered 1024×768, 1280×720, 1366×768,
+  1440×900, 1536×864, and 1920×1080. Every viewport reported an exact 0px Chat center offset and
+  zero document overflow. At 1024px, the grid measured 240/544/240px; Files options and inspector
+  tabs had zero overflow.
+- Boundary verification covered 901px desktop and the 900px, 768px, and 390px drawer layouts. All
+  retained a 0px center offset and no page or Files-control overflow. The temporary viewport
+  override was reset after verification.
 
 ### Latest-turn Files visibility
 

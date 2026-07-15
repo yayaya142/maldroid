@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Centered the desktop Web chat exactly at 100% zoom by giving Projects and the inspector a shared
+  responsive width, while preserving the compact drawer layout and Files usability.
 - Added latest-turn green file/directory markers to the Web Files explorer and hid routine log
   paths by default behind a persistent presentation-only reveal control.
 - Added a Web Live Work Stop control with real turn cancellation, active stream closure, safe-boundary
