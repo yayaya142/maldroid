@@ -1,6 +1,6 @@
 # MalDroid Reliability and Research Platform Master Plan
 
-Status: active gated backlog; `PLATFORM-010` cross-gate foundation implemented locally
+Status: active gated backlog; `PLATFORM-010` and the shared Web workspace are implemented locally
 Owner priority: make MalDroid a trustworthy daily research CLI before expanding breadth  
 Execution model: one agent and one task ID at a time  
 Canonical original requirements: `Tasks.MD` (read-only)

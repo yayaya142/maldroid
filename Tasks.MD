@@ -2544,6 +2544,20 @@ Expected:
 
 ## 42. Definition of done
 
+## 41A. Web workspace expansion (completed locally 2026-07-15)
+
+The owner reprioritized a second, high-quality product surface. Implemented requirements:
+
+* `maldroid` asks for Web or CLI; explicit `maldroid server` and `maldroid cli` commands exist.
+* CLI and Web share one runtime and cannot load concurrently.
+* Each investigation is a durable project/conversation with append-only sessions.
+* Three-pane English UI provides chat, bounded files, live activity, structured research, settings,
+  reports, context/profile/reasoning controls, and external MCP connectors.
+* Hebrew and Arabic chat messages render RTL per message while application chrome remains LTR.
+* Server and MCP remain loopback-only; browser API/WS calls require a random per-run token.
+* File browsing uses central path policy and bounded tools rather than an unrestricted Web file API.
+* The static-only evidence boundary remains unchanged.
+
 The project is complete only when:
 
 * `./install.sh` works.
@@ -2618,7 +2632,6 @@ Build it.
 אני רוצה שכל מה שקשור לפייתון וזה יהיה בסביבה ויראוטלית עם venu (יש בצורה אוטומטית כבר בלי לבלבל את הAGENT) 
 
 2-  אני יודע שזה כבר מופיע אבל אני רוצה שתבצע מחקר מקיף על כל סוגי השפות שיש בשביל לדעת איך לעשות להם REVESE נכון ולחקור נכון.
-
 
 
 

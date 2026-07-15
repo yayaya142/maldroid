@@ -66,7 +66,10 @@ sessions.
 ## Daily use
 
 ```bash
-maldroid
+maldroid                         # choose Web or CLI
+maldroid server                  # modern local Web workspace
+maldroid server --port 8787
+maldroid cli /path/to/investigation
 maldroid new CASE_NAME
 maldroid /path/to/investigation
 maldroid /path/to/index.android.bundle --profile react-native
@@ -75,6 +78,12 @@ maldroid /path/to/artifact --mcp-port 8765
 maldroid resume
 maldroid cases
 ```
+
+The Web workspace provides project conversations, multilingual chat with per-message RTL support,
+a VS Code-style bounded file explorer and preview, live tool activity, durable research views,
+settings, reports, and external MCP connector management. It stays local on `127.0.0.1`, requires
+a random per-run browser token, and uses the same case runtime and path policy as the CLI. See
+[`docs/WEB.md`](docs/WEB.md).
 
 Opening an existing directory creates only `.maldroid/` initially. Opening a file creates a
 managed case and registers a symlink by default. No analysis starts merely because an artifact is

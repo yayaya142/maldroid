@@ -1,5 +1,16 @@
 # Architecture
 
+## Shared product surfaces
+
+`WorkspaceRuntime` owns the complete case execution stack: llama.cpp process, local MCP server,
+official MCP client, dispatcher context, external MCP runtime, session, and agent. `InteractiveChat`
+and the loopback Web application are presentation adapters over that runtime. See ADR 0013.
+
+The Web server is a lightweight control plane until a case is activated. Its three-pane frontend
+uses authenticated same-origin HTTP/WebSocket endpoints for projects, bounded file inspection,
+research state, actions, settings, and activity. It never receives a direct unrestricted file API.
+A global file lease prevents concurrent CLI/Web model runtimes.
+
 ## Process and trust boundary
 
 ```text

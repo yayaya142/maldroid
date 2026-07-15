@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>MalDroid Workspace</title>
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+  <div id="app" class="app-shell">
+    <aside class="sidebar" aria-label="Projects">
+      <div class="brand-row">
+        <div class="brand-mark">M</div>
+        <div><strong>MalDroid</strong><span>Research workspace</span></div>
+        <button class="icon-button sidebar-toggle" data-action="toggle-sidebar" aria-label="Collapse sidebar">‹</button>
+      </div>
+      <button class="new-project primary-button" data-action="new-project"><span>＋</span> New investigation</button>
+      <div class="sidebar-label">Investigations</div>
+      <nav id="project-list" class="project-list" aria-live="polite"></nav>
+      <div class="sidebar-footer">
+        <button class="sidebar-button" data-action="settings"><span>⚙</span> Settings</button>
+        <div class="local-badge"><i></i><span>Local only</span><small id="version-label"></small></div>
+      </div>
+    </aside>
+
+    <main class="workspace">
+      <header class="workspace-header">
+        <div class="workspace-title">
+          <button class="icon-button mobile-menu" data-action="toggle-sidebar" aria-label="Open projects">☰</button>
+          <div><h1 id="project-title">MalDroid Workspace</h1><p id="project-path">Select or create an investigation</p></div>
+        </div>
+        <div class="header-actions">
+          <div id="runtime-status" class="status-pill idle"><i></i><span>Model offline</span></div>
+          <button class="secondary-button" data-action="command-palette">⌘ Actions</button>
+          <button class="icon-button" data-action="toggle-inspector" aria-label="Toggle inspector">◫</button>
+        </div>
+      </header>
+
+      <section class="chat-pane">
+        <div id="welcome" class="welcome">
+          <div class="welcome-orbit"><div class="brand-mark large">M</div></div>
+          <h2>Deep Android research, entirely local.</h2>
+          <p>Open an investigation to analyze large React Native and native codebases with durable findings, checkpoints, reports, and MCP tools.</p>
+          <button class="primary-button" data-action="new-project">Start an investigation</button>
+          <div class="feature-grid">
+            <article><span>⌕</span><div><strong>Large-code navigation</strong><p>Bounded search, indexing, and precise file reads.</p></div></article>
+            <article><span>◆</span><div><strong>Durable research</strong><p>Findings and checkpoints survive long sessions.</p></div></article>
+            <article><span>⌁</span><div><strong>MCP connected</strong><p>Use MalDroid and external analysis tools together.</p></div></article>
+          </div>
+        </div>
+        <div id="messages" class="messages hidden" aria-live="polite"></div>
+        <div id="turn-progress" class="turn-progress hidden">
+          <div class="progress-spinner"></div><div><strong id="progress-title">Thinking</strong><span id="progress-detail">Preparing the investigation…</span></div>
+        </div>
+        <div class="composer-wrap">
+          <div id="composer-disabled" class="composer-disabled">Open an investigation to begin</div>
+          <div class="composer" id="composer">
+            <textarea id="message-input" rows="1" dir="auto" placeholder="Ask MalDroid to investigate…" aria-label="Message"></textarea>
+            <div class="composer-footer">
+              <div class="composer-options">
+                <button id="profile-button" class="text-button" data-action="profile">Auto profile⌄</button>
+                <button id="reasoning-button" class="text-button" data-action="reasoning">Medium reasoning⌄</button>
+              </div>
+              <div class="composer-send"><span>Enter to send · Shift+Enter for newline</span><button id="send-button" aria-label="Send message">↑</button></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <aside class="inspector" aria-label="Investigation inspector">
+      <div class="inspector-tabs" role="tablist">
+        <button class="active" data-tab="files">Files</button>
+        <button data-tab="research">Research</button>
+        <button data-tab="activity">Activity <b id="activity-count">0</b></button>
+      </div>
+      <section id="panel-files" class="inspector-panel active">
+        <div class="panel-toolbar"><span>CASE EXPLORER</span><button class="icon-button" data-action="refresh-files" title="Refresh files">↻</button></div>
+        <div id="file-tree" class="file-tree empty-state">No project selected.</div>
+        <div id="file-preview" class="file-preview hidden">
+          <div class="preview-header"><div><strong id="preview-name"></strong><span id="preview-meta"></span></div><button class="icon-button" data-action="close-preview">×</button></div>
+          <pre id="preview-content" dir="ltr"></pre>
+        </div>
+      </section>
+      <section id="panel-research" class="inspector-panel">
+        <div class="research-stats" id="research-stats"></div>
+        <div class="quick-actions">
+          <button data-command="inventory"><span>▦</span> Inventory</button>
+          <button data-command="triage"><span>⌕</span> Behavior triage</button>
+          <button data-command="indicators"><span>◎</span> Indicators</button>
+          <button data-command="report"><span>▤</span> Build report</button>
+        </div>
+        <div id="research-content" class="research-content empty-state">Findings, TODOs, and checkpoints will appear here.</div>
+      </section>
+      <section id="panel-activity" class="inspector-panel">
+        <div class="panel-toolbar"><span>LIVE ACTIVITY</span><button class="text-button" data-action="clear-activity">Clear</button></div>
+        <div id="activity-list" class="activity-list empty-state">Tool calls and model progress will appear here.</div>
+      </section>
+      <footer class="context-footer">
+        <div><span>Context</span><strong id="context-label">0%</strong></div>
+        <div class="context-meter"><i id="context-meter"></i></div>
+        <div class="footer-connections"><span id="tool-count">No active tools</span><span id="mcp-state">MCP offline</span></div>
+      </footer>
+    </aside>
+  </div>
+
+  <dialog id="project-dialog" class="modal">
+    <form id="project-form" method="dialog">
+      <div class="modal-heading"><div><h2>New investigation</h2><p>Create a durable local project for one research objective.</p></div><button class="icon-button" value="cancel">×</button></div>
+      <label>Investigation name<input name="name" required maxlength="128" placeholder="Example: Banking app behavior review"></label>
+      <label>Existing folder or artifact <span>Optional</span><input name="source_path" placeholder="/absolute/path/to/decompiled-app"></label>
+      <div class="field-row">
+        <label>Analysis profile<select name="profile"><option value="generic">Auto detect</option><option value="react-native">React Native</option><option value="native">Native / Ghidra</option></select></label>
+        <label>Evidence mode<select name="evidence_mode"><option value="symlink">Symlink</option><option value="copy">Copy</option></select></label>
+      </div>
+      <div class="modal-note">MalDroid performs static analysis only. It never executes evidence.</div>
+      <div id="project-error" class="form-error"></div>
+      <div class="modal-actions"><button class="secondary-button" value="cancel">Cancel</button><button id="create-project-button" class="primary-button" value="default">Create and open</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="settings-dialog" class="modal settings-modal">
+    <form id="settings-form" method="dialog">
+      <div class="modal-heading"><div><h2>Settings</h2><p>Local model, workspace, context, and MCP configuration.</p></div><button class="icon-button" value="cancel">×</button></div>
+      <div class="settings-layout">
+        <nav><button type="button" class="active" data-settings-tab="model">Model</button><button type="button" data-settings-tab="workspace">Workspace</button><button type="button" data-settings-tab="research">Research</button><button type="button" data-settings-tab="connectors">MCP connectors</button></nav>
+        <div class="settings-panels">
+          <section data-settings-panel="model" class="active">
+            <label>llama-server binary<input data-key="llama.binary"></label>
+            <label>GGUF model path<input data-key="llama.model"></label>
+            <div class="field-row"><label>Context size<input type="number" data-key="general.default_context_size"></label><label>Response tokens<input type="number" data-key="llama.max_response_tokens"></label></div>
+            <div class="field-row"><label>GPU layers<input type="number" data-key="llama.gpu_layers"></label><label>Batch size<input type="number" data-key="llama.batch_size"></label></div>
+            <label>Default reasoning<select data-key="llama.reasoning_level"><option>off</option><option>low</option><option>medium</option><option>high</option><option>unlimited</option></select></label>
+          </section>
+          <section data-settings-panel="workspace">
+            <label>Cases directory<input data-key="general.cases_directory"></label>
+            <div class="field-row"><label>Web port<input type="number" data-key="web.port"></label><label>Model port<input type="number" data-key="llama.preferred_port"></label></div>
+            <label class="check-label"><input type="checkbox" data-key="web.open_browser"> Open browser when the Web workspace starts</label>
+          </section>
+          <section data-settings-panel="research">
+            <div class="field-row"><label>Max search results<input type="number" data-key="limits.max_search_results"></label><label>Max file-tree entries<input type="number" data-key="limits.max_file_tree_entries"></label></div>
+            <div class="field-row"><label>Max read lines<input type="number" data-key="limits.max_read_lines"></label><label>Tool rounds per phase<input type="number" data-key="limits.max_tool_rounds"></label></div>
+            <label>Auto-compact ratio<input type="number" step="0.01" data-key="limits.auto_compact_ratio"></label>
+          </section>
+          <section data-settings-panel="connectors">
+            <div id="connector-list" class="connector-list"></div>
+            <div class="connector-add"><input id="connector-url" type="url" placeholder="http://127.0.0.1:9000/mcp"><input id="connector-name" placeholder="Nickname"><button type="button" class="secondary-button" data-action="add-connector">Add MCP</button></div>
+          </section>
+        </div>
+      </div>
+      <div id="settings-error" class="form-error"></div>
+      <div class="modal-actions"><span class="save-hint">Stop the active model before changing persistent settings.</span><button class="secondary-button" value="cancel">Cancel</button><button id="save-settings-button" class="primary-button" value="default">Save settings</button></div>
+    </form>
+  </dialog>
+
+  <div id="menu" class="floating-menu hidden"></div>
+  <div id="toast-region" class="toast-region" aria-live="polite"></div>
+  <script type="module" src="/assets/app.js"></script>
+</body>
+</html>

@@ -120,6 +120,13 @@ class McpConfig(BaseModel):
     startup_timeout_seconds: int = Field(default=10, ge=1, le=60)
 
 
+class WebConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    host: Literal["127.0.0.1"] = "127.0.0.1"
+    port: int = Field(default=8787, ge=1, le=65535)
+    open_browser: bool = True
+
+
 class AppConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     general: GeneralConfig = Field(default_factory=GeneralConfig)
@@ -127,6 +134,7 @@ class AppConfig(BaseModel):
     limits: LimitsConfig = Field(default_factory=LimitsConfig)
     external_tools: ExternalToolsConfig = Field(default_factory=ExternalToolsConfig)
     mcp: McpConfig = Field(default_factory=McpConfig)
+    web: WebConfig = Field(default_factory=WebConfig)
 
     @model_validator(mode="after")
     def validate_context_budget(self) -> AppConfig:
@@ -241,6 +249,7 @@ def _validate_config_key(config: AppConfig, dotted_key: str) -> tuple[str, str]:
         "limits",
         "external_tools",
         "mcp",
+        "web",
     }:
         raise ConfigurationError("Configuration keys must use section.key form.")
     data = config.model_dump()

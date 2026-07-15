@@ -13,6 +13,11 @@ maldroid cases --json  # automation-friendly case inventory
 
 ## Interactive terminal workspace
 
+Running `maldroid` without arguments now asks for `1` Web or `2` CLI. Use `maldroid server` or
+`maldroid cli [PATH]` to select a surface directly. A global runtime lease prevents Web and CLI
+from loading the model at the same time. Complete Web usage is documented in
+[`WEB.md`](WEB.md).
+
 A normal case opens a full-screen-aware terminal prompt without taking over the alternate screen.
 The bottom toolbar always shows the active profile, estimated context usage and tokens remaining,
 finding count, open TODO count, and durable note count. Context estimates include current messages
@@ -172,8 +177,9 @@ maldroid --install-completion
 maldroid --show-completion
 ```
 
-Both `-h` and `--help` work. `maldroid help` accepts nested command names. With no arguments,
-MalDroid preserves the daily workflow and opens a new case.
+Both `-h` and `--help` work. `maldroid help` accepts nested command names. With no arguments in an
+interactive terminal, MalDroid displays the Web/CLI selector. Non-TTY invocation displays help so
+scripts never block on a prompt.
 
 ## Daily workflow
 

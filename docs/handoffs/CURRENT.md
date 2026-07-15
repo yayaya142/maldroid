@@ -1,15 +1,33 @@
 # Current Handoff
 
-Task: `PLATFORM-010`
+Task: `WEB-001`
 Next task: `PLATFORM-011`
 
-Implementation commits: `259226e`, `6e4e744`
+Implementation commit: pending
 
 ## Outcome
 
 The owner reprioritized MalDroid around real multi-hour research usability. The local implementation
 now provides semantic research memory, bounded long-run context, a faster interactive research CLI,
 deep React Native and Native/Ghidra guidance, and focused large-evidence tools.
+
+The repository now also has a modern local Web product surface. `maldroid server` serves an English
+three-pane workspace with investigation conversations, multilingual/RTL chat, bounded files,
+research state, activity, settings, reports, and MCP connectors. Bare `maldroid` asks for Web or
+CLI; `maldroid cli` selects the terminal explicitly.
+
+## Web runtime and security
+
+- `WorkspaceRuntime` is shared by CLI and Web and owns llama.cpp, local MCP, official MCP client,
+  external MCP, session, and agent lifecycle.
+- `RuntimeLease` prevents simultaneous CLI/Web workloads and remains held until model shutdown.
+- Web binds only to `127.0.0.1`, starts without loading the model, and keeps one active case runtime.
+- A random token is exchanged for an HTTP-only SameSite cookie. API/WS auth, Trusted Host checks,
+  CSP, no-store, frame blocking, and content-type protections are enabled.
+- File tree and preview calls use the dispatcher and `PathPolicy`; evidence execution remains
+  forbidden. Agent events stream to Activity without exposing hidden reasoning.
+- ADR 0013 documents the shared-runtime and local-Web security decisions. `docs/WEB.md` is the
+  operating guide.
 
 ## Implemented state and memory
 
@@ -60,6 +78,28 @@ deep React Native and Native/Ghidra guidance, and focused large-evidence tools.
 
 ## Verification
 
+Web-focused contracts:
+
+```text
+./scripts/dev test tests/test_web_workspace.py
+```
+
+Result: 7 passed. Coverage includes per-run token rejection, project creation/listing, Unicode and
+bounded file preview through path policy, authenticated WebSocket bootstrap, global runtime lease,
+loopback-only config validation, explicit production WebSocket packaging, and hidden-reasoning
+exclusion from timeline output.
+
+Real local browser smoke test:
+
+```text
+./scripts/dev maldroid server --port 8787 --no-open
+```
+
+Result: the packaged 1280×720 three-pane workspace and Settings modal rendered correctly; API auth
+completed, the real Uvicorn WebSocket connected without server warnings, browser logs contained no
+application errors, and the model remained offline until case activation. This test exposed and
+fixed the missing explicit `websockets` runtime dependency.
+
 Startup baseline:
 
 ```text
@@ -78,7 +118,7 @@ Focused and full tests:
 ./scripts/dev test
 ```
 
-Results: all focused suites passed; full suite passed with `106 passed`.
+Results: all focused suites passed; the current full suite passed with `115 passed`.
 
 Release gate:
 
@@ -86,9 +126,10 @@ Release gate:
 ./scripts/dev release-check
 ```
 
-The final run passed Ruff formatting/lint, mypy for 37 source files, 106 tests with 72% coverage,
-project hygiene, installer dry-run, wheel build, and archive verification. The wheel is
-`dist/maldroid-0.1.0-py3-none-any.whl` (121,025 bytes after the macOS fallback fix).
+The current final run passed Ruff formatting/lint, mypy for 42 source files, 115 tests with 70%
+coverage, project hygiene, installer dry-run, wheel build, and archive verification. The wheel is
+`dist/maldroid-0.1.0-py3-none-any.whl` (147,989 bytes) and contains the Web server plus all three
+static assets. `node --check src/maldroid/web/static/app.js` also passed.
 
 GitHub Actions run `29430555735` passed Kali and exposed one macOS-only failure: the new behavior
 search required ripgrep, which the macOS image does not install. Commit `6e4e744` added and tested
@@ -99,6 +140,9 @@ including lint, formatting, all 106 tests, and installer dry-run.
 
 - No real Gemma 4, llama-server, macOS Terminal, or Ghidra MCP long-run acceptance occurred in this
   Linux workspace.
+- Web UI activation, Hebrew model output, real project switching, and Ghidra MCP execution still
+  require the owner's configured macOS model and tools. The local browser smoke test deliberately
+  kept the missing Linux model offline.
 - Canonical state still lacks revision/idempotency/multiprocess transaction semantics from
   `REL-011..020`; schema v2 preserves the existing rollback model.
 - Automatic semantic fallback cannot manufacture research meaning. When the model supplies no
@@ -113,5 +157,6 @@ including lint, formatting, all 106 tests, and installer dry-run.
 git diff --check && git status --short
 ```
 
-Install current `main` on the owner's macOS host and begin `PLATFORM-011` with a real one-hour React
-Native investigation followed by a Native/Ghidra MCP investigation.
+Commit and push `WEB-001`, confirm macOS/Kali CI, then install current `main` on the owner's macOS
+host and begin `PLATFORM-011` with Web/CLI parity acceptance followed by the real one-hour React
+Native and Native/Ghidra MCP investigations.

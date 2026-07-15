@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Added a modern local Web workspace with investigation conversations, streaming chat/activity,
+  bounded file explorer and preview, durable research inspector, direct triage/report actions,
+  settings, external MCP management, and per-message RTL rendering.
+- Added `maldroid server`, `maldroid cli`, and an interactive Web/CLI selector for bare `maldroid`.
+- Added shared `WorkspaceRuntime` lifecycle and a cross-process lease that prevents simultaneous
+  CLI/Web model workloads.
+- Added random browser-token authentication, Trusted Host validation, restrictive CSP/security
+  headers, and fixed loopback-only Web configuration.
+
 ## 0.1.0 - Unreleased
 
 - Rebuilt long-investigation memory around schema-v2 typed Checkpoints, meaningful research Notes,

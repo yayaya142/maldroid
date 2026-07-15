@@ -209,13 +209,15 @@ def test_first_time_config_wizard_n_enables_api_key(
 @pytest.mark.parametrize(
     ("arguments", "inserted"),
     [
-        ([], "new"),
+        ([], None),
         (["/tmp/case"], "open"),
         (["-c", "8192"], "new"),
         (["doctor"], None),
         (["mcp", "--help"], None),
         (["help", "config"], None),
         (["--version"], None),
+        (["server", "--no-open"], None),
+        (["cli"], None),
     ],
 )
 def test_entrypoint_rewrites_daily_syntax(

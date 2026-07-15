@@ -4,6 +4,14 @@ Last updated: 2026-07-15
 
 ## Completed
 
+- A production-oriented local Web workspace now mirrors the terminal's core research surface:
+  project conversations, multilingual chat and RTL messages, bounded Files, live Activity,
+  Findings/TODO/Checkpoint views, direct triage/report actions, settings, and external MCP.
+- CLI and Web now share one `WorkspaceRuntime`; a global lease prevents concurrent model loads,
+  Web starts without loading the model, and switching cases keeps at most one active runtime.
+- The Web API is fixed to loopback and protected by a per-run browser token, HTTP-only SameSite
+  cookie, Trusted Host checks, CSP, no-store responses, and shared `PathPolicy` file access.
+
 - Long-investigation platform upgrade: state schema v2 separates typed semantic Checkpoints from
   research Notes, rejects operational tool/error dumps from model Notes, migrates v1 cases, adds
   complete paginated MCP readback, and deterministically builds `reports/RESEARCH_REPORT.md`.
@@ -131,12 +139,13 @@ Last updated: 2026-07-15
 
 ## Current test status
 
-The local 106-test suite and release gate pass. GitHub Actions run `29430877237` passes on macOS 26
-and Kali, including lint, formatting, the full suite, and installer dry-run. See
+The local 115-test suite and release gate pass. GitHub Actions still needs to be run for the Web
+workspace commit. Previous GitHub Actions run `29430877237` passes on macOS 26 and Kali, including
+lint, formatting, the full suite, and installer dry-run. See
 `docs/handoffs/CURRENT.md` for exact commands and environment-gated acceptance work.
 
 ## Immediate task
 
-Install the platform-upgrade commit on the owner's macOS host and run one long React Native case and
-one Native/Ghidra MCP case. Verify semantic checkpoints, report quality, context receipts, direct
-triage commands, and the existing `MalDroid_save_finding` fix against real model calls.
+Run Web/CLI parity acceptance on the owner's macOS host, then execute one long React Native case and
+one Native/Ghidra MCP case. Verify RTL chat, project switching, file preview, semantic checkpoints,
+report quality, context receipts, direct triage commands, and MCP connectors against real calls.

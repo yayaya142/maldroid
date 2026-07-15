@@ -17,7 +17,6 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from maldroid.agent import MalDroidAgent
 from maldroid.case_manager import Case, CaseManager
 from maldroid.config import (
     AppConfig,
@@ -35,17 +34,14 @@ from maldroid.exceptions import MalDroidError
 from maldroid.external_mcp import (
     ExternalMcpClient,
     ExternalMcpRegistryManager,
-    ExternalMcpRuntime,
     concise_mcp_error,
     external_tool_alias,
 )
-from maldroid.investigation import InvestigationManager
 from maldroid.knowledge_manager import KnowledgeManager
 from maldroid.llama_adapter import build_server_command, resolve_binary
 from maldroid.llama_client import LocalLlamaClient
-from maldroid.logging_config import configure_case_logging
-from maldroid.mcp_server import MalDroidMcpServer, McpToolClient
-from maldroid.paths import PathPolicy, data_directory, expand_path
+from maldroid.mcp_server import MalDroidMcpServer
+from maldroid.paths import data_directory, expand_path
 from maldroid.process_manager import (
     LlamaServerProcess,
     ShutdownRequested,
@@ -53,10 +49,9 @@ from maldroid.process_manager import (
 )
 from maldroid.profile_detection import detect_profiles
 from maldroid.profiles import PROFILES, get_profile
-from maldroid.session_manager import SessionManager
-from maldroid.tools.dispatcher import ToolDispatcher
-from maldroid.tools.models import ToolContext
-from maldroid.tools.registry import ToolRegistry, build_registry
+from maldroid.runtime import WorkspaceRuntime, build_tool_runtime
+from maldroid.runtime_lock import RuntimeLease
+from maldroid.tools.registry import build_registry
 from maldroid.ui import InteractiveChat
 
 app = typer.Typer(
@@ -68,6 +63,8 @@ app = typer.Typer(
     ),
     rich_markup_mode="rich",
     context_settings={"help_option_names": ["-h", "--help"]},
+    invoke_without_command=True,
+    no_args_is_help=False,
 )
 config_app = typer.Typer(
     help="Inspect and manage validated local configuration.",
@@ -124,6 +121,9 @@ CONFIG_DESCRIPTIONS = {
     "mcp.host": "Fixed loopback host for the Python MCP server.",
     "mcp.preferred_port": "Fixed MCP port; defaults to 8765 and never falls back.",
     "mcp.startup_timeout_seconds": "Maximum time to wait for MCP readiness.",
+    "web.host": "Fixed loopback host for the local MalDroid workspace.",
+    "web.port": "Port used by the local MalDroid workspace.",
+    "web.open_browser": "Open the Web workspace in the default browser at startup.",
 }
 
 
@@ -145,6 +145,7 @@ def _version_callback(value: bool) -> None:
 
 @app.callback()
 def main(
+    ctx: typer.Context,
     version: bool = typer.Option(
         False,
         "--version",
@@ -153,7 +154,68 @@ def main(
         help="Show the installed MalDroid version and exit.",
     ),
 ) -> None:
-    """Initialize global CLI options."""
+    """Choose the Web workspace or terminal workspace when no mode is supplied."""
+    if ctx.invoked_subcommand is not None or version:
+        return
+    if not sys.stdin.isatty():
+        _console().print(ctx.get_help())
+        return
+    console = _console()
+    console.print(
+        Panel.fit(
+            "[bold]1[/bold]  Web workspace  [dim](recommended)[/dim]\n"
+            "[bold]2[/bold]  CLI workspace",
+            title="How would you like to run MalDroid?",
+            border_style="cyan",
+        )
+    )
+    choice = typer.prompt("Choose 1 or 2", default="1")
+    if choice == "1":
+        from maldroid.web.server import run_web_server
+
+        _run_guarded(lambda: run_web_server(load_config()), False, console)
+    elif choice == "2":
+        _run_guarded(
+            lambda: _launch(None, None, None, None, False, None, None, None, None, False),
+            False,
+            console,
+        )
+    else:
+        raise MalDroidError("Choose 1 for Web or 2 for CLI.")
+
+
+@app.command("server")
+def server_command(
+    port: int | None = typer.Option(None, "--port", min=1, max=65535, help="Local Web port."),
+    no_open: bool = typer.Option(False, "--no-open", help="Do not open the browser automatically."),
+    debug: bool = typer.Option(False, "--debug", help="Show tracebacks for unexpected failures."),
+) -> None:
+    """Start the modern loopback-only Web workspace."""
+    from maldroid.web.server import run_web_server
+
+    _run_guarded(
+        lambda: run_web_server(load_config(), port=port, open_browser=not no_open),
+        debug,
+        _console(),
+    )
+
+
+@app.command("cli")
+def cli_command(
+    path: Path | None = typer.Argument(
+        None, help="Optional existing case, directory, or evidence artifact."
+    ),
+    name: str | None = typer.Option(None, "--name", help="Name for a new investigation."),
+    profile: str | None = typer.Option(None, "--profile", help="Static-analysis profile."),
+    copy: bool = typer.Option(False, "--copy", help="Copy evidence instead of symlinking."),
+    debug: bool = typer.Option(False, "--debug", help="Show tracebacks for unexpected failures."),
+) -> None:
+    """Start the terminal workspace explicitly."""
+    _run_guarded(
+        lambda: _launch(path, name, profile, None, copy, None, None, None, None, False),
+        debug,
+        _console(),
+    )
 
 
 @app.command("help")
@@ -911,41 +973,24 @@ def _run_case(
     auto_profile: bool = True,
 ) -> None:
     console = _console(no_color)
-    logger = configure_case_logging(case.root)
-    server = LlamaServerProcess(config, case.root)
-    mcp_server: MalDroidMcpServer | None = None
-    sessions: SessionManager | None = None
-    agent: MalDroidAgent | None = None
+    runtime = WorkspaceRuntime(
+        config,
+        case,
+        manager,
+        llama_port=port,
+        mcp_port=mcp_port,
+        auto_profile=auto_profile,
+    )
+    lease = RuntimeLease("CLI", {"case": str(case.root)}).acquire()
     try:
         with shutdown_signal_handlers():
-            logger.info("Starting local llama-server")
-            command = server.start(case.state.context_size, port, explicit_port=port is not None)
-            client = LocalLlamaClient(
-                server.base_url,
-                command.api_key,
-                Path(config.llama.model).name,
-                config.llama.temperature,
-                config.llama.max_response_tokens,
-                config.llama.reasoning_level,
-            )
-            registry, local_dispatcher = _build_tool_runtime(config, case, manager)
-            investigation = local_dispatcher.context.investigation
-            mcp_server = MalDroidMcpServer(
-                config,
-                registry,
-                local_dispatcher,
-                model_server_port=command.port,
-            )
-            mcp_endpoint = mcp_server.start(mcp_port)
-            console.print(f"MCP endpoint: {mcp_endpoint}")
-            dispatcher = McpToolClient(
-                mcp_endpoint, timeout_seconds=config.limits.command_timeout_seconds
-            )
-            previous = SessionManager.load_latest_summary(case)
-            sessions = SessionManager(case, manager)
-            external_mcp = ExternalMcpRuntime(config, case, ExternalMcpRegistryManager())
-            for status in external_mcp.refresh():
-                sessions.record("external_mcp_connection", content=status)
+            runtime.start()
+            assert runtime.agent is not None
+            assert runtime.registry is not None
+            assert runtime.dispatcher is not None
+            assert runtime.local_dispatcher is not None
+            console.print(f"MCP endpoint: {runtime.mcp_endpoint}")
+            for status in runtime.external_mcp.statuses if runtime.external_mcp else []:
                 if status["status"] == "connected":
                     console.print(
                         f"External MCP {status['nickname']}: connected ({status['tools']} tools)"
@@ -955,56 +1000,28 @@ def _run_case(
                         f"[yellow]External MCP {status['nickname']}: unavailable; "
                         "continuing without it[/yellow]"
                     )
-            agent = MalDroidAgent(
-                config,
-                case,
-                client,
-                registry,
-                dispatcher,
-                sessions,
-                previous,
-                auto_profile_enabled=auto_profile,
-                external_mcp=external_mcp,
-            )
             chat = InteractiveChat(
                 console,
                 case,
                 manager,
-                investigation,
-                server,
-                agent,
-                registry,
-                dispatcher,
-                mcp_endpoint,
+                runtime.local_dispatcher.context.investigation,
+                runtime.server,
+                runtime.agent,
+                runtime.registry,
+                runtime.dispatcher,
+                runtime.mcp_endpoint,
             )
             chat.run()
-            try:
-                agent.compact()
-            except Exception as exc:
-                sessions.save_summary(case.state.summary or f"Session ended. Summary failed: {exc}")
     except ShutdownRequested as exc:
-        logger.info("Orderly shutdown requested by signal %s", exc.signum)
+        runtime.logger.info("Orderly shutdown requested by signal %s", exc.signum)
     finally:
-        if mcp_server is not None:
-            mcp_server.stop()
-        server.stop()
-        logger.info("Local llama-server stopped")
+        try:
+            runtime.stop()
+        finally:
+            lease.release()
 
 
-def _build_tool_runtime(
-    config: AppConfig, case: Case, manager: CaseManager
-) -> tuple[ToolRegistry, ToolDispatcher]:
-    registry = build_registry()
-    investigation = InvestigationManager(manager)
-    evidence_sources = {item.case_path: item.source_resolved_path for item in case.state.evidence}
-    context = ToolContext(
-        config=config,
-        case=case,
-        case_manager=manager,
-        investigation=investigation,
-        path_policy=PathPolicy(case.root, evidence_sources),
-    )
-    return registry, ToolDispatcher(registry, context)
+_build_tool_runtime = build_tool_runtime
 
 
 def _config_with_overrides(
@@ -1135,6 +1152,8 @@ def entrypoint() -> None:
         "knowledge",
         "mcp",
         "help",
+        "server",
+        "cli",
     }
     arguments = sys.argv[1:]
     global_options = {
@@ -1144,9 +1163,7 @@ def entrypoint() -> None:
         "--help",
         "-h",
     }
-    if not arguments:
-        sys.argv.append("new")
-    elif arguments[0] not in commands and arguments[0] not in global_options:
+    if arguments and arguments[0] not in commands and arguments[0] not in global_options:
         sys.argv.insert(1, "new" if arguments[0].startswith("-") else "open")
     try:
         app()
