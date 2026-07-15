@@ -151,8 +151,8 @@ Last updated: 2026-07-15
 
 ## Current test status
 
-The local 136-test suite and release gate pass with 71% coverage. GitHub Actions run `29434717235`
-passes the repetition-recovery handoff on macOS 26 and Kali, including dependency bootstrap, lint,
+The local 136-test suite and release gate pass with 71% coverage. GitHub Actions run `29436270978`
+passes the Web usability handoff on macOS 26 and Kali, including dependency bootstrap, lint,
 formatting, all tests, coverage, and installer dry-run. See
 `docs/handoffs/CURRENT.md` for exact commands and environment-gated acceptance work.
 
