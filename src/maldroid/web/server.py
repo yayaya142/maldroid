@@ -35,7 +35,7 @@ from maldroid.config import (
 )
 from maldroid.constants import VERSION
 from maldroid.evidence_manager import EvidenceManager
-from maldroid.exceptions import MalDroidError
+from maldroid.exceptions import MalDroidError, TurnCancelledError
 from maldroid.external_mcp import ExternalMcpClient, ExternalMcpRegistryManager
 from maldroid.paths import expand_path
 from maldroid.profiles import PROFILES, get_profile
@@ -87,6 +87,7 @@ class WebWorkspace:
         self.selected_case: Case | None = None
         self._runtime_lock = threading.RLock()
         self._turn_lock = threading.Lock()
+        self._turn_cancel_requested = threading.Event()
         self._event_loop: asyncio.AbstractEventLoop | None = None
         self._event_queue: asyncio.Queue[dict[str, Any]] | None = None
 
@@ -182,6 +183,8 @@ class WebWorkspace:
         if not self._turn_lock.acquire(blocking=False):
             raise MalDroidError("Another model turn is already running.")
         try:
+            if self._turn_cancel_requested.is_set():
+                raise TurnCancelledError("Turn stopped by user.")
             runtime = self._require_runtime()
             assert runtime.agent is not None
             if runtime.agent.should_auto_compact():
@@ -191,7 +194,24 @@ class WebWorkspace:
                 runtime.agent.compact()
             return response
         finally:
+            self._turn_cancel_requested.clear()
+            current_runtime = self.runtime
+            if current_runtime is not None and current_runtime.agent is not None:
+                current_runtime.agent.finish_turn()
             self._turn_lock.release()
+
+    def prepare_turn(self) -> None:
+        """Reset the Web cancellation signal before scheduling a new turn."""
+        if self._turn_lock.locked():
+            raise MalDroidError("Another model turn is already running.")
+        self._turn_cancel_requested.clear()
+
+    def cancel_turn(self) -> None:
+        """Request cancellation without stopping the shared model runtime."""
+        self._turn_cancel_requested.set()
+        runtime = self.runtime
+        if runtime is not None and runtime.agent is not None:
+            runtime.agent.cancel_turn()
 
     def command(self, action: str, payload: dict[str, Any]) -> dict[str, Any]:
         runtime = self._require_runtime()
@@ -366,6 +386,7 @@ class WebWorkspace:
             "compaction",
             "phase_checkpoint",
             "automatic_checkpoint",
+            "turn_cancelled",
         }
         output: list[dict[str, Any]] = []
         for item in events:
@@ -617,15 +638,18 @@ class _WorkspaceSocket(WebSocketEndpoint):
                 text = str(data.get("content") or "").strip()
                 if not text:
                     raise MalDroidError("Message cannot be empty.")
+                task = websocket.scope.get("turn_task")
+                if isinstance(task, asyncio.Task) and not task.done():
+                    raise MalDroidError("Another model turn is already running.")
+                self.workspace.prepare_turn()
                 await websocket.send_json({"type": "turn_start", "content": text})
-                response = await asyncio.to_thread(self.workspace.respond, text)
-                await websocket.send_json(
-                    {
-                        "type": "assistant",
-                        "content": response,
-                        "workspace": self.workspace.snapshot(),
-                    }
-                )
+                websocket.scope["turn_task"] = asyncio.create_task(self._run_turn(websocket, text))
+            elif kind == "stop":
+                task = websocket.scope.get("turn_task")
+                if not isinstance(task, asyncio.Task) or task.done():
+                    raise MalDroidError("No model turn is currently running.")
+                await websocket.send_json({"type": "turn_stopping"})
+                self.workspace.cancel_turn()
             elif kind == "activate":
                 await websocket.send_json({"type": "runtime_start", "case_id": data.get("case_id")})
                 result = await asyncio.to_thread(self.workspace.activate, str(data["case_id"]))
@@ -635,7 +659,31 @@ class _WorkspaceSocket(WebSocketEndpoint):
         except Exception as exc:
             await websocket.send_json({"type": "error", "error": str(exc)})
 
+    async def _run_turn(self, websocket: WebSocket, text: str) -> None:
+        task = asyncio.current_task()
+        try:
+            response = await asyncio.to_thread(self.workspace.respond, text)
+            await websocket.send_json(
+                {
+                    "type": "assistant",
+                    "content": response,
+                    "workspace": self.workspace.snapshot(),
+                }
+            )
+        except TurnCancelledError:
+            await websocket.send_json(
+                {"type": "turn_stopped", "workspace": self.workspace.snapshot()}
+            )
+        except Exception as exc:
+            await websocket.send_json({"type": "error", "error": str(exc)})
+        finally:
+            if websocket.scope.get("turn_task") is task:
+                websocket.scope["turn_task"] = None
+
     async def on_disconnect(self, websocket: WebSocket, close_code: int) -> None:
+        turn = websocket.scope.get("turn_task")
+        if isinstance(turn, asyncio.Task) and not turn.done():
+            self.workspace.cancel_turn()
         queue = websocket.scope.get("event_queue")
         if isinstance(queue, asyncio.Queue):
             self.workspace.unbind_events(queue)

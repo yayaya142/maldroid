@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added a Web Live Work Stop control with real turn cancellation, active stream closure, safe-boundary
+  tool handling, preserved durable research state, and no llama-server restart.
 - Added a central Web Live Work surface with elapsed time, phase/tool/token telemetry, current
   operation, and a bounded recent-operation timeline while keeping hidden reasoning private.
 

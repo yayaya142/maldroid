@@ -38,6 +38,10 @@ pages. There is no non-loopback option.
 - While the runtime starts or the model works, Chat shows a Live Work panel with elapsed time,
   research phase, tool-call count, approximate generated/context tokens, the current operation,
   and the latest three operational steps. It never renders private reasoning.
+- During an active model turn, **Stop** closes the current generation stream and returns control to
+  Chat without unloading llama-server. Partial generation is discarded; completed tools and durable
+  research records remain available. If a synchronous tool is already running, the panel shows
+  `Stopping` until that operation reaches its safe return boundary.
 - The Files tab provides name/path filtering, collapsible directories, type-aware icons, item
   counts, selected-file state, keyboard navigation, and bounded previews with line numbers.
 

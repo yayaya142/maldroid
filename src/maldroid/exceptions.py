@@ -5,6 +5,10 @@ class MalDroidError(Exception):
     """Base class for expected MalDroid failures."""
 
 
+class TurnCancelledError(MalDroidError):
+    """Raised when the researcher stops the active model turn."""
+
+
 class ConfigurationError(MalDroidError):
     """Raised when configuration is missing or unsafe."""
 

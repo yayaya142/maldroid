@@ -54,7 +54,10 @@
         <section id="turn-progress" class="turn-progress hidden" aria-label="Live model work">
           <div class="live-work-header">
             <div class="live-work-label"><i></i><span>Live work</span></div>
-            <time id="work-elapsed">0:00</time>
+            <div class="live-work-actions">
+              <time id="work-elapsed">0:00</time>
+              <button id="stop-turn" class="stop-turn hidden" type="button" data-action="stop-turn" aria-label="Stop the active model turn"><span>■</span> Stop</button>
+            </div>
           </div>
           <div class="live-work-current" aria-live="polite">
             <div class="progress-spinner"></div>

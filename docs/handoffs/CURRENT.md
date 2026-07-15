@@ -1,9 +1,9 @@
 # Current Handoff
 
-Task: `WEB-004`
+Task: `WEB-005`
 Next task: `PLATFORM-011`
 
-Implementation commit: `7646b5b`
+Implementation commit: pending
 
 ## Outcome
 
@@ -19,6 +19,21 @@ CLI; `maldroid cli` selects the terminal explicitly.
 ## Web usability follow-up
 
 ### Live work transparency
+
+#### Stop active turn
+
+- Live Work now exposes an English `Stop` control only while a model turn is cancellable. Pressing
+  it immediately changes the panel to `Stopping` and disables repeated requests.
+- WebSocket turns run as background tasks, allowing the same connection to receive Stop while the
+  synchronous agent works. The controller closes the active llama.cpp stream, discards partial
+  output, records `turn_cancelled`, and restores the ready composer without unloading the model.
+- Findings, TODOs, Notes, Checkpoints, and completed tool results remain intact. An already-running
+  synchronous tool completes before the next cancellation check; the UI states this safe-boundary
+  behavior instead of pretending it was killed.
+- ADR 0016 documents the concurrency, persistence, and tool-boundary decision.
+- Browser verification covered the control's accessible label and layout at 1280×720 and 390×844
+  with no horizontal overflow or MalDroid console errors. Real llama.cpp timing remains part of
+  `PLATFORM-011` on the owner's configured host.
 
 - Added a central Live Work surface above the composer for runtime startup and active model turns.
   It shows elapsed time, research phase, tool-call count, approximate generated/context tokens,
@@ -178,10 +193,11 @@ Web-focused contracts:
 ./scripts/dev test tests/test_web_workspace.py
 ```
 
-Result: 10 passed. Coverage includes per-run token rejection, project creation/listing, Unicode and
+Result: 11 passed. Coverage includes per-run token rejection, project creation/listing, Unicode and
 bounded file preview through path policy, authenticated WebSocket bootstrap, global runtime lease,
 loopback-only config validation, explicit production WebSocket packaging, hidden-reasoning
-exclusion from timeline output, and the Live Work telemetry/privacy contract.
+exclusion from timeline output, the Live Work telemetry/privacy contract, and real concurrent Stop
+delivery while a worker turn is active.
 
 Real local browser smoke test:
 
@@ -210,13 +226,17 @@ Focused and full tests:
 ./scripts/dev test tests/test_large_react_native.py tests/test_framework_profiles.py tests/test_triage_tools.py
 ./scripts/dev test tests/test_ui.py tests/test_triage_tools.py
 ./scripts/dev test tests/test_web_workspace.py tests/test_ui.py
+./scripts/dev test tests/test_llama_client.py tests/test_tools_agent.py
 ./scripts/dev test
 ```
 
 Results: all focused suites passed. Repetition-specific coverage includes Hebrew words, phrases,
 Unicode character runs, normal prose/code/JSON false-positive fixtures, disabled behavior, stream
 closure, fresh-session continuation, objective carry-over, and bounded exhaustion. The current full
-suite passed with `137 passed`; the focused Web/UI suite passed with `17 passed`.
+suite passed with `140 passed`; the focused Web/UI suite passed with `18 passed`, and the focused
+model-stream/agent suite passed with `48 passed`. Cancellation coverage closes an active stream,
+discards its response, records the stopped objective, preserves durable state, and returns the
+WebSocket to a ready state.
 
 Release gate:
 
@@ -224,10 +244,10 @@ Release gate:
 ./scripts/dev release-check
 ```
 
-The current final run passed Ruff formatting/lint, mypy for 43 source files, 137 tests with 71%
+The current final run passed Ruff formatting/lint, mypy for 43 source files, 140 tests with 72%
 coverage, project hygiene, installer dry-run, wheel build, and archive verification. The wheel is
-`dist/maldroid-0.1.0-py3-none-any.whl` (156,482 bytes, SHA-256
-`1017d14db278e47fa93f68fad021a79ee77a723450e37544ae1ac8d2f9bf680a`) and contains the updated
+`dist/maldroid-0.1.0-py3-none-any.whl` (158,106 bytes, SHA-256
+`093170ab18d9383d74a509544da46c648bc225435279c994d5cb5ef0835924e7`) and contains the updated
 composer, Live Work telemetry, theme, Files explorer, repetition guard, updater, Web server, and all
 three static assets.
 `node --check src/maldroid/web/static/app.js` also passed.

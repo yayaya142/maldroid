@@ -109,6 +109,10 @@ During long turns, a central Live Work panel confirms that the local model is ac
 time, phase, tool count, approximate token telemetry, and recent operational steps. It deliberately
 does not expose private model reasoning.
 
+Use **Stop** in Live Work to cancel the active turn without restarting llama-server. MalDroid drops
+partial model output while retaining completed tool results and durable research records. A tool
+already in progress finishes its current safe operation before the turn closes.
+
 Opening an existing directory creates only `.maldroid/` initially. Opening a file creates a
 managed case and registers a symlink by default. No analysis starts merely because an artifact is
 detected.

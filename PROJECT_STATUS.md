@@ -4,6 +4,10 @@ Last updated: 2026-07-15
 
 ## Completed
 
+- Web Live Work now includes a Stop control for active model turns. The WebSocket remains responsive,
+  the active generation stream is closed, partial output is discarded, and the workspace returns
+  to chat without unloading the model. Durable state and completed tool results are preserved;
+  synchronous tools stop at their next safe boundary.
 - Web Chat now shows a responsive Live Work surface throughout runtime startup and model turns:
   elapsed time, research phase, tool count, approximate generated/context tokens, current action,
   and the latest three operational events. It intentionally excludes private reasoning and raw
@@ -160,9 +164,8 @@ Last updated: 2026-07-15
 
 ## Current test status
 
-The local 136-test suite and release gate pass with 71% coverage. GitHub Actions run `29438273312`
-passes the responsive Web handoff on macOS 26 and Kali, including dependency bootstrap, lint,
-formatting, all tests, coverage, and installer dry-run. See
+The local 140-test suite and release gate pass with 72% coverage. The latest completed cross-platform
+run covers `WEB-004`; `WEB-005` cancellation CI is recorded in the handoff after its push. See
 `docs/handoffs/CURRENT.md` for exact commands and environment-gated acceptance work.
 
 ## Immediate task

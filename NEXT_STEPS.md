@@ -20,10 +20,15 @@ surface with elapsed time, phase/tool/token telemetry, current operation, and a 
 timeline without exposing hidden reasoning. Physical active-model acceptance remains in
 `PLATFORM-011`.
 
+Completed out of sequence by explicit owner reprioritization: `WEB-005` adds a responsive Stop
+control to Live Work, keeps the WebSocket responsive during turns, closes active model streams, and
+preserves durable state plus completed tool results at safe cancellation boundaries. Physical
+active-model acceptance remains in `PLATFORM-011`.
+
 1. `PLATFORM-011` — Install the long-investigation and Web-workspace upgrade on the owner's macOS
    host. Verify `maldroid` mode selection, `maldroid server`, exclusive CLI/Web locking, project
-   creation/switching, Hebrew input/output RTL, settings, bounded file preview, Live Work telemetry,
-   live activity,
+   creation/switching, Hebrew input/output RTL, settings, bounded file preview, Live Work telemetry
+   and mid-generation Stop behavior, live activity,
    reports, external Ghidra MCP, and shutdown. From the installed version, run `maldroid update`,
    verify the reported commit and absence of a retained clone, then continue the long-run tests. Run a minimum
    one-hour React Native investigation and one Native/Ghidra MCP investigation. Record context

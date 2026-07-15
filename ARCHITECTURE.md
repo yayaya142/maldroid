@@ -28,6 +28,12 @@ phase, tool count, and token estimates are presentation metrics rather than dura
 The surface describes operations and outcomes only. Hidden reasoning and raw evidence payloads
 remain outside the DOM.
 
+Web model turns run as asynchronous WebSocket tasks so the same authenticated connection can accept
+a Stop request while the synchronous controller is working. Cancellation closes the current model
+stream and is checked at every model/tool boundary. Partial generation is discarded; durable state
+and completed tool results remain available, and llama-server stays loaded. An already-running
+synchronous tool finishes before cancellation is acknowledged as complete. See ADR 0016.
+
 ## Update lifecycle
 
 The explicit `maldroid update` maintenance path is separate from investigation execution. It clones

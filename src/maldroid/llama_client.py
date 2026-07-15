@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import re
+import threading
 from collections.abc import Callable, Iterable
+from contextlib import suppress
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
 
 from openai import OpenAI
+
+from maldroid.exceptions import TurnCancelledError
 
 ReasoningLevel = Literal["off", "low", "medium", "high", "unlimited"]
 ModelEventHandler = Callable[[str, dict[str, Any]], None]
@@ -126,6 +130,23 @@ class LocalLlamaClient:
         self.reasoning_level = reasoning_level
         self.repetition_recovery_enabled = repetition_recovery_enabled
         self.event_handler = event_handler
+        self._cancel_event = threading.Event()
+        self._response_lock = threading.Lock()
+        self._active_response: Any | None = None
+
+    def reset_cancellation(self) -> None:
+        """Prepare the client for a new user turn."""
+        self._cancel_event.clear()
+
+    def cancel_current(self) -> None:
+        """Interrupt the active local response stream when possible."""
+        self._cancel_event.set()
+        with self._response_lock:
+            response = self._active_response
+        close = getattr(response, "close", None)
+        if callable(close):
+            with suppress(Exception):
+                close()
 
     def set_event_handler(self, handler: ModelEventHandler | None) -> None:
         self.event_handler = handler
@@ -142,6 +163,8 @@ class LocalLlamaClient:
     def complete(
         self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
     ) -> AssistantMessage:
+        if self._cancel_event.is_set():
+            raise TurnCancelledError("Turn stopped by user.")
         request: dict[str, Any] = {
             "model": self.model,
             "messages": messages,
@@ -157,12 +180,24 @@ class LocalLlamaClient:
             request["tools"] = tools
             request["parallel_tool_calls"] = False
         response = self.client.chat.completions.create(**request)
+        with self._response_lock:
+            self._active_response = response
         try:
+            if self._cancel_event.is_set():
+                raise TurnCancelledError("Turn stopped by user.")
             return self._consume_stream(response)
+        except Exception:
+            if self._cancel_event.is_set():
+                raise TurnCancelledError("Turn stopped by user.") from None
+            raise
         finally:
+            with self._response_lock:
+                if self._active_response is response:
+                    self._active_response = None
             close = getattr(response, "close", None)
             if callable(close):
-                close()
+                with suppress(Exception):
+                    close()
 
     def _consume_stream(self, response: Iterable[Any]) -> AssistantMessage:
         content_parts: list[str] = []
@@ -175,6 +210,8 @@ class LocalLlamaClient:
         reasoning_tail = ""
         self._emit("generation_start")
         for chunk in response:
+            if self._cancel_event.is_set():
+                raise TurnCancelledError("Turn stopped by user.")
             usage = getattr(chunk, "usage", None)
             if usage is not None and getattr(usage, "completion_tokens", None) is not None:
                 actual_completion_tokens = int(usage.completion_tokens)
@@ -225,6 +262,8 @@ class LocalLlamaClient:
                 content_characters=content_characters,
                 reasoning_characters=reasoning_characters,
             )
+        if self._cancel_event.is_set():
+            raise TurnCancelledError("Turn stopped by user.")
         estimated_tokens = max(
             1,
             (content_characters + reasoning_characters) // 4,

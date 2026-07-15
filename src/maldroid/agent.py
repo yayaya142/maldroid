@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
+import threading
 import time
 from collections.abc import Callable
 from typing import Any
 
 from maldroid.case_manager import Case
 from maldroid.config import AppConfig
+from maldroid.exceptions import TurnCancelledError
 from maldroid.external_mcp import ExternalMcpRuntime
 from maldroid.knowledge_manager import KnowledgeManager
 from maldroid.llama_client import (
@@ -93,10 +95,54 @@ class MalDroidAgent:
         self.external_mcp = external_mcp
         self.messages: list[dict[str, Any]] = []
         self._active_objective = ""
+        self._cancel_event = threading.Event()
+        self._cancel_recorded = False
         model_event_setter = getattr(self.client, "set_event_handler", None)
         if model_event_setter is not None:
             model_event_setter(self._handle_model_event)
         self._reset_messages(previous_summary)
+
+    def cancel_turn(self) -> None:
+        """Request cooperative cancellation of the active turn and response stream."""
+        self._cancel_event.set()
+        cancel = getattr(self.client, "cancel_current", None)
+        if callable(cancel):
+            cancel()
+
+    def _prepare_turn(self) -> None:
+        self._cancel_event.clear()
+        self._cancel_recorded = False
+        reset = getattr(self.client, "reset_cancellation", None)
+        if callable(reset):
+            reset()
+
+    def finish_turn(self) -> None:
+        """Clear cancellation state after the controller has left the active turn."""
+        self._cancel_event.clear()
+        reset = getattr(self.client, "reset_cancellation", None)
+        if callable(reset):
+            reset()
+
+    def _check_cancelled(self) -> None:
+        if not self._cancel_event.is_set():
+            return
+        if not self._cancel_recorded:
+            self.messages.append(
+                {
+                    "role": "system",
+                    "content": (
+                        "The preceding turn was stopped by the researcher. Do not continue that "
+                        "objective unless the researcher asks again. Durable state and completed "
+                        "tool results remain available."
+                    ),
+                }
+            )
+            self.sessions.record(
+                "turn_cancelled", content={"objective": self._active_objective[:12000]}
+            )
+            self._emit("turn_cancelled")
+            self._cancel_recorded = True
+        raise TurnCancelledError("Turn stopped by user.")
 
     def _emit(self, event: str, **data: Any) -> None:
         if self.event_handler is not None:
@@ -163,8 +209,10 @@ class MalDroidAgent:
             return ""
 
     def respond(self, text: str) -> str:
-        self._detect_and_switch_profile()
+        self._prepare_turn()
         self._active_objective = text
+        self._detect_and_switch_profile()
+        self._check_cancelled()
         self.messages.append({"role": "user", "content": text})
         self.sessions.record("message", role="user", content=text)
         phase = 1
@@ -178,6 +226,7 @@ class MalDroidAgent:
         investigation_calls = 0
         repetition_recoveries = 0
         while True:
+            self._check_cancelled()
             tools = self.available_tool_schemas()
             if not self._auto_profile_enabled:
                 filtered_tools: list[dict[str, Any]] = []
@@ -198,6 +247,7 @@ class MalDroidAgent:
             )
             try:
                 assistant = self._complete_with_retries(self.messages, tools)
+                self._check_cancelled()
             except RepetitiveGenerationError as exc:
                 if not self.config.llama.repetition_recovery_enabled:
                     raise
@@ -236,6 +286,7 @@ class MalDroidAgent:
             phase_tool_rounds += 1
             total_tool_rounds += 1
             for call in assistant.tool_calls:
+                self._check_cancelled()
                 self.sessions.record(
                     "tool_call",
                     role="assistant",
@@ -282,6 +333,7 @@ class MalDroidAgent:
                     mcp_tool_name("detect_profile"),
                 }:
                     self._detect_and_switch_profile()
+                self._check_cancelled()
             self._prune_working_context()
             if investigation_calls and not structured_state_updated and not state_reminder_sent:
                 self.messages.append({"role": "system", "content": STATE_DISCIPLINE_REMINDER})
@@ -323,13 +375,18 @@ class MalDroidAgent:
     ) -> AssistantMessage:
         attempts = self.config.limits.model_retry_attempts
         for attempt in range(1, attempts + 1):
+            self._check_cancelled()
             try:
                 return self.client.complete(messages, tools)
             except KeyboardInterrupt:
                 raise
             except RepetitiveGenerationError:
                 raise
+            except TurnCancelledError:
+                self._check_cancelled()
+                raise
             except Exception as exc:
+                self._check_cancelled()
                 if attempt >= attempts:
                     raise
                 delay = min(4.0, float(2 ** (attempt - 1)))
@@ -722,6 +779,8 @@ class MalDroidAgent:
         try:
             summary_message = self.client.complete(self.messages + [prompt], [])
             summary = summary_message.content or self._durable_fallback_summary()
+        except TurnCancelledError:
+            raise
         except Exception as exc:
             summary = self._durable_fallback_summary(f"Model compaction failed: {exc}")
         self.sessions.record("compaction", content={"summary": summary})

@@ -22,3 +22,4 @@ body.sidebar-collapsed .mobile-menu{display:grid}
 @media(max-width:560px){.turn-progress{width:calc(100% - 24px);padding:10px}.live-work-metrics{grid-template-columns:1fr 1fr}.live-work-step:nth-child(-n+2){display:none}.turn-progress footer{display:none}}
 @media(max-height:680px){.composer-wrap{padding-top:8px}.live-work-steps,.turn-progress footer{display:none}.messages{padding-bottom:20px}}
 .live-work-label span{color:var(--accent);margin:0}
+.live-work-actions{display:flex;align-items:center;gap:9px}.stop-turn{height:27px;padding:0 10px;border:1px solid color-mix(in srgb,var(--danger) 55%,var(--line));border-radius:7px;background:color-mix(in srgb,var(--danger) 10%,var(--panel-2));color:var(--danger);font-size:9px;font-weight:750;letter-spacing:.02em}.stop-turn:hover{background:color-mix(in srgb,var(--danger) 18%,var(--panel-2));border-color:var(--danger)}.stop-turn:disabled{opacity:.58;cursor:wait}.stop-turn span{color:inherit;margin:0 4px 0 0;font-size:7px}

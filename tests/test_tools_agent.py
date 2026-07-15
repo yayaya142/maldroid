@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -8,6 +10,7 @@ import pytest
 from maldroid.agent import CHECKPOINT_REMINDER, STATE_DISCIPLINE_REMINDER, MalDroidAgent
 from maldroid.case_manager import CaseManager
 from maldroid.config import AppConfig
+from maldroid.exceptions import TurnCancelledError
 from maldroid.investigation import InvestigationManager
 from maldroid.knowledge_manager import KnowledgeManager
 from maldroid.llama_client import (
@@ -257,6 +260,44 @@ class FakeClient:
                 ],
             )
         return AssistantMessage(content="Investigation state inspected.")
+
+
+def test_agent_cancellation_preserves_state_and_marks_objective_stopped(
+    app_config: AppConfig,
+) -> None:
+    manager, case, registry, dispatcher = make_dispatcher(app_config)
+    sessions = SessionManager(case, manager)
+
+    class BlockingClient:
+        def __init__(self) -> None:
+            self.started = threading.Event()
+            self.cancelled = threading.Event()
+
+        def reset_cancellation(self) -> None:
+            self.cancelled.clear()
+
+        def cancel_current(self) -> None:
+            self.cancelled.set()
+
+        def complete(self, messages, tools):
+            self.started.set()
+            self.cancelled.wait(2)
+            raise TurnCancelledError("Turn stopped by user.")
+
+    client = BlockingClient()
+    agent = MalDroidAgent(app_config, case, client, registry, dispatcher, sessions)
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(agent.respond, "Trace the registration flow")
+        assert client.started.wait(1)
+        agent.cancel_turn()
+        with pytest.raises(TurnCancelledError, match="stopped by user"):
+            future.result(timeout=2)
+
+    events = [json.loads(line) for line in sessions.history_path.read_text().splitlines()]
+    cancelled = next(event for event in events if event["type"] == "turn_cancelled")
+    assert cancelled["content"]["objective"] == "Trace the registration flow"
+    assert case.state.findings == []
+    assert "Do not continue that objective" in str(agent.messages[-1]["content"])
 
 
 def test_agent_tool_call_round_trip(app_config: AppConfig) -> None:

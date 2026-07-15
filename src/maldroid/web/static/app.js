@@ -62,9 +62,11 @@ function connectSocket() {
 
 async function handleSocket(message) {
   if (message.type === "activity") { addActivity(message.event, message.data); updateProgress(message.event, message.data); return; }
-  if (message.type === "runtime_start") { startLiveWork("Starting local model", "Loading llama.cpp and case-scoped MCP tools…"); setBusy(true, "Starting local model", "Loading llama.cpp and case-scoped MCP tools…"); return; }
+  if (message.type === "runtime_start") { startLiveWork("Starting local model", "Loading llama.cpp and case-scoped MCP tools…", false); setBusy(true, "Starting local model", "Loading llama.cpp and case-scoped MCP tools…"); return; }
   if (message.type === "runtime_ready") { state.workspace = message.workspace; state.activeId = state.workspace.case.case_id; setBusy(false); renderWorkspace(); await refreshBootstrap(); await loadProjectData(state.activeId); $("#message-input").focus(); toast("Local model and MCP workspace are ready. You can message MalDroid below."); return; }
-  if (message.type === "turn_start") { startLiveWork("Thinking", "Planning the next research step…"); setBusy(true, "Thinking", "Planning the next research step…"); return; }
+  if (message.type === "turn_start") { startLiveWork("Thinking", "Planning the next research step…", true); setBusy(true, "Thinking", "Planning the next research step…"); return; }
+  if (message.type === "turn_stopping") { $("#stop-turn").disabled = true; $("#progress-title").textContent = "Stopping"; $("#progress-detail").textContent = "Finishing the current safe boundary…"; appendLiveWorkStep("turn_stopping"); return; }
+  if (message.type === "turn_stopped") { state.workspace = message.workspace; setBusy(false); renderWorkspace(); renderResearch(); $("#message-input").focus(); toast("Model turn stopped. Durable research state was preserved."); return; }
   if (message.type === "assistant") { addMessage("assistant", message.content); state.workspace = message.workspace; setBusy(false); renderWorkspace(); renderResearch(); return; }
   if (message.type === "error") { setBusy(false); toast(message.error, true); }
 }
@@ -177,14 +179,15 @@ function updateProgress(event, data) {
   if (event !== "generation_progress" && event !== "generation_start" && event !== "generation_complete") appendLiveWorkStep(event, data);
 }
 
-function startLiveWork(title, detail) {
+function startLiveWork(title, detail, cancellable = false) {
   stopLiveWork(); state.work = { startedAt: Date.now(), timer: null, phase: 1, tools: 0, tokens: 0, context: 0, steps: [] };
   $("#progress-title").textContent = title; $("#progress-detail").textContent = detail; $("#live-work-steps").replaceChildren();
+  $("#stop-turn").classList.toggle("hidden", !cancellable); $("#stop-turn").disabled = false;
   appendLiveWorkStep("work_started", { title, detail }); renderLiveWorkMetrics(); updateWorkElapsed();
   state.work.timer = setInterval(updateWorkElapsed, 1000);
 }
 
-function stopLiveWork() { if (state.work.timer) clearInterval(state.work.timer); state.work.timer = null; }
+function stopLiveWork() { if (state.work.timer) clearInterval(state.work.timer); state.work.timer = null; $("#stop-turn").classList.add("hidden"); $("#stop-turn").disabled = false; }
 function updateWorkElapsed() { const seconds = Math.max(0, Math.floor((Date.now() - state.work.startedAt) / 1000)); $("#work-elapsed").textContent = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`; }
 function renderLiveWorkMetrics() { $("#work-phase").textContent = String(state.work.phase); $("#work-tools").textContent = String(state.work.tools); $("#work-tokens").textContent = `${state.work.tokens || 0} tok`; $("#work-context").textContent = `${state.work.context || 0} tok`; }
 function appendLiveWorkStep(event, data = {}) {
@@ -204,6 +207,8 @@ function appendLiveWorkStep(event, data = {}) {
     generation_repetition_detected: ["Repeated output stopped", "Protecting the context before automatic recovery", "warning"],
     repetition_recovery: ["Continued in a clean session", `Recovery attempt ${data.attempt || 1}`, "success"],
     repetition_recovery_exhausted: ["Recovery stopped safely", "Investigation state was preserved for the next message", "warning"],
+    turn_stopping: ["Stop requested", "Waiting for the current safe boundary", "warning"],
+    turn_cancelled: ["Model turn stopped", "Durable research state and completed tool results were preserved", "success"],
   };
   const description = descriptions[event]; if (!description) return;
   state.work.steps.push({ event, title: description[0], detail: description[1], status: description[2] }); state.work.steps = state.work.steps.slice(-3);
@@ -212,7 +217,7 @@ function appendLiveWorkStep(event, data = {}) {
 }
 
 function addActivity(event, data = {}) {
-  const titleMap = { model_start:"Model reasoning started", generation_complete:"Generation completed", generation_repetition_detected:"Repeated output stopped", repetition_recovery:"Continued in a fresh session", repetition_recovery_exhausted:"Repeated generation stopped safely", tool_start:`Running ${shortTool(data.name)}`, tool_result:`${shortTool(data.name)} ${data.status || "completed"}`, checkpoint_required:"Durable checkpoint requested", automatic_checkpoint:"Checkpoint saved", phase_rollover:"Autonomous phase continued", compaction_complete:"Context compacted", external_mcp_connection:`MCP ${data.nickname || "connector"}` };
+  const titleMap = { model_start:"Model reasoning started", generation_complete:"Generation completed", generation_repetition_detected:"Repeated output stopped", repetition_recovery:"Continued in a fresh session", repetition_recovery_exhausted:"Repeated generation stopped safely", turn_cancelled:"Model turn stopped", tool_start:`Running ${shortTool(data.name)}`, tool_result:`${shortTool(data.name)} ${data.status || "completed"}`, checkpoint_required:"Durable checkpoint requested", automatic_checkpoint:"Checkpoint saved", phase_rollover:"Autonomous phase continued", compaction_complete:"Context compacted", external_mcp_connection:`MCP ${data.nickname || "connector"}` };
   if (!titleMap[event] && event === "generation_progress") return;
   state.activities.unshift({ event, title: titleMap[event] || event.replaceAll("_", " "), detail: activityDetail(data), time: new Date() }); state.activities = state.activities.slice(0, 100);
   if (!$("[data-tab='activity']").classList.contains("active")) state.unread++;
@@ -302,6 +307,7 @@ async function handleAction(action,target){
   else if(action==="profile")showChoiceMenu(target,["auto","generic","react-native","native"],state.workspace.case?.profile,choice=>runCommand("profile",{profile:choice}));
   else if(action==="reasoning")showChoiceMenu(target,["off","low","medium","high","unlimited"],state.workspace.reasoning,choice=>runCommand("reasoning",{level:choice}));
   else if(action==="command-palette")showActionMenu(target);
+  else if(action==="stop-turn"){if(!state.busy||!state.socket||state.socket.readyState!==WebSocket.OPEN)return;target.disabled=true;state.socket.send(JSON.stringify({type:"stop"}))}
   else if(action==="add-connector")await addConnector();
 }
 

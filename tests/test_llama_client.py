@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
 
+from maldroid.exceptions import TurnCancelledError
 from maldroid.llama_client import (
     REASONING_BUDGETS,
     LocalLlamaClient,
@@ -150,6 +153,39 @@ class ClosableStream(list):
 
     def close(self) -> None:
         self.closed = True
+
+
+class BlockingStream:
+    def __init__(self) -> None:
+        self.started = threading.Event()
+        self.closed = threading.Event()
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        self.started.set()
+        self.closed.wait(2)
+        raise StopIteration
+
+    def close(self) -> None:
+        self.closed.set()
+
+
+def test_cancel_current_closes_active_stream_and_discards_partial_response() -> None:
+    stream = BlockingStream()
+    client = LocalLlamaClient("http://127.0.0.1:7575/v1", None, "local-model")
+    client.client = Mock()
+    client.client.chat.completions.create.return_value = stream
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(client.complete, [{"role": "user", "content": "test"}], [])
+        assert stream.started.wait(1)
+        client.cancel_current()
+        with pytest.raises(TurnCancelledError, match="stopped by user"):
+            future.result(timeout=2)
+
+    assert stream.closed.is_set()
 
 
 def test_streaming_aborts_repetition_and_closes_response() -> None:

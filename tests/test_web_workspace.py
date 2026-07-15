@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import importlib.util
+import threading
 from pathlib import Path
 
 import pytest
 from starlette.testclient import TestClient
 
 from maldroid.config import AppConfig
-from maldroid.exceptions import MalDroidError
+from maldroid.exceptions import MalDroidError, TurnCancelledError
 from maldroid.runtime_lock import RuntimeLease
 from maldroid.web.server import WebWorkspace, create_app
 
@@ -79,6 +80,8 @@ def test_web_shell_exposes_live_operational_progress_without_private_reasoning(
     assert 'id="turn-progress"' in page
     assert 'id="work-elapsed"' in page
     assert 'id="live-work-steps"' in page
+    assert 'id="stop-turn"' in page
+    assert 'data-action="stop-turn"' in page
     assert "private model reasoning is never exposed" in page
     assert ".live-work-metrics" in styles
     assert "startLiveWork" in script
@@ -86,6 +89,8 @@ def test_web_shell_exposes_live_operational_progress_without_private_reasoning(
     assert "liveToolDetail" in script
     assert "input_tokens_estimate" in script
     assert "completion_tokens_estimate" in script
+    assert 'type:"stop"' in script
+    assert 'message.type === "turn_stopped"' in script
 
 
 def test_web_project_creation_listing_and_bounded_file_preview(tmp_path: Path) -> None:
@@ -127,6 +132,40 @@ def test_websocket_returns_workspace_snapshot(tmp_path: Path) -> None:
         assert connected == {"type": "connected", "workspace": {"active": False}}
 
 
+def test_websocket_stop_interrupts_an_active_turn(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workspace = WebWorkspace(web_config(tmp_path))
+    started = threading.Event()
+    cancelled = threading.Event()
+
+    def blocking_respond(text: str) -> str:
+        assert text == "Investigate this"
+        started.set()
+        cancelled.wait(2)
+        raise TurnCancelledError("Turn stopped by user.")
+
+    monkeypatch.setattr(workspace, "respond", blocking_respond)
+    monkeypatch.setattr(workspace, "cancel_turn", cancelled.set)
+    with (
+        authorized_client(workspace) as client,
+        client.websocket_connect(
+            "/ws",
+            headers={"cookie": "maldroid_web_token=test-token", "host": "localhost"},
+        ) as socket,
+    ):
+        socket.receive_json()
+        socket.send_json({"type": "message", "content": "Investigate this"})
+        assert socket.receive_json()["type"] == "turn_start"
+        assert started.wait(1)
+        socket.send_json({"type": "stop"})
+        assert socket.receive_json()["type"] == "turn_stopping"
+        stopped = socket.receive_json()
+
+    assert stopped["type"] == "turn_stopped"
+    assert stopped["workspace"] == {"active": False}
+
+
 def test_runtime_lease_rejects_parallel_workspace(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -165,6 +204,11 @@ def test_web_timeline_never_exposes_hidden_reasoning(tmp_path: Path) -> None:
                 "type": "tool_call",
                 "content": {"name": "MalDroid_search_text", "arguments": {"query": "x"}},
             },
+            {
+                "timestamp": "2026-07-15T12:02:00+03:00",
+                "type": "turn_cancelled",
+                "content": {"objective": "private stopped request"},
+            },
         ]
     )
     serialized = str(timeline)
@@ -172,3 +216,5 @@ def test_web_timeline_never_exposes_hidden_reasoning(tmp_path: Path) -> None:
     assert "MalDroid_search_text" in serialized
     assert "hidden chain" not in serialized
     assert "arguments" not in serialized
+    assert "turn_cancelled" in serialized
+    assert "private stopped request" not in serialized

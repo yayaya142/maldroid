@@ -1,5 +1,7 @@
 # Architecture Decisions
 
+- ADR 0016: Web turns run asynchronously and use cooperative cancellation; Stop closes the active
+  model stream, preserves durable/completed work, and exits synchronous tools at a safe boundary.
 - ADR 0015: Bounded streaming repetition detection aborts runaway local generations and resumes the
   same objective in a fresh session with durable and recent high-value context; it is enabled by
   default and recovery attempts are bounded.
