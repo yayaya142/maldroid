@@ -181,6 +181,19 @@ Both `-h` and `--help` work. `maldroid help` accepts nested command names. With 
 interactive terminal, MalDroid displays the Web/CLI selector. Non-TTY invocation displays help so
 scripts never block on a prompt.
 
+## Updating
+
+```bash
+maldroid update
+```
+
+The update command performs an explicit network operation against the fixed official repository,
+clones only its `main` branch into a temporary directory, runs the installer in non-interactive
+upgrade mode, and removes the clone on success or failure. It prints the installed short commit.
+The old private venv is backed up and restored if installation fails. User configuration, cases,
+knowledge, and MCP connector state are not stored in the venv and are preserved. Stop an active
+CLI or Web workspace before updating.
+
 ## Daily workflow
 
 ```bash

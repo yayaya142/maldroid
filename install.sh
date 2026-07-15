@@ -7,20 +7,24 @@ VENV_DIR="${INSTALL_ROOT}/venv"
 BIN_DIR="${HOME}/.local/bin"
 WRAPPER="${BIN_DIR}/maldroid"
 DRY_RUN=false
+UPGRADE=false
 DEFAULT_PACKAGE_INDEX="https://pypi.org/simple"
 PACKAGE_INDEX="${MALDROID_PIP_INDEX_URL:-${DEFAULT_PACKAGE_INDEX}}"
 
 if [ "${1:-}" = "--dry-run" ]; then
   DRY_RUN=true
+elif [ "${1:-}" = "--upgrade" ]; then
+  UPGRADE=true
 elif [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
-  echo "Usage: ./install.sh [--dry-run]"
+  echo "Usage: ./install.sh [--dry-run|--upgrade]"
   echo
   echo "Install MalDroid into an isolated user environment."
   echo "  --dry-run  Show detected paths and requirements without changing files."
+  echo "  --upgrade  Reinstall from a verified update checkout without setup prompts."
   echo "  -h, --help Show this help message."
   exit 0
 elif [ "$#" -gt 0 ]; then
-  echo "Usage: ./install.sh [--dry-run]" >&2
+  echo "Usage: ./install.sh [--dry-run|--upgrade]" >&2
   exit 2
 fi
 
@@ -81,6 +85,9 @@ echo "Python: ${PYTHON_BIN}"
 echo "Virtual environment: ${VENV_DIR}"
 echo "Executable: ${WRAPPER}"
 echo "Project: ${ROOT_DIR}"
+if ${UPGRADE}; then
+  echo "Mode: update existing installation"
+fi
 echo "ripgrep: $(command -v rg || echo 'not found (recommended)')"
 echo "llama-server: $(command -v llama-server || echo 'not found; configuration will request a path')"
 if [ "${PACKAGE_INDEX}" = "${DEFAULT_PACKAGE_INDEX}" ]; then
@@ -98,6 +105,23 @@ fi
 echo
 echo "[2/5] Creating MalDroid's private Python environment"
 mkdir -p "${INSTALL_ROOT}" "${BIN_DIR}"
+VENV_BACKUP="${INSTALL_ROOT}/venv.previous"
+HAVE_VENV_BACKUP=false
+rollback_upgrade() {
+  status=$?
+  if ${UPGRADE} && ${HAVE_VENV_BACKUP} && [ "${status}" -ne 0 ]; then
+    echo "Update failed; restoring the previous MalDroid environment." >&2
+    rm -rf "${VENV_DIR}"
+    mv "${VENV_BACKUP}" "${VENV_DIR}"
+  fi
+  exit "${status}"
+}
+trap rollback_upgrade EXIT
+if ${UPGRADE} && [ -d "${VENV_DIR}" ]; then
+  rm -rf "${VENV_BACKUP}"
+  mv "${VENV_DIR}" "${VENV_BACKUP}"
+  HAVE_VENV_BACKUP=true
+fi
 "${PYTHON_BIN}" -m venv "${VENV_DIR}"
 echo "[3/5] Installing MalDroid and its dependencies"
 if ! "${VENV_DIR}/bin/python" -m pip --isolated install \
@@ -123,7 +147,7 @@ case ":${PATH}:" in
     LINE='export PATH="$HOME/.local/bin:$PATH"'
     echo "${BIN_DIR} is not in PATH. Add this line to your shell configuration:"
     echo "${LINE}"
-    if [ -t 0 ]; then
+    if [ -t 0 ] && ! ${UPGRADE}; then
       printf "Append it to ~/.zshrc now? [y/N] "
       read -r answer
       if [ "${answer}" = "y" ] || [ "${answer}" = "Y" ]; then
@@ -135,12 +159,15 @@ esac
 
 echo
 echo "[5/5] Configuring your local model"
-if [ ! -f "${HOME}/.config/maldroid/config.toml" ]; then
+if [ ! -f "${HOME}/.config/maldroid/config.toml" ] && ! ${UPGRADE}; then
   echo "A short setup wizard will now ask for llama-server and your GGUF model."
   "${VENV_DIR}/bin/maldroid" config init
-else
+elif [ -f "${HOME}/.config/maldroid/config.toml" ]; then
   echo "Existing configuration found; keeping it unchanged."
   echo "To change it later, run: maldroid config init"
+else
+  echo "No configuration exists yet; update installed successfully without changing setup."
+  echo "Run 'maldroid config init' before the first investigation."
 fi
 echo
 echo "Final verification"
@@ -149,6 +176,11 @@ echo
 echo "============================================================"
 echo "Installation complete."
 echo "============================================================"
+if ${HAVE_VENV_BACKUP}; then
+  rm -rf "${VENV_BACKUP}"
+  HAVE_VENV_BACKUP=false
+fi
+trap - EXIT
 echo "Next steps:"
 echo "  1. Open a new terminal if PATH was updated."
 echo "  2. Run: maldroid --help"

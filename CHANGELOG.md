@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added `maldroid update`: fixed-official-repository depth-one clone, temporary source cleanup,
+  non-interactive installation, commit reporting, runtime exclusion, and previous-venv rollback on
+  installation failure.
 - Added a modern local Web workspace with investigation conversations, streaming chat/activity,
   bounded file explorer and preview, durable research inspector, direct triage/report actions,
   settings, external MCP management, and per-message RTL rendering.

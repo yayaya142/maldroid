@@ -53,6 +53,7 @@ from maldroid.runtime import WorkspaceRuntime, build_tool_runtime
 from maldroid.runtime_lock import RuntimeLease
 from maldroid.tools.registry import build_registry
 from maldroid.ui import InteractiveChat
+from maldroid.updater import update_from_official_repository
 
 app = typer.Typer(
     name="maldroid",
@@ -216,6 +217,23 @@ def cli_command(
         debug,
         _console(),
     )
+
+
+@app.command("update")
+def update_command() -> None:
+    """Download and install the latest official MalDroid version."""
+    console = _console()
+
+    def update() -> None:
+        with RuntimeLease("Update"):
+            console.print("[cyan]Downloading the latest official MalDroid version…[/cyan]")
+            result = update_from_official_repository()
+            console.print(
+                f"[green bold]MalDroid updated successfully.[/green bold] Commit: {result.commit}"
+            )
+            console.print("[dim]The temporary source checkout was removed.[/dim]")
+
+    _run_guarded(update, False, console)
 
 
 @app.command("help")
@@ -1154,6 +1172,7 @@ def entrypoint() -> None:
         "help",
         "server",
         "cli",
+        "update",
     }
     arguments = sys.argv[1:]
     global_options = {

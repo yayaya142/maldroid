@@ -36,6 +36,17 @@ The installer presents five explained steps, detects `llama-server` when it is a
 and shows defaults that can be accepted with Enter. Existing configuration is preserved on
 reinstallation.
 
+Update an installed copy without keeping a source repository:
+
+```bash
+maldroid update
+```
+
+This explicitly clones the official `main` branch into an OS temporary directory, installs it,
+prints the installed commit, and removes the checkout. The prior private venv is restored if the
+new installation fails. Configuration, investigations, knowledge, and MCP connectors are preserved.
+Update cannot run while a CLI or Web workspace is active.
+
 After installation, enable native shell completion and inspect the command map:
 
 ```bash

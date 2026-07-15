@@ -36,7 +36,7 @@ class RuntimeLease:
             suffix = f" (PID {pid})" if pid else ""
             raise MalDroidError(
                 f"MalDroid {label}{suffix} is already running. Close it before starting "
-                f"{self.mode}. Only one CLI or Web workspace may run at a time."
+                f"{self.mode}. Only one CLI, Web, or update operation may run at a time."
             ) from exc
         self.acquired = True
         atomic_write_json(

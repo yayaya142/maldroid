@@ -2,6 +2,8 @@
 
 - ADR 0013: CLI and Web are presentation surfaces over one `WorkspaceRuntime`; only one global
   model workspace may run, and the Web surface is token-authenticated and loopback-only.
+- ADR 0014: Self-update is explicit, fixed to the official `main` branch, temporary, globally
+  exclusive, and transactional with restoration of the previous private venv on failure.
 
 - ADR-0001: MalDroid starts and owns one local `llama-server` child for a simple daily workflow.
 - ADR-0002: Tools are in-process Python handlers so policy remains independent of model behavior.

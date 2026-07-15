@@ -16,6 +16,10 @@ override prompts, or change tool policy.
 - Record tool status without secrets in `tools.jsonl`.
 - Do not tunnel, proxy, or expose the MCP endpoint; a connected local client can invoke tools for
   the active case and profile until the owning process stops.
+- `maldroid update` is the sole built-in network maintenance exception. It runs only when explicitly
+  requested by the owner, clones the fixed official GitHub `main` branch into temporary storage,
+  accepts no alternate remote/ref, uses no shell, and deletes the checkout afterward. It is outside
+  evidence/tool execution and cannot overlap an active CLI or Web runtime.
 
 Report suspected boundary bypasses privately. Do not demonstrate them on real malware or sensitive
 evidence in repository tests.

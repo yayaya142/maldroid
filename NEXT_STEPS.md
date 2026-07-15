@@ -6,7 +6,8 @@ The owner has reprioritized reliability and research quality. Follow
 1. `PLATFORM-011` — Install the long-investigation and Web-workspace upgrade on the owner's macOS
    host. Verify `maldroid` mode selection, `maldroid server`, exclusive CLI/Web locking, project
    creation/switching, Hebrew input/output RTL, settings, bounded file preview, live activity,
-   reports, external Ghidra MCP, and shutdown before the long-run tests. Run a minimum
+   reports, external Ghidra MCP, and shutdown. From the installed version, run `maldroid update`,
+   verify the reported commit and absence of a retained clone, then continue the long-run tests. Run a minimum
    one-hour React Native investigation and one Native/Ghidra MCP investigation. Record context
    usage across phases, pruned-result receipts, checkpoint contents, Findings/TODO/report parity,
    direct CLI triage latency, Ghidra connector tool names, model/server versions, and any repeated
@@ -31,7 +32,11 @@ The owner has reprioritized reliability and research quality. Follow
    folded into `PLATFORM-011`.
 7. `CLI-010` — Completed: `maldroid cases` opens the configured cases directory while preserving
    `--list` and `--json` automation behavior.
-8. `REL-001` — After the reliability gates, on the user's macOS host run installer dry-run, installation, doctor command
+8. `CLI-011` — Completed locally: `maldroid update` downloads the official `main` branch into a
+   temporary checkout, transactionally replaces the private venv, rolls back failures, preserves
+   user state, and deletes the checkout. Physical installed-macOS acceptance remains in
+   `PLATFORM-011`.
+9. `REL-001` — After the reliability gates, on the user's macOS host run installer dry-run, installation, doctor command
    preview, and `doctor --model-tool-test` using the authorized Gemma 4 GGUF. Record llama.cpp
    version and `/props` template behavior. Acceptance: structured array/object tool call and final
    response pass through MalDroid MCP independently of WebUI built-ins. Connect an external MCP client to the printed endpoint,
@@ -67,10 +72,10 @@ The owner has reprioritized reliability and research quality. Follow
    Add one real local Streamable HTTP connector and one legacy SSE connector, restart MalDroid,
    verify their `MCP_<nickname>_` tools appear and execute, then confirm an offline saved connector
    warns without blocking startup and survives a default uninstall/reinstall.
-9. `REL-002` — Run the full suite and installer lifecycle on Kali rolling and Apple Silicon.
-10. `COMPAT-001` — Expand benign multi-architecture ELF and versioned Blutter fixtures on target
+10. `REL-002` — Run the full suite and installer lifecycle on Kali rolling and Apple Silicon.
+11. `COMPAT-001` — Expand benign multi-architecture ELF and versioned Blutter fixtures on target
    platforms and record exact external-tool versions.
-11. `RESEARCH-001` — Deepen version-specific static playbooks according to Gate 9 of the master plan while preserving the dynamic-analysis
+12. `RESEARCH-001` — Deepen version-specific static playbooks according to Gate 9 of the master plan while preserving the dynamic-analysis
    exclusion.
 
 Only one task may be active at a time. Do not mark a profile complete with placeholders or mocks.

@@ -4,6 +4,10 @@ Last updated: 2026-07-15
 
 ## Completed
 
+- `maldroid update` now performs an explicit fixed-origin shallow clone, runs non-interactive
+  upgrade installation, reports the installed commit, and removes temporary source on success or
+  failure. Update is excluded from active CLI/Web runtimes and restores the previous private venv
+  if installation fails; all user state remains outside the replaced environment.
 - A production-oriented local Web workspace now mirrors the terminal's core research surface:
   project conversations, multilingual chat and RTL messages, bounded Files, live Activity,
   Findings/TODO/Checkpoint views, direct triage/report actions, settings, and external MCP.
@@ -139,9 +143,9 @@ Last updated: 2026-07-15
 
 ## Current test status
 
-The local 115-test suite and release gate pass. GitHub Actions run `29433131792` passes the Web
-workspace commit on macOS 26 and Kali, including dependency bootstrap, lint, formatting, the full
-suite, and installer dry-run. See
+The local 122-test suite and release gate pass with 71% coverage. GitHub Actions must be rerun for
+the self-update commit; run `29433131792` passed the preceding Web workspace commit on macOS 26 and
+Kali. See
 `docs/handoffs/CURRENT.md` for exact commands and environment-gated acceptance work.
 
 ## Immediate task

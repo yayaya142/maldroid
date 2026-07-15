@@ -11,6 +11,14 @@ uses authenticated same-origin HTTP/WebSocket endpoints for projects, bounded fi
 research state, actions, settings, and activity. It never receives a direct unrestricted file API.
 A global file lease prevents concurrent CLI/Web model runtimes.
 
+## Update lifecycle
+
+The explicit `maldroid update` maintenance path is separate from investigation execution. It clones
+the fixed official repository into `TemporaryDirectory`, invokes `install.sh --upgrade`, and then
+deletes the source tree. Upgrade mode replaces only the private application venv. It keeps the old
+venv as `venv.previous` until installation and doctor verification finish, restoring it through an
+EXIT trap on failure. The global runtime lease prevents concurrent model or Web work. See ADR 0014.
+
 ## Process and trust boundary
 
 ```text
@@ -42,6 +50,7 @@ logging. External static utilities are temporary allowlisted subprocesses with `
 - `large_files`: contentless FTS5 token index plus source offsets.
 - `knowledge_manager`: Markdown discovery, metadata, FTS5 retrieval, and bounded reads.
 - `investigation`: stable findings, evidence references, notes, and TODOs.
+- `updater`: fixed-remote temporary clone, transactional installer invocation, and cleanup.
 
 Dependencies point inward toward domain models and policies. Tool modules depend on managers;
 managers do not depend on tool modules.

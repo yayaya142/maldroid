@@ -218,6 +218,7 @@ def test_first_time_config_wizard_n_enables_api_key(
         (["--version"], None),
         (["server", "--no-open"], None),
         (["cli"], None),
+        (["update"], None),
     ],
 )
 def test_entrypoint_rewrites_daily_syntax(
@@ -374,6 +375,55 @@ def test_installer_help_is_self_contained() -> None:
     assert completed.returncode == 0
     assert "Install MalDroid into an isolated user environment" in completed.stdout
     assert "--dry-run" in completed.stdout
+    assert "--upgrade" in completed.stdout
+
+
+@pytest.mark.parametrize("pip_exit", [0, 7])
+def test_installer_upgrade_replaces_or_restores_private_environment(
+    tmp_path: Path, pip_exit: int
+) -> None:
+    root = Path(__file__).resolve().parents[1]
+    install_root = tmp_path / ".local" / "share" / "maldroid"
+    old_venv = install_root / "venv"
+    old_venv.mkdir(parents=True)
+    (old_venv / "old-marker").write_text("previous installation", encoding="utf-8")
+    fake_python = tmp_path / "base-python"
+    fake_python.write_text(
+        "#!/bin/sh\n"
+        'if [ "$1" = "-c" ]; then exit 0; fi\n'
+        'if [ "$1" = "-m" ] && [ "$2" = "ensurepip" ]; then exit 0; fi\n'
+        'if [ "$1" = "-m" ] && [ "$2" = "venv" ]; then\n'
+        '  mkdir -p "$3/bin"\n'
+        f"  printf '#!/bin/sh\\nexit {pip_exit}\\n' > \"$3/bin/python\"\n"
+        "  printf '#!/bin/sh\\nexit 0\\n' > \"$3/bin/maldroid\"\n"
+        '  chmod +x "$3/bin/python" "$3/bin/maldroid"\n'
+        "  exit 0\n"
+        "fi\n"
+        "exit 1\n",
+        encoding="utf-8",
+    )
+    fake_python.chmod(0o755)
+    environment = os.environ.copy()
+    environment["HOME"] = str(tmp_path)
+    environment["PYTHON"] = str(fake_python)
+    completed = subprocess.run(
+        [str(root / "install.sh"), "--upgrade"],
+        cwd=root,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    backup = install_root / "venv.previous"
+    if pip_exit == 0:
+        assert completed.returncode == 0, completed.stderr
+        assert "Mode: update existing installation" in completed.stdout
+        assert not (old_venv / "old-marker").exists()
+    else:
+        assert completed.returncode != 0
+        assert "restoring the previous" in completed.stderr
+        assert (old_venv / "old-marker").is_file()
+    assert not backup.exists()
 
 
 def test_uninstall_preserves_or_explicitly_removes_saved_mcp_configuration(

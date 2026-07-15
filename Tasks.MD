@@ -2542,7 +2542,13 @@ Expected:
 * The previous session summary is loaded.
 * The researcher can continue.
 
-## 42. Definition of done
+## 41B. One-command self-update (completed locally 2026-07-15)
+
+* `maldroid update` clones only the official repository's `main` branch with shallow history.
+* The checkout uses OS temporary storage and is removed on success and failure.
+* Upgrade mode is non-interactive and preserves configuration, cases, knowledge, and MCP state.
+* The prior private venv is restored if creation or package installation fails.
+* Update is explicitly user-triggered and cannot overlap CLI or Web operation.
 
 ## 41A. Web workspace expansion (completed locally 2026-07-15)
 
@@ -2557,6 +2563,8 @@ The owner reprioritized a second, high-quality product surface. Implemented requ
 * Server and MCP remain loopback-only; browser API/WS calls require a random per-run token.
 * File browsing uses central path policy and bounded tools rather than an unrestricted Web file API.
 * The static-only evidence boundary remains unchanged.
+
+## 42. Definition of done
 
 The project is complete only when:
 
@@ -2632,7 +2640,5 @@ Build it.
 אני רוצה שכל מה שקשור לפייתון וזה יהיה בסביבה ויראוטלית עם venu (יש בצורה אוטומטית כבר בלי לבלבל את הAGENT) 
 
 2-  אני יודע שזה כבר מופיע אבל אני רוצה שתבצע מחקר מקיף על כל סוגי השפות שיש בשביל לדעת איך לעשות להם REVESE נכון ולחקור נכון.
-
-
 
 

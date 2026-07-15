@@ -1,9 +1,9 @@
 # Current Handoff
 
-Task: `WEB-001`
+Task: `CLI-011`
 Next task: `PLATFORM-011`
 
-Implementation commits: `97afc6f`, `2f6a537`
+Implementation commit: pending
 
 ## Outcome
 
@@ -15,6 +15,17 @@ The repository now also has a modern local Web product surface. `maldroid server
 three-pane workspace with investigation conversations, multilingual/RTL chat, bounded files,
 research state, activity, settings, reports, and MCP connectors. Bare `maldroid` asks for Web or
 CLI; `maldroid cli` selects the terminal explicitly.
+
+## One-command update
+
+- `maldroid update` clones only the fixed official GitHub repository's `main` branch with depth one.
+- The clone lives in `TemporaryDirectory` and is removed after both successful and failed installs.
+- It invokes `install.sh --upgrade` with the base interpreter and no setup/PATH prompts.
+- Upgrade keeps the existing private venv as `venv.previous`, restores it on failure, and deletes
+  the backup only after the new installation and doctor step succeed.
+- The global runtime lease blocks update while CLI or Web is active. Config, cases, knowledge, and
+  external MCP state are not stored in the venv and remain unchanged.
+- ADR 0014 records the explicit-network, fixed-origin, rollback, and cleanup boundaries.
 
 ## Web runtime and security
 
@@ -78,6 +89,19 @@ CLI; `maldroid cli` selects the terminal explicitly.
 
 ## Verification
 
+Updater and transactional-installer contracts:
+
+```text
+./scripts/dev test tests/test_updater.py tests/test_cli_process_installer.py
+./scripts/dev maldroid update --help
+bash -n install.sh
+```
+
+Results: 31 focused tests passed. They cover fixed official clone arguments, base-Python selection,
+commit reporting, successful temporary-checkout deletion, deletion after installer failure, missing
+Git, CLI output, command dispatch, installer help, successful private-venv replacement, and exact
+previous-venv restoration after simulated pip failure.
+
 Web-focused contracts:
 
 ```text
@@ -118,7 +142,7 @@ Focused and full tests:
 ./scripts/dev test
 ```
 
-Results: all focused suites passed; the current full suite passed with `115 passed`.
+Results: all focused suites passed; the current full suite passed with `122 passed`.
 
 Release gate:
 
@@ -126,9 +150,9 @@ Release gate:
 ./scripts/dev release-check
 ```
 
-The current final run passed Ruff formatting/lint, mypy for 42 source files, 115 tests with 70%
+The current final run passed Ruff formatting/lint, mypy for 43 source files, 122 tests with 71%
 coverage, project hygiene, installer dry-run, wheel build, and archive verification. The wheel is
-`dist/maldroid-0.1.0-py3-none-any.whl` (147,989 bytes) and contains the Web server plus all three
+`dist/maldroid-0.1.0-py3-none-any.whl` (149,497 bytes) and contains the updater, Web server, and all three
 static assets. `node --check src/maldroid/web/static/app.js` also passed.
 
 GitHub Actions run `29433131792` passed on macOS 26 and Kali for commit `2f6a537`. Both jobs passed
@@ -147,6 +171,9 @@ including lint, formatting, all 106 tests, and installer dry-run.
 - Web UI activation, Hebrew model output, real project switching, and Ghidra MCP execution still
   require the owner's configured macOS model and tools. The local browser smoke test deliberately
   kept the missing Linux model offline.
+- The updater's clone/install/rollback behavior is fully exercised with isolated synthetic
+  environments, but a real installed macOS self-update from this new command requires the command
+  to first be delivered to the owner's installation.
 - Canonical state still lacks revision/idempotency/multiprocess transaction semantics from
   `REL-011..020`; schema v2 preserves the existing rollback model.
 - Automatic semantic fallback cannot manufacture research meaning. When the model supplies no
@@ -161,5 +188,6 @@ including lint, formatting, all 106 tests, and installer dry-run.
 git diff --check && git status --short
 ```
 
-Install current `main` on the owner's macOS host and begin `PLATFORM-011` with Web/CLI parity
-acceptance followed by the real one-hour React Native and Native/Ghidra MCP investigations.
+Commit, push, and confirm macOS/Kali CI for `CLI-011`. Then install current `main` once on the
+owner's macOS host, run `maldroid update` from the installed command, and begin `PLATFORM-011` with
+Web/CLI parity acceptance followed by the real one-hour React Native and Native/Ghidra MCP work.
