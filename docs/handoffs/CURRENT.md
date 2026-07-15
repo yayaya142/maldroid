@@ -40,6 +40,8 @@ deep React Native and Native/Ghidra guidance, and focused large-evidence tools.
   and `/report`. Toolbar/status/checkpoint views now display semantic continuity.
 - New core tools: artifact inventory, network-indicator extraction, multi-family behavior search,
   bounded byte-range hex/ASCII reads, and deterministic report generation.
+- Behavior-family search prefers ripgrep and falls back to a bounded streaming Python scanner on
+  hosts such as the macOS CI image where ripgrep is not installed.
 - New React Native tools: behavior-family triage mapped to Metro modules/offsets and bridge inventory.
 - New Native tools: ELF dependencies, relocations, JNI surface, and hardening indicators.
 - Added deep automatically routed playbooks for React Native data-flow research and Native ELF/JNI/
@@ -84,7 +86,11 @@ Release gate:
 
 The final run passed Ruff formatting/lint, mypy for 37 source files, 106 tests with 72% coverage,
 project hygiene, installer dry-run, wheel build, and archive verification. The wheel is
-`dist/maldroid-0.1.0-py3-none-any.whl` (120,265 bytes in this build).
+`dist/maldroid-0.1.0-py3-none-any.whl` (121,025 bytes after the macOS fallback fix).
+
+GitHub Actions run `29430555735` passed Kali and exposed one macOS-only failure: the new behavior
+search required ripgrep, which the macOS image does not install. The focused follow-up adds and
+tests the bounded streaming fallback. A replacement CI run is required after the follow-up commit.
 
 ## Known limitations
 
@@ -104,6 +110,6 @@ project hygiene, installer dry-run, wheel build, and archive verification. The w
 git diff --check && git status --short
 ```
 
-Then inspect the complete diff, commit atomically as
-`PLATFORM-010 upgrade long-investigation research`, and install that commit on the owner's macOS
-host for `PLATFORM-011`.
+Commit the macOS fallback as `PLATFORM-010 add portable behavior search fallback`, push `main`, and
+wait for both CI jobs. Then install the resulting commit on the owner's macOS host for
+`PLATFORM-011`.

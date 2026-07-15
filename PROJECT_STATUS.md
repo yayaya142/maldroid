@@ -16,7 +16,8 @@ Last updated: 2026-07-15
   playbooks. New profile tools map bundle behavior to Metro modules, inventory bridges, parse ELF
   dependencies/relocations/JNI surfaces, and summarize hardening.
 - Core static triage now provides artifact inventory, network-indicator extraction, multi-family
-  behavior search, and bounded byte-range hex/ASCII reads for huge or binary artifacts.
+  behavior search, and bounded byte-range hex/ASCII reads for huge or binary artifacts. Behavior
+  search uses ripgrep when available and a timeout-bounded streaming fallback otherwise.
 
 - Governance, sequential-agent handoff contract, automatic development venv, packaging, and CI.
 - Validated secure configuration with the supplied Gemma 4 performance preset.

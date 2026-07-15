@@ -39,7 +39,7 @@ Every public name is centrally namespaced with the `MalDroid_` prefix.
 | `MalDroid_read_large_text_chunk` | path, chunk number | Source lines/offsets and bounded content | Invalidated on source change |
 | `MalDroid_inventory_case` | path and file/count limits | Types, sizes, largest files, large-text candidates | Bounded recursive inventory |
 | `MalDroid_extract_network_indicators` | path and limits | URLs, WebSockets, domains, IPs, emails, source paths | Static extraction; full overflow saved |
-| `MalDroid_search_behavior_patterns` | path, categories, limits | Grouped network/persistence/identity/crypto/dynamic/bridge/command/WebView leads | One bounded ripgrep pass; matches are not reachability proof |
+| `MalDroid_search_behavior_patterns` | path, categories, limits | Grouped network/persistence/identity/crypto/dynamic/bridge/command/WebView leads | Bounded ripgrep or streaming fallback; matches are not reachability proof |
 | `MalDroid_read_byte_range` | path, offset, length | Exact bounded hex/ASCII rows | Maximum 64 KiB |
 | `MalDroid_build_research_report` | title, tentative filter | `reports/RESEARCH_REPORT.md` | Deterministic durable-state view; no evidence bytes |
 

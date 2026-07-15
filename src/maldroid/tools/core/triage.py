@@ -8,6 +8,7 @@ import os
 import re
 import shutil
 import subprocess
+import time
 from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -196,11 +197,11 @@ def search_behavior_patterns(context: ToolContext, arguments: BaseModel) -> dict
     values = BehaviorSearchInput.model_validate(arguments)
     target = context.read_path(values.path)
     executable = shutil.which("rg")
-    if not executable:
-        raise ValueError("Behavior pattern search requires ripgrep for bounded execution.")
     categories = values.categories or [cast(BehaviorCategory, value) for value in BEHAVIOR_PATTERNS]
-    combined = [pattern for category in categories for pattern in BEHAVIOR_PATTERNS[category]]
     output = context.output_directory() / _output_name("behavior-search", "jsonl")
+    if not executable:
+        return _python_behavior_search(context, target, values, categories, output)
+    combined = [pattern for category in categories for pattern in BEHAVIOR_PATTERNS[category]]
     command = [
         executable,
         "--json",
@@ -230,7 +231,9 @@ def search_behavior_patterns(context: ToolContext, arguments: BaseModel) -> dict
         category: re.compile("|".join(f"(?:{item})" for item in BEHAVIOR_PATTERNS[category]), re.I)
         for category in categories
     }
-    grouped: dict[str, list[dict[str, Any]]] = {category: [] for category in categories}
+    grouped: dict[BehaviorCategory, list[dict[str, Any]]] = {
+        category: [] for category in categories
+    }
     totals: Counter[str] = Counter()
     with output.open(encoding="utf-8", errors="replace") as handle:
         for raw in handle:
@@ -263,6 +266,7 @@ def search_behavior_patterns(context: ToolContext, arguments: BaseModel) -> dict
             if totals[category] > values.max_results_per_category
         ],
         "output_file": output.relative_to(context.case.root).as_posix(),
+        "backend": "ripgrep",
         "accuracy": "Pattern matches are triage leads, not evidence of reachable behavior.",
     }
 
@@ -502,3 +506,118 @@ def _scan_indicators(path: Path, display_path: str, found: dict[str, dict[str, s
 
 def _output_name(prefix: str, suffix: str) -> str:
     return f"{prefix}-{datetime.now().strftime('%Y%m%d-%H%M%S-%f')}.{suffix}"
+
+
+def _python_behavior_search(
+    context: ToolContext,
+    target: Path,
+    values: BehaviorSearchInput,
+    categories: list[BehaviorCategory],
+    output: Path,
+) -> dict[str, Any]:
+    compiled = {
+        category: [re.compile(pattern.encode(), re.I) for pattern in BEHAVIOR_PATTERNS[category]]
+        for category in categories
+    }
+    grouped: dict[BehaviorCategory, list[dict[str, Any]]] = {
+        category: [] for category in categories
+    }
+    totals: Counter[str] = Counter()
+    scanned_files = 0
+    scan_truncated = False
+    deadline = time.monotonic() + context.config.limits.command_timeout_seconds
+    with output.open("w", encoding="utf-8") as output_handle:
+        for path in _walk_files(target):
+            if not path.is_file() or _appears_binary_container(path):
+                continue
+            scanned_files += 1
+            if scanned_files > 20000:
+                scan_truncated = True
+                break
+            display_path = _display_path(target, values.path, path)
+            carry = b""
+            consumed = 0
+            line_number = 1
+            with path.open("rb") as source:
+                for block in iter(lambda: source.read(1024 * 1024), b""):
+                    if time.monotonic() >= deadline:
+                        raise TimeoutError(
+                            "Behavior pattern search exceeded the configured command timeout."
+                        )
+                    data = carry + block
+                    base = consumed - len(carry)
+                    safe_length = max(0, len(data) - 4096)
+                    searchable = data[:safe_length]
+                    line_number = _collect_behavior_matches(
+                        searchable,
+                        base,
+                        line_number,
+                        display_path,
+                        compiled,
+                        grouped,
+                        totals,
+                        values.max_results_per_category,
+                        output_handle,
+                    )
+                    consumed += len(block)
+                    carry = data[safe_length:]
+            _collect_behavior_matches(
+                carry,
+                consumed - len(carry),
+                line_number,
+                display_path,
+                compiled,
+                grouped,
+                totals,
+                values.max_results_per_category,
+                output_handle,
+            )
+    return {
+        "path": values.path,
+        "categories": categories,
+        "totals": dict(totals),
+        "results": grouped,
+        "truncated_categories": [
+            category
+            for category in categories
+            if totals[category] > values.max_results_per_category
+        ],
+        "files_scanned": min(scanned_files, 20000),
+        "file_scan_truncated": scan_truncated,
+        "output_file": output.relative_to(context.case.root).as_posix(),
+        "backend": "python-streaming",
+        "accuracy": "Pattern matches are triage leads, not evidence of reachable behavior.",
+    }
+
+
+def _collect_behavior_matches(
+    data: bytes,
+    base_offset: int,
+    start_line: int,
+    display_path: str,
+    compiled: dict[BehaviorCategory, list[re.Pattern[bytes]]],
+    grouped: dict[BehaviorCategory, list[dict[str, Any]]],
+    totals: Counter[str],
+    result_limit: int,
+    output_handle: Any,
+) -> int:
+    for category, patterns in compiled.items():
+        for pattern in patterns:
+            for match in pattern.finditer(data):
+                totals[category] += 1
+                preview_start = max(0, match.start() - 300)
+                preview_end = min(len(data), match.end() + 300)
+                record = {
+                    "path": display_path,
+                    "line": start_line + data[: match.start()].count(b"\n"),
+                    "offset": base_offset + match.start(),
+                    "preview": data[preview_start:preview_end].decode("utf-8", errors="replace")[
+                        :1000
+                    ],
+                }
+                output_handle.write(
+                    json.dumps({"category": category, **record}, ensure_ascii=False) + "\n"
+                )
+                if len(grouped[category]) < result_limit:
+                    grouped[category].append(record)
+    return start_line + data.count(b"\n")

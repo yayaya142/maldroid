@@ -12,6 +12,8 @@
   drill-down, concise timeline, and one-command deterministic report generation.
 - Added core artifact inventory, URL/domain/IP/email/WebSocket extraction, behavior-family search,
   and byte-range hex/ASCII tools for very large evidence.
+- Added a bounded Python streaming backend for behavior-family search when ripgrep is unavailable,
+  preserving the same macOS/Kali result contract and local full-output behavior.
 - Added React Native bundle behavior/module triage and bridge inventory, plus Native ELF dependency,
   relocation, JNI, and hardening tools.
 - Added automatically routed deep React Native and Native/Ghidra MCP investigation methodologies;

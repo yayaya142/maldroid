@@ -8,7 +8,8 @@ The owner has reprioritized reliability and research quality. Follow
    usage across phases, pruned-result receipts, checkpoint contents, Findings/TODO/report parity,
    direct CLI triage latency, Ghidra connector tool names, model/server versions, and any repeated
    or low-value state. Acceptance: a fresh session resumes from MCP state without chat history and
-   `reports/RESEARCH_REPORT.md` is useful without manual cleanup.
+   `reports/RESEARCH_REPORT.md` is useful without manual cleanup. Confirm `/triage` uses ripgrep on
+   the configured Mac when present and the streaming fallback when it is absent.
 2. `REL-010` — Retest the fixed `MalDroid_save_finding` path on the owner's macOS case. Record
    the structured tool call/result, case state before/after, rendered Markdown, audit/session events,
    installed commit, and model/server versions. Add a benign regression test that fails for the
