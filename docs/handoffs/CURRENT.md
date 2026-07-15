@@ -3,7 +3,7 @@
 Task: `MODEL-010`
 Next task: `PLATFORM-011`
 
-Implementation commit: pending
+Implementation commit: `a55a8ab`
 
 ## Outcome
 
@@ -177,8 +177,10 @@ Release gate:
 
 The current final run passed Ruff formatting/lint, mypy for 43 source files, 135 tests with 71%
 coverage, project hygiene, installer dry-run, wheel build, and archive verification. The wheel is
-`dist/maldroid-0.1.0-py3-none-any.whl` and contains the repetition guard, updater, Web server, and
-all three static assets. `node --check src/maldroid/web/static/app.js` also passed.
+`dist/maldroid-0.1.0-py3-none-any.whl` (151,882 bytes, SHA-256
+`83157827601ab36db0713ad06a101f069017fcb6b06847763dc7b7b088699e02`) and contains the repetition
+guard, updater, Web server, and all three static assets.
+`node --check src/maldroid/web/static/app.js` also passed.
 
 GitHub Actions run `29433131792` passed on macOS 26 and Kali for commit `2f6a537`. Both jobs passed
 dependency bootstrap (including the explicit WebSocket backend), Ruff, mypy, formatting, all 115
