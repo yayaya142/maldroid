@@ -148,8 +148,8 @@ Last updated: 2026-07-15
 
 ## Current test status
 
-The local 135-test suite and release gate pass with 71% coverage. GitHub Actions run `29433912079`
-passes the self-update commit on macOS 26 and Kali, including dependency bootstrap, lint, mypy,
+The local 135-test suite and release gate pass with 71% coverage. GitHub Actions run `29434717235`
+passes the repetition-recovery handoff on macOS 26 and Kali, including dependency bootstrap, lint,
 formatting, all tests, coverage, and installer dry-run. See
 `docs/handoffs/CURRENT.md` for exact commands and environment-gated acceptance work.
 
