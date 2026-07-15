@@ -3,7 +3,7 @@
 Task: `WEB-007`
 Next task: `PLATFORM-011`
 
-Implementation commit: this handoff commit
+Implementation commit: `bacf938`
 
 ## Outcome
 
@@ -258,6 +258,7 @@ Focused and full tests:
 ./scripts/dev test tests/test_ui.py tests/test_triage_tools.py
 ./scripts/dev test tests/test_web_workspace.py tests/test_ui.py
 ./scripts/dev test tests/test_llama_client.py tests/test_tools_agent.py
+./scripts/dev test tests/test_web_workspace.py
 ./scripts/dev test
 ```
 
@@ -267,7 +268,8 @@ closure, fresh-session continuation, objective carry-over, and bounded exhaustio
 suite passed with `140 passed`; the focused Web/UI suite passed with `18 passed`, and the focused
 model-stream/agent suite passed with `48 passed`. Cancellation coverage closes an active stream,
 discards its response, records the stopped objective, preserves durable state, and returns the
-WebSocket to a ready state.
+WebSocket to a ready state. The final `WEB-007` focused workspace run passed `11 passed` with the
+shared-column regression assertions.
 
 Release gate:
 
@@ -277,11 +279,14 @@ Release gate:
 
 The current final run passed Ruff formatting/lint, mypy for 43 source files, 140 tests with 72%
 coverage, project hygiene, installer dry-run, wheel build, and archive verification. The wheel is
-`dist/maldroid-0.1.0-py3-none-any.whl` (159,321 bytes, SHA-256
-`dcf59912813f6be81a7af332b37e37e2d4736f455cb9ca58aec8dcc84d51a3dd`) and contains the updated
+`dist/maldroid-0.1.0-py3-none-any.whl` (159,331 bytes, SHA-256
+`6718aa8c8ca95b178a5c627d0072af248fbc993c29b511a2ffbaca10f2619a1f`) and contains the updated
 composer, Live Work telemetry, latest-turn Files markers, hidden-log control, theme, repetition
 guard, updater, Web server, and all three static assets.
 `node --check src/maldroid/web/static/app.js` also passed.
+
+After implementation commit `bacf938`, only this handoff finalization was dirty. The test server
+was stopped, the browser viewport override was reset, and the local browser tab was closed.
 
 GitHub Actions run `29433131792` passed on macOS 26 and Kali for commit `2f6a537`. Both jobs passed
 dependency bootstrap (including the explicit WebSocket backend), Ruff, mypy, formatting, all 115
