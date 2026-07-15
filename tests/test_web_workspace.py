@@ -67,6 +67,27 @@ def test_web_shell_exposes_chat_theme_sidebar_restore_and_file_controls(tmp_path
     assert "syncPaneState" in script
 
 
+def test_web_shell_exposes_live_operational_progress_without_private_reasoning(
+    tmp_path: Path,
+) -> None:
+    workspace = WebWorkspace(web_config(tmp_path))
+    with authorized_client(workspace) as client:
+        page = client.get("/").text
+        styles = client.get("/assets/styles.css").text
+        script = client.get("/assets/app.js").text
+
+    assert 'id="turn-progress"' in page
+    assert 'id="work-elapsed"' in page
+    assert 'id="live-work-steps"' in page
+    assert "private model reasoning is never exposed" in page
+    assert ".live-work-metrics" in styles
+    assert "startLiveWork" in script
+    assert "appendLiveWorkStep" in script
+    assert "liveToolDetail" in script
+    assert "input_tokens_estimate" in script
+    assert "completion_tokens_estimate" in script
+
+
 def test_web_project_creation_listing_and_bounded_file_preview(tmp_path: Path) -> None:
     source = tmp_path / "decompiled-app"
     source.mkdir()

@@ -15,9 +15,15 @@ Completed out of sequence by explicit owner reprioritization: `WEB-003` replaces
 with a responsive 100%-zoom grid and compact-screen drawers for Projects and the full inspector.
 Physical active-model acceptance remains in `PLATFORM-011`.
 
+Completed out of sequence by explicit owner reprioritization: `WEB-004` adds a central Live Work
+surface with elapsed time, phase/tool/token telemetry, current operation, and a bounded operational
+timeline without exposing hidden reasoning. Physical active-model acceptance remains in
+`PLATFORM-011`.
+
 1. `PLATFORM-011` — Install the long-investigation and Web-workspace upgrade on the owner's macOS
    host. Verify `maldroid` mode selection, `maldroid server`, exclusive CLI/Web locking, project
-   creation/switching, Hebrew input/output RTL, settings, bounded file preview, live activity,
+   creation/switching, Hebrew input/output RTL, settings, bounded file preview, Live Work telemetry,
+   live activity,
    reports, external Ghidra MCP, and shutdown. From the installed version, run `maldroid update`,
    verify the reported commit and absence of a retained clone, then continue the long-run tests. Run a minimum
    one-hour React Native investigation and one Native/Ghidra MCP investigation. Record context

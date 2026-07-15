@@ -22,6 +22,12 @@ chat becomes the sole layout column; Projects and the full Files/Research/Activi
 independent keyboard-accessible drawers. Height breakpoints compact nonessential welcome content
 without shrinking the chat composer or model controls.
 
+During startup and active turns, the center pane consumes the same bounded WebSocket activity
+events as the Activity inspector to render Live Work telemetry. Elapsed time is browser-local;
+phase, tool count, and token estimates are presentation metrics rather than durable case state.
+The surface describes operations and outcomes only. Hidden reasoning and raw evidence payloads
+remain outside the DOM.
+
 ## Update lifecycle
 
 The explicit `maldroid update` maintenance path is separate from investigation execution. It clones

@@ -1,6 +1,6 @@
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
-const state = { bootstrap: null, workspace: { active: false }, activeId: null, socket: null, busy: false, activities: [], unread: 0, files: [], collapsedDirectories: new Set(), selectedFile: null, fileFilter: "", theme: "dark" };
+const state = { bootstrap: null, workspace: { active: false }, activeId: null, socket: null, busy: false, activities: [], unread: 0, files: [], collapsedDirectories: new Set(), selectedFile: null, fileFilter: "", theme: "dark", work: { startedAt: 0, timer: null, phase: 1, tools: 0, tokens: 0, context: 0, steps: [] } };
 
 async function api(path, options = {}) {
   const response = await fetch(path, { ...options, headers: { "Content-Type": "application/json", ...(options.headers || {}) } });
@@ -62,9 +62,9 @@ function connectSocket() {
 
 async function handleSocket(message) {
   if (message.type === "activity") { addActivity(message.event, message.data); updateProgress(message.event, message.data); return; }
-  if (message.type === "runtime_start") { setBusy(true, "Starting local model", "Loading llama.cpp and case-scoped MCP tools…"); return; }
+  if (message.type === "runtime_start") { startLiveWork("Starting local model", "Loading llama.cpp and case-scoped MCP tools…"); setBusy(true, "Starting local model", "Loading llama.cpp and case-scoped MCP tools…"); return; }
   if (message.type === "runtime_ready") { state.workspace = message.workspace; state.activeId = state.workspace.case.case_id; setBusy(false); renderWorkspace(); await refreshBootstrap(); await loadProjectData(state.activeId); $("#message-input").focus(); toast("Local model and MCP workspace are ready. You can message MalDroid below."); return; }
-  if (message.type === "turn_start") { setBusy(true, "Thinking", "Planning the next research step…"); return; }
+  if (message.type === "turn_start") { startLiveWork("Thinking", "Planning the next research step…"); setBusy(true, "Thinking", "Planning the next research step…"); return; }
   if (message.type === "assistant") { addMessage("assistant", message.content); state.workspace = message.workspace; setBusy(false); renderWorkspace(); renderResearch(); return; }
   if (message.type === "error") { setBusy(false); toast(message.error, true); }
 }
@@ -155,7 +155,7 @@ function setBusy(busy, title = "Thinking", detail = "Working on the investigatio
   state.busy = busy; $("#send-button").disabled = busy; $("#message-input").disabled = busy;
   $("#turn-progress").classList.toggle("hidden", !busy); $("#progress-title").textContent = title; $("#progress-detail").textContent = detail;
   const status = $("#runtime-status"); status.classList.toggle("loading", busy); if (busy) $("span", status).textContent = title;
-  else renderWorkspace();
+  else { stopLiveWork(); renderWorkspace(); }
 }
 
 function updateProgress(event, data) {
@@ -170,6 +170,45 @@ function updateProgress(event, data) {
     compaction_start: ["Compacting context", "Preserving durable state and reclaiming context…"], phase_rollover: ["Continuing autonomously", `Starting research phase ${(data.completed_phase || 1) + 1}…`]
   };
   if (labels[event]) { $("#progress-title").textContent = labels[event][0]; $("#progress-detail").textContent = labels[event][1]; }
+  if (event === "model_start") { state.work.phase = data.phase || state.work.phase; state.work.context = data.input_tokens_estimate || state.work.context; }
+  if (event === "generation_progress") state.work.tokens = data.completion_tokens_estimate || state.work.tokens;
+  if (event === "tool_start") state.work.tools += 1;
+  renderLiveWorkMetrics();
+  if (event !== "generation_progress" && event !== "generation_start" && event !== "generation_complete") appendLiveWorkStep(event, data);
+}
+
+function startLiveWork(title, detail) {
+  stopLiveWork(); state.work = { startedAt: Date.now(), timer: null, phase: 1, tools: 0, tokens: 0, context: 0, steps: [] };
+  $("#progress-title").textContent = title; $("#progress-detail").textContent = detail; $("#live-work-steps").replaceChildren();
+  appendLiveWorkStep("work_started", { title, detail }); renderLiveWorkMetrics(); updateWorkElapsed();
+  state.work.timer = setInterval(updateWorkElapsed, 1000);
+}
+
+function stopLiveWork() { if (state.work.timer) clearInterval(state.work.timer); state.work.timer = null; }
+function updateWorkElapsed() { const seconds = Math.max(0, Math.floor((Date.now() - state.work.startedAt) / 1000)); $("#work-elapsed").textContent = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`; }
+function renderLiveWorkMetrics() { $("#work-phase").textContent = String(state.work.phase); $("#work-tools").textContent = String(state.work.tools); $("#work-tokens").textContent = `${state.work.tokens || 0} tok`; $("#work-context").textContent = `${state.work.context || 0} tok`; }
+function appendLiveWorkStep(event, data = {}) {
+  const descriptions = {
+    work_started: [data.title || "Work started", data.detail || "Preparing the investigation", "running"],
+    model_start: [`Research phase ${data.phase || 1}`, `Preparing model context for tool round ${(data.total_tool_rounds || 0) + 1}`, "running"],
+    tool_start: [`Using ${shortTool(data.name)}`, liveToolDetail(data), "running"],
+    tool_result: [data.status === "completed" ? `${shortTool(data.name)} completed` : `${shortTool(data.name)} needs attention`, data.error || (data.output_file ? "Full output saved in the case" : "Result returned to the model"), data.status === "completed" ? "success" : "warning"],
+    checkpoint_required: ["Preserving research progress", "Saving findings, TODOs, and the exact next action", "running"],
+    state_discipline_required: ["Organizing durable research", "Updating evidence-backed Findings and TODOs", "running"],
+    automatic_checkpoint: ["Research checkpoint saved", data.status || "Durable progress is available to future sessions", "success"],
+    phase_checkpoint: ["Phase checkpoint saved", "Findings, TODOs, and the next action are durable", "success"],
+    compaction_start: ["Reclaiming context", "Summarizing durable state before continuing", "running"],
+    compaction_complete: ["Context compacted", "Continuing with the preserved research state", "success"],
+    phase_rollover: [`Continuing with phase ${(data.completed_phase || 1) + 1}`, "The investigation remains active", "success"],
+    model_retry: ["Retrying the local model", `Attempt ${data.attempt || 1} after a temporary error`, "warning"],
+    generation_repetition_detected: ["Repeated output stopped", "Protecting the context before automatic recovery", "warning"],
+    repetition_recovery: ["Continued in a clean session", `Recovery attempt ${data.attempt || 1}`, "success"],
+    repetition_recovery_exhausted: ["Recovery stopped safely", "Investigation state was preserved for the next message", "warning"],
+  };
+  const description = descriptions[event]; if (!description) return;
+  state.work.steps.push({ event, title: description[0], detail: description[1], status: description[2] }); state.work.steps = state.work.steps.slice(-3);
+  const root = $("#live-work-steps"); root.replaceChildren();
+  for (const step of state.work.steps) { const row = el("div", `live-work-step ${step.status}`), marker = el("i", "", step.status === "success" ? "✓" : step.status === "warning" ? "!" : ""); const copy = el("div"); copy.append(el("strong", "", step.title), el("span", "", step.detail)); row.append(marker, copy); root.append(row); }
 }
 
 function addActivity(event, data = {}) {
@@ -290,6 +329,7 @@ function getPath(object,path){return path.split(".").reduce((value,key)=>value?.
 function shortProfile(value){return ({"react-native":"RN",native:"Native",generic:"Auto"})[value]||value}
 function shortTool(value=""){return value.replace(/^MalDroid_/,"").replace(/^MCP_[^_]+_/,"").replaceAll("_"," ")}
 function activityDetail(data){if(data.arguments)return Object.entries(data.arguments).slice(0,2).map(([k,v])=>`${k}: ${String(v).slice(0,60)}`).join(" · ");if(data.error)return String(data.error).slice(0,120);if(data.action)return data.action;return data.status||"Local workspace"}
+function liveToolDetail(data){const args=data.arguments||{},safeKeys=["path","query","pattern","start_line","end_line","offset","length","nickname"],details=safeKeys.filter(key=>args[key]!==undefined).slice(0,2).map(key=>`${key}: ${String(args[key]).slice(0,60)}`);return details.join(" · ")||"Running a bounded local tool"}
 function relativeTime(value){const seconds=Math.max(0,(Date.now()-new Date(value).getTime())/1000);if(seconds<60)return"just now";if(seconds<3600)return`${Math.floor(seconds/60)}m ago`;if(seconds<86400)return`${Math.floor(seconds/3600)}h ago`;return`${Math.floor(seconds/86400)}d ago`}
 function formatBytes(bytes=0){if(bytes<1024)return`${bytes} B`;if(bytes<1048576)return`${(bytes/1024).toFixed(1)} KB`;return`${(bytes/1048576).toFixed(1)} MB`}
 function fileIcon(item){if(item.type==="directory")return"▰";if(item.type==="symlink")return"↗";const extension=item.path.split(".").pop().toLowerCase();if(["js","jsx","ts","tsx"].includes(extension))return"JS";if(["java","kt","smali"].includes(extension))return"J";if(["c","cc","cpp","h","hpp"].includes(extension))return"C";if(["so","elf","bin","dex"].includes(extension))return"◆";if(["json","toml","yaml","yml","xml"].includes(extension))return"{}";if(["md","txt","log"].includes(extension))return"≡";return"·"}

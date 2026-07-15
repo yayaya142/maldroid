@@ -51,9 +51,24 @@
           </div>
         </div>
         <div id="messages" class="messages hidden" aria-live="polite"></div>
-        <div id="turn-progress" class="turn-progress hidden">
-          <div class="progress-spinner"></div><div><strong id="progress-title">Thinking</strong><span id="progress-detail">Preparing the investigation…</span></div>
-        </div>
+        <section id="turn-progress" class="turn-progress hidden" aria-label="Live model work">
+          <div class="live-work-header">
+            <div class="live-work-label"><i></i><span>Live work</span></div>
+            <time id="work-elapsed">0:00</time>
+          </div>
+          <div class="live-work-current" aria-live="polite">
+            <div class="progress-spinner"></div>
+            <div><strong id="progress-title">Thinking</strong><span id="progress-detail">Preparing the investigation…</span></div>
+          </div>
+          <div class="live-work-metrics">
+            <div><span>Phase</span><strong id="work-phase">1</strong></div>
+            <div><span>Tools</span><strong id="work-tools">0</strong></div>
+            <div><span>Generated</span><strong id="work-tokens">0 tok</strong></div>
+            <div><span>Context</span><strong id="work-context">0 tok</strong></div>
+          </div>
+          <div id="live-work-steps" class="live-work-steps"></div>
+          <footer>Showing operational progress only — private model reasoning is never exposed.</footer>
+        </section>
         <div class="composer-wrap">
           <div id="composer-disabled" class="composer-disabled">Open an investigation to begin</div>
           <div class="composer" id="composer">

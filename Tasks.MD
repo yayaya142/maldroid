@@ -2589,6 +2589,14 @@ minimum that creates overflow, and compact widths must expose Projects plus File
 as reversible drawers. Short screens may remove decoration but must retain Chat and controls. The
 document itself must never require horizontal scrolling at supported breakpoints.
 
+## 41D. Visible Web work progress
+
+Long local-model turns must feel active rather than frozen. While a runtime starts or a turn is in
+progress, Chat must show a central Live Work surface with elapsed time, research phase, tool-call
+count, approximate generated/context tokens, the current operation, and a bounded recent-operation
+timeline. It must use the existing activity stream, remain responsive, and expose operational
+status only—not hidden model reasoning or evidence content.
+
 ## 42. Definition of done
 
 The project is complete only when:

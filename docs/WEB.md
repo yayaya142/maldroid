@@ -35,6 +35,9 @@ pages. There is no non-loopback option.
   of the center pane. Enter sends and Shift+Enter inserts a newline; Actions are optional shortcuts.
 - The right inspector provides bounded case files and previews, structured research state, direct
   triage/report actions, and a live activity stream without exposing hidden model reasoning.
+- While the runtime starts or the model works, Chat shows a Live Work panel with elapsed time,
+  research phase, tool-call count, approximate generated/context tokens, the current operation,
+  and the latest three operational steps. It never renders private reasoning.
 - The Files tab provides name/path filtering, collapsible directories, type-aware icons, item
   counts, selected-file state, keyboard navigation, and bounded previews with line numbers.
 

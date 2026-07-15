@@ -4,6 +4,11 @@ Last updated: 2026-07-15
 
 ## Completed
 
+- Web Chat now shows a responsive Live Work surface throughout runtime startup and model turns:
+  elapsed time, research phase, tool count, approximate generated/context tokens, current action,
+  and the latest three operational events. It intentionally excludes private reasoning and raw
+  evidence content.
+
 - Web responsive layout now supports normal 100% zoom across desktop, compact laptop, tablet, and
   phone widths. Projects/Files use clamped desktop columns; at 900px and below Chat becomes full
   width and both side panes become independently closable drawers. Tested viewport widths have no

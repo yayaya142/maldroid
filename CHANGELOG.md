@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a central Web Live Work surface with elapsed time, phase/tool/token telemetry, current
+  operation, and a bounded recent-operation timeline while keeping hidden reasoning private.
+
 - Rebuilt the Web workspace as a fluid 100%-zoom layout with clamped desktop columns, a centered
   flexible chat, compact-height rules, and project/inspector drawers for laptop, tablet, and phone
   widths without horizontal overflow.

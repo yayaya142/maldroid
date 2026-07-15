@@ -1,9 +1,9 @@
 # Current Handoff
 
-Task: `WEB-003`
+Task: `WEB-004`
 Next task: `PLATFORM-011`
 
-Implementation commit: `bd975bd`
+Implementation commit: pending
 
 ## Outcome
 
@@ -17,6 +17,21 @@ research state, activity, settings, reports, and MCP connectors. Bare `maldroid`
 CLI; `maldroid cli` selects the terminal explicitly.
 
 ## Web usability follow-up
+
+### Live work transparency
+
+- Added a central Live Work surface above the composer for runtime startup and active model turns.
+  It shows elapsed time, research phase, tool-call count, approximate generated/context tokens,
+  the current operation, and the latest three operational events.
+- The view is driven by the existing authenticated WebSocket activity stream and adds no new model
+  or filesystem authority. It displays bounded operation labels/results only; private reasoning and
+  raw evidence content remain excluded.
+- The panel participates in the center-pane flex layout instead of overlaying messages. Phone widths
+  collapse metrics to two columns, while short screens remove the timeline/footer before removing
+  any chat controls.
+- Browser verification covered 1280×720 and 390×844 at 100% zoom with zero document-level
+  horizontal overflow and no MalDroid JavaScript console errors. Active-model event timing remains
+  part of `PLATFORM-011` because this Linux workspace has no configured llama-server/GGUF.
 
 - Fixed the root cause of the missing chat box: the legacy adjacent-sibling CSS rule continued to
   hide the composer after runtime activation. Explicit active/hidden state now wins, the composer is
@@ -163,10 +178,10 @@ Web-focused contracts:
 ./scripts/dev test tests/test_web_workspace.py
 ```
 
-Result: 7 passed. Coverage includes per-run token rejection, project creation/listing, Unicode and
+Result: 10 passed. Coverage includes per-run token rejection, project creation/listing, Unicode and
 bounded file preview through path policy, authenticated WebSocket bootstrap, global runtime lease,
-loopback-only config validation, explicit production WebSocket packaging, and hidden-reasoning
-exclusion from timeline output.
+loopback-only config validation, explicit production WebSocket packaging, hidden-reasoning
+exclusion from timeline output, and the Live Work telemetry/privacy contract.
 
 Real local browser smoke test:
 
@@ -201,7 +216,7 @@ Focused and full tests:
 Results: all focused suites passed. Repetition-specific coverage includes Hebrew words, phrases,
 Unicode character runs, normal prose/code/JSON false-positive fixtures, disabled behavior, stream
 closure, fresh-session continuation, objective carry-over, and bounded exhaustion. The current full
-suite passed with `136 passed`; the focused Web/UI suite passed with `16 passed`.
+suite passed with `137 passed`; the focused Web/UI suite passed with `17 passed`.
 
 Release gate:
 
@@ -209,10 +224,10 @@ Release gate:
 ./scripts/dev release-check
 ```
 
-The current final run passed Ruff formatting/lint, mypy for 43 source files, 136 tests with 71%
+The current final run passed Ruff formatting/lint, mypy for 43 source files, 137 tests with 71%
 coverage, project hygiene, installer dry-run, wheel build, and archive verification. The wheel is
-`dist/maldroid-0.1.0-py3-none-any.whl` (154,539 bytes, SHA-256
-`3b919942f6579581186b516b23482fa7aff6710a52c5a1c30082ab82a70e8e91`) and contains the updated
+`dist/maldroid-0.1.0-py3-none-any.whl` (156,482 bytes, SHA-256
+`1017d14db278e47fa93f68fad021a79ee77a723450e37544ae1ac8d2f9bf680a`) and contains the updated
 composer, theme, Files explorer, repetition guard, updater, Web server, and all three static assets.
 `node --check src/maldroid/web/static/app.js` also passed.
 

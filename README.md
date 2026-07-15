@@ -105,6 +105,10 @@ The layout is designed for normal 100% browser zoom: Projects and Files use flui
 the chat stays centered in its remaining space, and both side panes become header-controlled drawers
 on compact laptop, tablet, and phone widths instead of forcing horizontal overflow.
 
+During long turns, a central Live Work panel confirms that the local model is active with elapsed
+time, phase, tool count, approximate token telemetry, and recent operational steps. It deliberately
+does not expose private model reasoning.
+
 Opening an existing directory creates only `.maldroid/` initially. Opening a file creates a
 managed case and registers a symlink by default. No analysis starts merely because an artifact is
 detected.
