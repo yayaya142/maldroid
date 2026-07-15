@@ -3,7 +3,7 @@
 Task: `WEB-001`
 Next task: `PLATFORM-011`
 
-Implementation commit: `97afc6f`
+Implementation commits: `97afc6f`, `2f6a537`
 
 ## Outcome
 
@@ -131,6 +131,10 @@ coverage, project hygiene, installer dry-run, wheel build, and archive verificat
 `dist/maldroid-0.1.0-py3-none-any.whl` (147,989 bytes) and contains the Web server plus all three
 static assets. `node --check src/maldroid/web/static/app.js` also passed.
 
+GitHub Actions run `29433131792` passed on macOS 26 and Kali for commit `2f6a537`. Both jobs passed
+dependency bootstrap (including the explicit WebSocket backend), Ruff, mypy, formatting, all 115
+tests, coverage, and installer dry-run.
+
 GitHub Actions run `29430555735` passed Kali and exposed one macOS-only failure: the new behavior
 search required ripgrep, which the macOS image does not install. Commit `6e4e744` added and tested
 the bounded streaming fallback. Replacement run `29430877237` passed both macOS 26 and Kali,
@@ -157,6 +161,5 @@ including lint, formatting, all 106 tests, and installer dry-run.
 git diff --check && git status --short
 ```
 
-Commit and push `WEB-001`, confirm macOS/Kali CI, then install current `main` on the owner's macOS
-host and begin `PLATFORM-011` with Web/CLI parity acceptance followed by the real one-hour React
-Native and Native/Ghidra MCP investigations.
+Install current `main` on the owner's macOS host and begin `PLATFORM-011` with Web/CLI parity
+acceptance followed by the real one-hour React Native and Native/Ghidra MCP investigations.

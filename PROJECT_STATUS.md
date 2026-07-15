@@ -139,9 +139,9 @@ Last updated: 2026-07-15
 
 ## Current test status
 
-The local 115-test suite and release gate pass. GitHub Actions still needs to be run for the Web
-workspace commit. Previous GitHub Actions run `29430877237` passes on macOS 26 and Kali, including
-lint, formatting, the full suite, and installer dry-run. See
+The local 115-test suite and release gate pass. GitHub Actions run `29433131792` passes the Web
+workspace commit on macOS 26 and Kali, including dependency bootstrap, lint, formatting, the full
+suite, and installer dry-run. See
 `docs/handoffs/CURRENT.md` for exact commands and environment-gated acceptance work.
 
 ## Immediate task
