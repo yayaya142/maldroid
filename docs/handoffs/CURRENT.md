@@ -3,7 +3,7 @@
 Task: `WEB-006`
 Next task: `PLATFORM-011`
 
-Implementation commit: pending
+Implementation commit: `f231ec4`
 
 ## Outcome
 
@@ -262,10 +262,10 @@ Release gate:
 
 The current final run passed Ruff formatting/lint, mypy for 43 source files, 140 tests with 72%
 coverage, project hygiene, installer dry-run, wheel build, and archive verification. The wheel is
-`dist/maldroid-0.1.0-py3-none-any.whl` (158,106 bytes, SHA-256
-`093170ab18d9383d74a509544da46c648bc225435279c994d5cb5ef0835924e7`) and contains the updated
-composer, Live Work telemetry, theme, Files explorer, repetition guard, updater, Web server, and all
-three static assets.
+`dist/maldroid-0.1.0-py3-none-any.whl` (159,321 bytes, SHA-256
+`dcf59912813f6be81a7af332b37e37e2d4736f455cb9ca58aec8dcc84d51a3dd`) and contains the updated
+composer, Live Work telemetry, latest-turn Files markers, hidden-log control, theme, repetition
+guard, updater, Web server, and all three static assets.
 `node --check src/maldroid/web/static/app.js` also passed.
 
 GitHub Actions run `29433131792` passed on macOS 26 and Kali for commit `2f6a537`. Both jobs passed
