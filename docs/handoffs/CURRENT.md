@@ -3,7 +3,7 @@
 Task: `CLI-011`
 Next task: `PLATFORM-011`
 
-Implementation commit: `505e6e8`
+Implementation commits: `505e6e8`, `edde4e5`
 
 ## Outcome
 
@@ -159,6 +159,10 @@ GitHub Actions run `29433131792` passed on macOS 26 and Kali for commit `2f6a537
 dependency bootstrap (including the explicit WebSocket backend), Ruff, mypy, formatting, all 115
 tests, coverage, and installer dry-run.
 
+GitHub Actions run `29433912079` passed `CLI-011` on macOS 26 and Kali for commit `edde4e5`. Both
+jobs passed dependency bootstrap, Ruff, mypy, formatting, all 122 tests, coverage, and installer
+dry-run.
+
 GitHub Actions run `29430555735` passed Kali and exposed one macOS-only failure: the new behavior
 search required ripgrep, which the macOS image does not install. Commit `6e4e744` added and tested
 the bounded streaming fallback. Replacement run `29430877237` passed both macOS 26 and Kali,
@@ -188,6 +192,6 @@ including lint, formatting, all 106 tests, and installer dry-run.
 git diff --check && git status --short
 ```
 
-Commit, push, and confirm macOS/Kali CI for `CLI-011`. Then install current `main` once on the
-owner's macOS host, run `maldroid update` from the installed command, and begin `PLATFORM-011` with
-Web/CLI parity acceptance followed by the real one-hour React Native and Native/Ghidra MCP work.
+Install current `main` once on the owner's macOS host, run `maldroid update` from the installed
+command, and begin `PLATFORM-011` with Web/CLI parity acceptance followed by the real one-hour React
+Native and Native/Ghidra MCP work.

@@ -143,9 +143,9 @@ Last updated: 2026-07-15
 
 ## Current test status
 
-The local 122-test suite and release gate pass with 71% coverage. GitHub Actions must be rerun for
-the self-update commit; run `29433131792` passed the preceding Web workspace commit on macOS 26 and
-Kali. See
+The local 122-test suite and release gate pass with 71% coverage. GitHub Actions run `29433912079`
+passes the self-update commit on macOS 26 and Kali, including dependency bootstrap, lint, mypy,
+formatting, all tests, coverage, and installer dry-run. See
 `docs/handoffs/CURRENT.md` for exact commands and environment-gated acceptance work.
 
 ## Immediate task
