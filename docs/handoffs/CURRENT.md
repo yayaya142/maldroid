@@ -3,7 +3,7 @@
 Task: `CLI-011`
 Next task: `PLATFORM-011`
 
-Implementation commit: pending
+Implementation commit: `505e6e8`
 
 ## Outcome
 
