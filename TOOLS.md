@@ -22,8 +22,13 @@ Every public name is centrally namespaced with the `MalDroid_` prefix.
 | `MalDroid_count_lines` | `path` | Streaming line count | Does not load the file |
 | `MalDroid_extract_strings` | `path`, `minimum_length` | Preview and output file | Static extraction, timeout, no execution |
 | `MalDroid_register_evidence` | `path`, `mode`, `calculate_hash` | Evidence record | Tool input must already be case-visible; external registration is CLI-controlled |
-| `MalDroid_read_case_state` | none | Summary, counts, open TODOs, recent notes | Excludes full histories and evidence content |
-| `MalDroid_save_note` | `text`, `evidence` | Stable note | Case-only write; required after meaningful investigation turns |
+| `MalDroid_read_case_state` | none | Findings, TODOs, latest checkpoint, counts, and research-note digest | Complete histories use paginated list/get tools |
+| `MalDroid_save_note` | text, kind, title, evidence | Stable research insight, decision, or hypothesis | Rejects tool activity, dumps, and operational errors |
+| `MalDroid_save_checkpoint` | typed objective/progress/evidence/change/next-action fields | Semantic continuity record | Requires substantive content and a next action unless complete |
+| `MalDroid_list_findings`, `MalDroid_get_finding` | pagination or stable ID | Complete Finding readback | No evidence bytes |
+| `MalDroid_list_notes`, `MalDroid_get_note` | pagination or stable ID | Meaningful research Notes | Operational history excluded |
+| `MalDroid_list_todos` | pagination | Open and completed TODOs | Stable IDs |
+| `MalDroid_list_checkpoints`, `MalDroid_get_checkpoint` | pagination or stable ID | Typed research continuity | Tool/audit payloads excluded |
 | `MalDroid_save_finding` | title, summary, confidence, severity, status, evidence, tags | Stable finding | Validated enums and evidence shape |
 | `MalDroid_update_finding` | `finding_id`, `changes` | Updated finding | Field allowlist |
 | `MalDroid_update_todo` | action, `text_or_id` | TODO or removal result | Validated actions |
@@ -32,6 +37,11 @@ Every public name is centrally namespaced with the `MalDroid_` prefix.
 | `MalDroid_index_large_text_file` | `path`, `chunk_lines` | Hash, line/chunk metadata | Text only; source is not duplicated as readable content |
 | `MalDroid_search_large_text_index` | path, query, page options | Matching chunk boundaries | Contentless FTS5 |
 | `MalDroid_read_large_text_chunk` | path, chunk number | Source lines/offsets and bounded content | Invalidated on source change |
+| `MalDroid_inventory_case` | path and file/count limits | Types, sizes, largest files, large-text candidates | Bounded recursive inventory |
+| `MalDroid_extract_network_indicators` | path and limits | URLs, WebSockets, domains, IPs, emails, source paths | Static extraction; full overflow saved |
+| `MalDroid_search_behavior_patterns` | path, categories, limits | Grouped network/persistence/identity/crypto/dynamic/bridge/command/WebView leads | One bounded ripgrep pass; matches are not reachability proof |
+| `MalDroid_read_byte_range` | path, offset, length | Exact bounded hex/ASCII rows | Maximum 64 KiB |
+| `MalDroid_build_research_report` | title, tentative filter | `reports/RESEARCH_REPORT.md` | Deterministic durable-state view; no evidence bytes |
 
 Example:
 
@@ -60,6 +70,8 @@ Example:
 | `MalDroid_find_javascript_symbol` | same search parameters | Exact textual occurrences | Not semantic resolution |
 | `MalDroid_trace_javascript_symbol_occurrences` | same search parameters | Contexts and evidence positions | Not a reconstructed runtime call graph |
 | `MalDroid_extract_bundle_urls` | `path` | Unique URLs and approximate lines | Textual extraction only |
+| `MalDroid_triage_react_native_bundle` | path and per-family limit | Behavior-family hits mapped to offsets and Metro modules | Leads require source-to-sink verification |
+| `MalDroid_list_react_native_bridges` | path | NativeModules, TurboModules, components, offsets | Textual bridge inventory |
 
 ## Native tools
 
@@ -71,6 +83,10 @@ Example:
 | `MalDroid_search_native_strings` | path, query, minimum length | Saved `strings` output and bounded exact matches |
 | `MalDroid_read_disassembly_range` | path, hexadecimal start/stop | At most 1 MiB address range via allowlisted `objdump` |
 | `MalDroid_search_disassembly` | path, query | Saved disassembly and bounded textual matches |
+| `MalDroid_inspect_native_dependencies` | path | NEEDED libraries, SONAME, runpath, binding indicators |
+| `MalDroid_list_elf_relocations` | path | Saved relocation inventory |
+| `MalDroid_inspect_jni_surface` | path | Static JNI exports, dynamic registration indicators, Ghidra next step |
+| `MalDroid_inspect_native_hardening` | path | NX, RELRO, canary, fortify indicators and source outputs |
 
 Native inputs are parsed or disassembled statically and are never loaded or executed.
 

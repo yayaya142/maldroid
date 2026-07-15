@@ -11,6 +11,7 @@ from datetime import datetime
 from pathlib import Path
 
 from maldroid.config import AppConfig, resolved_cases_directory
+from maldroid.constants import STATE_SCHEMA_VERSION
 from maldroid.exceptions import CaseError
 from maldroid.io_utils import atomic_write_json, atomic_write_text
 from maldroid.models import CaseMetadata, CaseState, now_iso
@@ -46,6 +47,9 @@ class CaseManager:
         (root / "notes" / "CASE.md").write_text("# Case Notes\n\n", encoding="utf-8")
         (root / "notes" / "FINDINGS.md").write_text("# Findings\n\n", encoding="utf-8")
         (root / "notes" / "TODO.md").write_text("# TODO\n\n", encoding="utf-8")
+        (root / "notes" / "CHECKPOINTS.md").write_text(
+            "# Research Checkpoints\n\n", encoding="utf-8"
+        )
         (root / "notes" / "SESSION_SUMMARY.md").write_text(
             "# Session Summary\n\n", encoding="utf-8"
         )
@@ -86,7 +90,9 @@ class CaseManager:
         try:
             with metadata_path.open("rb") as handle:
                 metadata = CaseMetadata.model_validate(tomllib.load(handle))
-            state = CaseState.model_validate_json(state_path.read_text(encoding="utf-8"))
+            state = CaseState.model_validate(
+                _migrate_state(json.loads(state_path.read_text(encoding="utf-8")))
+            )
         except (OSError, ValueError, tomllib.TOMLDecodeError) as exc:
             raise CaseError(f"Cannot load case metadata from {root}: {exc}") from exc
         if Path(metadata.root).resolve() != root:
@@ -145,8 +151,10 @@ class CaseManager:
         try:
             with (root / ".maldroid" / "case.toml").open("rb") as handle:
                 metadata = CaseMetadata.model_validate(tomllib.load(handle))
-            state = CaseState.model_validate_json(
-                (root / ".maldroid" / "state.json").read_text(encoding="utf-8")
+            state = CaseState.model_validate(
+                _migrate_state(
+                    json.loads((root / ".maldroid" / "state.json").read_text(encoding="utf-8"))
+                )
             )
             return Case(root=root, metadata=metadata, state=state)
         except (OSError, ValueError, tomllib.TOMLDecodeError) as exc:
@@ -189,3 +197,27 @@ def _unique_directory(path: Path) -> Path:
         candidate = path.with_name(f"{path.name}-{counter}")
         counter += 1
     return candidate
+
+
+def _migrate_state(payload: object) -> dict[str, object]:
+    """Apply small forward-only migrations while preserving existing case content."""
+    if not isinstance(payload, dict):
+        raise ValueError("case state must be a JSON object")
+    migrated = dict(payload)
+    version = int(migrated.get("schema_version", 1))
+    if version > STATE_SCHEMA_VERSION:
+        raise ValueError(
+            f"case state schema {version} is newer than supported schema {STATE_SCHEMA_VERSION}"
+        )
+    if version < 2:
+        migrated.setdefault("checkpoints", [])
+        notes = migrated.get("notes", [])
+        if isinstance(notes, list):
+            migrated["notes"] = [
+                {**note, "kind": "research_note"}
+                if isinstance(note, dict) and "kind" not in note
+                else note
+                for note in notes
+            ]
+        migrated["schema_version"] = 2
+    return migrated

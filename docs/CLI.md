@@ -31,9 +31,9 @@ the display is explicitly approximate. Input history is persisted inside the cas
 ### Long-running agent controller
 
 A user request is not stopped merely because one tool window is exhausted. The default controller
-runs eight tool rounds per phase, writes a durable MCP checkpoint, compacts the conversation, then
-continues the original objective automatically. Phases are unlimited by default, allowing a task to
-run for as long as completion requires. The same rollover happens early when context reaches the
+runs eight tool rounds per phase, writes a typed semantic MCP checkpoint, and continues without
+compacting usable context. Phases are unlimited by default, allowing a task to run for as long as
+completion requires. Compaction happens only when context reaches the
 configured compaction threshold, so context exhaustion is handled inside the active task rather
 than after it returns to the prompt. The legacy `limits.max_task_phases` key remains accepted for
 configuration compatibility but no longer stops the controller, including in existing installs
@@ -45,6 +45,11 @@ error responses are normalized from structured, wrapped, and plain-text result v
 the unhelpful generic “no ToolResult payload” failure when the server supplied an error message.
 If all retries fail, the turn pauses with a clear external-dependency panel while the CLI and case
 remain open; it does not terminate the session or discard durable work.
+
+The controller reserves the next completion budget in its context calculation. By default only the
+six most recent tool results and reasoning blocks remain in full active context; older results are
+replaced with small receipts while complete session JSONL and saved output remain available. The
+original objective is not reinserted at every tool window.
 
 Controller settings are validated and discoverable:
 
@@ -119,6 +124,22 @@ Use `/help` for the complete command table. The principal live views are `/statu
 `/reasoning`, `/tools`, `/findings`, `/todo`, `/checkpoints`, `/history`, `/server`, and `/mcp`. `/quit` is an
 alias for `/exit`. In non-interactive input or with `MALDROID_SIMPLE_INPUT=1`, MalDroid falls back
 to its reliable line-oriented prompt.
+
+Direct research commands:
+
+```text
+/dashboard
+/inventory [PATH]
+/indicators [PATH]
+/triage [PATH]
+/findings [FIND-ID]
+/timeline [5-100]
+/report
+```
+
+These commands inspect durable/local state directly without consuming a model turn. `/report`
+atomically rebuilds `reports/RESEARCH_REPORT.md` from Findings, TODOs, and the latest typed
+checkpoint.
 
 ### Reasoning control
 
@@ -244,6 +265,8 @@ summary or, if generation fails, durable findings, notes, TODOs, profile, and pr
 Tool-window checkpoints do not trigger compaction: they preserve meaningful evidence activity and
 structured state while the existing context remains available. The terminal announces when the
 agent is organizing TODO/Finding state, saving a checkpoint, or compacting for actual context use.
+`limits.retained_tool_results` defaults to `6` and controls how many full results remain in the
+active model context; it never removes the session/audit copy.
 
 ## Exit behavior
 

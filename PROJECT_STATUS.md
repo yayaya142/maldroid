@@ -1,8 +1,22 @@
 # Project Status
 
-Last updated: 2026-07-14
+Last updated: 2026-07-15
 
 ## Completed
+
+- Long-investigation platform upgrade: state schema v2 separates typed semantic Checkpoints from
+  research Notes, rejects operational tool/error dumps from model Notes, migrates v1 cases, adds
+  complete paginated MCP readback, and deterministically builds `reports/RESEARCH_REPORT.md`.
+- Working-context retention now reserves response capacity, retains only a configurable recent
+  result/reasoning window, replaces older payloads with session-backed receipts, and stops repeating
+  the original objective at every autonomous phase.
+- The interactive workspace adds `/dashboard`, `/inventory`, `/indicators`, `/triage`, Finding
+  drill-down, `/timeline`, and `/report`, plus checkpoint-aware status and toolbar views.
+- React Native and Native/Ghidra now have automatically routed, evidence-oriented methodology
+  playbooks. New profile tools map bundle behavior to Metro modules, inventory bridges, parse ELF
+  dependencies/relocations/JNI surfaces, and summarize hardening.
+- Core static triage now provides artifact inventory, network-indicator extraction, multi-family
+  behavior search, and bounded byte-range hex/ASCII reads for huge or binary artifacts.
 
 - Governance, sequential-agent handoff contract, automatic development venv, packaging, and CI.
 - Validated secure configuration with the supplied Gemma 4 performance preset.
@@ -65,7 +79,7 @@ Last updated: 2026-07-14
   toolbar/status, persists through `llama.reasoning_level`, and uses llama.cpp's native dynamic
   `thinking_budget_tokens` request field without requiring a server restart.
 - Long requests use autonomous checkpoint/compact/continue phases instead of stopping after eight
-  tools. Phases are unlimited by default, with durable phase notes, original-objective recovery,
+  tools. Phases are unlimited by default, with typed semantic checkpoints, original-objective recovery,
   mid-task context-threshold rollover and bounded model retries. The legacy phase-ceiling config
   value is ignored so existing installations also become unlimited automatically.
 - llama.cpp responses stream into a structured accumulator for content, reasoning, tool-call
@@ -79,22 +93,26 @@ Last updated: 2026-07-14
   selection tools. Manual CLI/slash overrides lock the session until `/profile auto` is requested.
 - Tool-round windows no longer compact usable context. They save bounded, evidence-rich progress
   checkpoints and continue; only actual context pressure triggers summarization and reset.
-- The controller actively drives TODO, Finding, and note maintenance during substantive work. A
-  fresh synthesis must follow later evidence operations, and automatic fallback notes include
-  objective, arguments/results, durable state, synthesis, and next action rather than tool names.
+- The controller actively drives TODO and Finding maintenance during substantive work. A typed
+  semantic checkpoint must follow later evidence operations; operational tool/error content is
+  excluded from Notes and low-value fallback content is skipped.
 - Persistent external MCP connectors support loopback Streamable HTTP and SSE URLs, optional
   nicknames, namespaced discovery/execution inside the agent, non-blocking offline behavior,
   connector and case histories, bounded outputs, and explicit remove/uninstall lifecycle.
 
 ## Partial or environment-gated
 
+- The platform upgrade passes synthetic/local contracts but still requires a multi-hour real Gemma
+  4 investigation on the owner's React Native and Native/Ghidra cases. CLI latency and checkpoint
+  quality under real MCP/Ghidra output are not yet physically accepted.
+- Internal model subagents remain deliberately deferred. Typed state and context pruning address the
+  immediate pollution problem without adding another model/state-merging security boundary.
+
 - The reproduced Finding contract failure is fixed: evidence descriptions now have a safe default,
   validation errors identify the failing field, and `FINDINGS.md` includes evidence, tags,
   timestamps, and tool provenance. The owner's real macOS case still needs confirmation.
-- Finding, Note, and TODO writes roll canonical state back if deterministic Markdown rendering
-  fails. Mutations still lack revision/idempotency semantics, and MCP readback does not expose
-  complete Findings, Notes, or completed TODOs.
-- Automatic Notes lack a typed semantic checkpoint contract and may preserve tool/error noise.
+- Finding, Note, TODO, and Checkpoint writes roll canonical state back if deterministic Markdown
+  rendering fails. Mutations still lack revision/idempotency semantics.
 - `maldroid cases` opens the configured directory; `--list` and `--json` provide inventories.
 - Safe Python decoding-script execution is requested but not designed or implemented. No sandbox
   claim is authorized until an ADR and adversarial OS-isolation tests exist.
@@ -116,5 +134,6 @@ The local synthetic suite passes. See `docs/handoffs/CURRENT.md` for exact comma
 
 ## Immediate task
 
-Retest `MalDroid_save_finding` on the owner's macOS case to confirm the reproduced schema failure was
-the only user-visible cause, then continue the reliability sequence without broad feature work.
+Install the platform-upgrade commit on the owner's macOS host and run one long React Native case and
+one Native/Ghidra MCP case. Verify semantic checkpoints, report quality, context receipts, direct
+triage commands, and the existing `MalDroid_save_finding` fix against real model calls.

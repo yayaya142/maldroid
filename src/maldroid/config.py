@@ -105,6 +105,7 @@ class LimitsConfig(BaseModel):
     max_task_phases: int = Field(default=0, ge=0, le=100000)
     model_retry_attempts: int = Field(default=3, ge=1, le=10)
     auto_compact_ratio: float = Field(default=0.72, ge=0.5, le=0.8)
+    retained_tool_results: int = Field(default=6, ge=1, le=32)
 
 
 class ExternalToolsConfig(BaseModel):

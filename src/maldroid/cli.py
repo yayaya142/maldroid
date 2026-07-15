@@ -119,6 +119,7 @@ CONFIG_DESCRIPTIONS = {
     "limits.max_task_phases": "Deprecated compatibility setting; phases are unlimited.",
     "limits.model_retry_attempts": "Transient model-request attempts before failing the turn.",
     "limits.auto_compact_ratio": "Context usage ratio that triggers automatic compaction.",
+    "limits.retained_tool_results": "Recent full tool results retained in active model context.",
     "external_tools.blutter": "Optional path to an explicitly configured Blutter adapter.",
     "mcp.host": "Fixed loopback host for the Python MCP server.",
     "mcp.preferred_port": "Fixed MCP port; defaults to 8765 and never falls back.",

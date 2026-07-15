@@ -6,6 +6,7 @@ import bisect
 import hashlib
 import json
 import re
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -47,6 +48,39 @@ class SearchBundleInput(BundleInput):
     query: str = Field(min_length=1, max_length=1000)
     max_results: int = Field(default=50, ge=1, le=200)
     context_characters: int = Field(default=160, ge=20, le=1000)
+
+
+class TriageBundleInput(BundleInput):
+    max_results_per_family: int = Field(default=25, ge=1, le=200)
+
+
+RN_BEHAVIOR_PATTERNS: dict[str, re.Pattern[bytes]] = {
+    "network": re.compile(rb"https?://|wss?://|\bfetch\b|axios|XMLHttpRequest|WebSocket", re.I),
+    "storage": re.compile(rb"AsyncStorage|MMKV|SQLite|Realm|Keychain|EncryptedStorage", re.I),
+    "native_bridge": re.compile(
+        rb"NativeModules|TurboModuleRegistry|requireNativeComponent|DeviceEventEmitter", re.I
+    ),
+    "dynamic_code": re.compile(
+        rb"\beval\s*\(|new\s+Function|dynamic\s+import|sourceMappingURL", re.I
+    ),
+    "identifiers": re.compile(
+        rb"ANDROID_ID|advertisingId|deviceId|installationId|getImei|getSubscriberId", re.I
+    ),
+    "android_capability": re.compile(
+        rb"AccessibilityService|DeviceAdmin|NotificationListener|VpnService|SYSTEM_ALERT_WINDOW|BOOT_COMPLETED",
+        re.I,
+    ),
+    "crypto_encoding": re.compile(rb"AES|RSA|Hmac|SHA-?256|encrypt|decrypt|base64", re.I),
+    "command_channel": re.compile(
+        rb"command|opcode|dispatch|handler|heartbeat|polling|pushToken|onMessage", re.I
+    ),
+}
+
+BRIDGE_PATTERNS = (
+    re.compile(rb"NativeModules\.([A-Za-z_$][\w$]{1,127})"),
+    re.compile(rb"TurboModuleRegistry\.(?:get|getEnforcing)\([\"']([^\"']{1,128})"),
+    re.compile(rb"requireNativeComponent\([\"']([^\"']{1,128})"),
+)
 
 
 def inspect_javascript_bundle(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
@@ -219,6 +253,115 @@ def extract_bundle_urls(context: ToolContext, arguments: BaseModel) -> dict[str,
     return {"path": values.path, "total_urls": len(results), "results": results}
 
 
+def triage_react_native_bundle(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
+    values = TriageBundleInput.model_validate(arguments)
+    path = context.read_path(values.path)
+    if not path.is_file():
+        raise ValueError("A React Native bundle file is required.")
+    modules: list[dict[str, Any]] = []
+    with suppress(CaseError):
+        modules = _load_index(context, values.path)["modules"]
+    starts = [item["start_offset"] for item in modules]
+    totals = {family: 0 for family in RN_BEHAVIOR_PATTERNS}
+    results: dict[str, list[dict[str, Any]]] = {family: [] for family in RN_BEHAVIOR_PATTERNS}
+    carry = b""
+    consumed = 0
+    line = 1
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            data = carry + block
+            base = consumed - len(carry)
+            safe_length = max(0, len(data) - 4096)
+            searchable = data[:safe_length] if block else data
+            for family, pattern in RN_BEHAVIOR_PATTERNS.items():
+                for match in pattern.finditer(searchable):
+                    totals[family] += 1
+                    if len(results[family]) >= values.max_results_per_family:
+                        continue
+                    absolute = base + match.start()
+                    module = None
+                    if starts:
+                        module_index = max(0, bisect.bisect_right(starts, absolute) - 1)
+                        module = modules[module_index]["module"]
+                    preview_start = max(0, match.start() - 100)
+                    preview_end = min(len(data), match.end() + 100)
+                    results[family].append(
+                        {
+                            "match": match.group(0).decode("utf-8", errors="replace"),
+                            "offset": absolute,
+                            "line": line + data[: match.start()].count(b"\n"),
+                            "module": module,
+                            "preview": data[preview_start:preview_end].decode(
+                                "utf-8", errors="replace"
+                            ),
+                        }
+                    )
+            line += searchable.count(b"\n")
+            consumed += len(block)
+            carry = data[safe_length:]
+    final_base = consumed - len(carry)
+    for family, pattern in RN_BEHAVIOR_PATTERNS.items():
+        for match in pattern.finditer(carry):
+            totals[family] += 1
+            if len(results[family]) >= values.max_results_per_family:
+                continue
+            absolute = final_base + match.start()
+            module = None
+            if starts:
+                module_index = max(0, bisect.bisect_right(starts, absolute) - 1)
+                module = modules[module_index]["module"]
+            results[family].append(
+                {
+                    "match": match.group(0).decode("utf-8", errors="replace"),
+                    "offset": absolute,
+                    "line": line + carry[: match.start()].count(b"\n"),
+                    "module": module,
+                    "preview": carry[max(0, match.start() - 100) : match.end() + 100].decode(
+                        "utf-8", errors="replace"
+                    ),
+                }
+            )
+    return {
+        "path": values.path,
+        "metro_index_used": bool(modules),
+        "totals": totals,
+        "results": results,
+        "truncated_families": [
+            family for family, total in totals.items() if total > values.max_results_per_family
+        ],
+        "accuracy": "Matches prioritize investigation paths; verify reachability and data flow.",
+    }
+
+
+def list_react_native_bridges(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
+    values = BundleInput.model_validate(arguments)
+    path = context.read_path(values.path)
+    names: dict[str, set[int]] = {}
+    carry = b""
+    consumed = 0
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            data = carry + block
+            base = consumed - len(carry)
+            for pattern in BRIDGE_PATTERNS:
+                for match in pattern.finditer(data):
+                    name = match.group(1).decode("utf-8", errors="replace")
+                    names.setdefault(name, set()).add(base + match.start())
+            consumed += len(block)
+            carry = data[-512:]
+    records = [
+        {"name": name, "occurrences": len(offsets), "sample_offsets": sorted(offsets)[:10]}
+        for name, offsets in sorted(names.items())
+    ]
+    return {
+        "path": values.path,
+        "total_bridges": len(records),
+        "bridges": records[:500],
+        "truncated": len(records) > 500,
+        "next_step": "Correlate names with Java/Kotlin native modules and inspect call sites.",
+    }
+
+
 def register_react_native_tools(registry: ToolRegistry) -> None:
     definitions: list[tuple[str, str, type[BaseModel], ToolHandler]] = [
         (
@@ -268,6 +411,18 @@ def register_react_native_tools(registry: ToolRegistry) -> None:
             "Extract URLs from a bundle without adding the bundle to model context.",
             BundleInput,
             extract_bundle_urls,
+        ),
+        (
+            "triage_react_native_bundle",
+            "Map high-signal behavior families to bounded bundle offsets and Metro modules.",
+            TriageBundleInput,
+            triage_react_native_bundle,
+        ),
+        (
+            "list_react_native_bridges",
+            "Inventory NativeModules, TurboModules, and native components with offsets.",
+            BundleInput,
+            list_react_native_bridges,
         ),
     ]
     for name, description, model, handler in definitions:

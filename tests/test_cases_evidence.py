@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -30,6 +31,31 @@ def test_existing_directory_is_initialized_minimally(tmp_path: Path, app_config:
     assert case.metadata.managed is False
     assert (existing / ".maldroid").is_dir()
     assert not (existing / "evidence").exists()
+
+
+def test_v1_case_state_migrates_without_losing_notes(app_config: AppConfig) -> None:
+    manager = CaseManager(app_config)
+    case = manager.create("Legacy")
+    state_path = case.internal / "state.json"
+    payload = json.loads(state_path.read_text(encoding="utf-8"))
+    payload["schema_version"] = 1
+    payload.pop("checkpoints", None)
+    payload["notes"] = [
+        {
+            "id": "NOTE-0001",
+            "text": "Existing research insight",
+            "evidence": [],
+            "created_at": "2026-07-14T12:00:00+00:00",
+        }
+    ]
+    state_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    reopened = manager.open(case.root)
+
+    assert reopened.state.schema_version == 2
+    assert reopened.state.notes[0].text == "Existing research insight"
+    assert reopened.state.notes[0].kind == "research_note"
+    assert reopened.state.checkpoints == []
 
 
 def test_evidence_symlink_copy_duplicates_and_hash(tmp_path: Path, app_config: AppConfig) -> None:

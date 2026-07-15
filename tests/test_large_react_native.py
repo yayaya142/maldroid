@@ -69,3 +69,18 @@ def test_react_native_module_index_and_bounded_search(app_config: AppConfig) -> 
         {"path": bundle.name, "query": "AccessibilityService"},
     )
     assert search.data["results"][0]["module"] == "34"
+
+    bundle.write_text(
+        bundle.read_text(encoding="utf-8")
+        + "__d(function(){NativeModules.CommandBridge.execute(ANDROID_ID);"
+        + "fetch('https://api.example.com');},56,[]);\n",
+        encoding="utf-8",
+    )
+    dispatcher.execute(mcp_tool_name("index_metro_bundle"), {"path": bundle.name})
+    triage = dispatcher.execute(mcp_tool_name("triage_react_native_bundle"), {"path": bundle.name})
+    assert triage.status == "completed"
+    assert triage.data["totals"]["network"] >= 1
+    assert triage.data["totals"]["identifiers"] >= 1
+    assert triage.data["results"]["native_bridge"][0]["module"] == "56"
+    bridges = dispatcher.execute(mcp_tool_name("list_react_native_bridges"), {"path": bundle.name})
+    assert bridges.data["bridges"][0]["name"] == "CommandBridge"

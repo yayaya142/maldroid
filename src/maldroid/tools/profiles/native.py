@@ -66,6 +66,86 @@ def list_elf_symbols(context: ToolContext, arguments: BaseModel) -> dict[str, An
     return run_allowlisted(context, "readelf", ["-W", "-s", str(path)], "elf-symbols")
 
 
+def inspect_native_dependencies(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
+    values = ElfInput.model_validate(arguments)
+    path = context.read_path(values.path)
+    result = run_allowlisted(context, "readelf", ["-W", "-d", str(path)], "elf-dynamic")
+    output = context.case.root / result["output_file"]
+    text = output.read_text(encoding="utf-8", errors="replace")
+    needed = re.findall(r"\(NEEDED\).*?\[([^]]+)]", text)
+    soname = re.findall(r"\(SONAME\).*?\[([^]]+)]", text)
+    result.update(
+        {
+            "path": values.path,
+            "needed_libraries": needed,
+            "soname": soname[0] if soname else None,
+            "has_runpath": "(RUNPATH)" in text or "(RPATH)" in text,
+            "has_bind_now": "BIND_NOW" in text or "FLAGS_1" in text and "NOW" in text,
+        }
+    )
+    return result
+
+
+def list_elf_relocations(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
+    values = ElfInput.model_validate(arguments)
+    path = context.read_path(values.path)
+    return run_allowlisted(context, "readelf", ["-W", "-r", str(path)], "elf-relocations")
+
+
+def inspect_jni_surface(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
+    values = ElfInput.model_validate(arguments)
+    path = context.read_path(values.path)
+    result = run_allowlisted(context, "readelf", ["-W", "-s", str(path)], "jni-symbols")
+    output = context.case.root / result["output_file"]
+    lines = output.read_text(encoding="utf-8", errors="replace").splitlines()
+    exports = sorted(
+        {match.group(0) for line in lines if (match := re.search(r"Java_[A-Za-z0-9_]+", line))}
+    )
+    indicators = sorted(
+        {
+            indicator
+            for indicator in ("JNI_OnLoad", "RegisterNatives", "GetMethodID", "CallObjectMethod")
+            if any(indicator in line for line in lines)
+        }
+    )
+    result.update(
+        {
+            "path": values.path,
+            "static_jni_exports": exports[:500],
+            "static_jni_export_count": len(exports),
+            "dynamic_jni_indicators": indicators,
+            "next_step": (
+                "Trace JNI_OnLoad/RegisterNatives in Ghidra to recover dynamic class and method mappings."
+                if "JNI_OnLoad" in indicators or "RegisterNatives" in indicators
+                else "Correlate static Java_* exports with Java/Kotlin native declarations."
+            ),
+        }
+    )
+    return result
+
+
+def inspect_native_hardening(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
+    values = ElfInput.model_validate(arguments)
+    path = context.read_path(values.path)
+    program = run_allowlisted(context, "readelf", ["-W", "-l", str(path)], "elf-program-headers")
+    symbols = run_allowlisted(context, "readelf", ["-W", "-s", str(path)], "elf-hardening-symbols")
+    program_text = (context.case.root / program["output_file"]).read_text(errors="replace")
+    symbol_text = (context.case.root / symbols["output_file"]).read_text(errors="replace")
+    stack_line = next((line for line in program_text.splitlines() if "GNU_STACK" in line), "")
+    return {
+        "path": values.path,
+        "nx_stack": not any("E" in token for token in stack_line.split()[-2:])
+        if stack_line
+        else None,
+        "gnu_relro": "GNU_RELRO" in program_text,
+        "stack_canary": "__stack_chk_fail" in symbol_text,
+        "fortify": "_chk@" in symbol_text or "_chk" in symbol_text,
+        "program_headers_output": program["output_file"],
+        "symbols_output": symbols["output_file"],
+        "accuracy": "Hardening indicators are static heuristics and should be verified against ELF flags.",
+    }
+
+
 def search_native_strings(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
     values = StringSearchInput.model_validate(arguments)
     path = context.read_path(values.path)
@@ -141,6 +221,30 @@ def register_native_tools(registry: ToolRegistry) -> None:
             "List ELF symbols with allowlisted readelf.",
             ElfInput,
             list_elf_symbols,
+        ),
+        (
+            "inspect_native_dependencies",
+            "Parse ELF dependencies, SONAME, runpath, and immediate-binding indicators.",
+            ElfInput,
+            inspect_native_dependencies,
+        ),
+        (
+            "list_elf_relocations",
+            "Save the bounded static ELF relocation inventory.",
+            ElfInput,
+            list_elf_relocations,
+        ),
+        (
+            "inspect_jni_surface",
+            "Inventory static JNI exports and dynamic registration indicators for Ghidra tracing.",
+            ElfInput,
+            inspect_jni_surface,
+        ),
+        (
+            "inspect_native_hardening",
+            "Summarize NX, RELRO, stack-canary, and fortify indicators with source outputs.",
+            ElfInput,
+            inspect_native_hardening,
         ),
         (
             "search_native_strings",

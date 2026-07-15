@@ -84,13 +84,36 @@ def test_slash_completion_includes_commands_and_profiles() -> None:
 
 def test_toolbar_exposes_remaining_context_and_durable_state(app_config) -> None:
     chat, _ = make_chat(app_config)
-    chat.investigation.save_note(chat.case, "Continue with the manifest.")
+    chat.investigation.save_checkpoint(
+        chat.case,
+        objective="Inspect the manifest",
+        completed_work=["Mapped exported components"],
+        next_action="Trace component entrypoints",
+    )
     toolbar = "".join(fragment[1] for fragment in chat._bottom_toolbar())
 
     assert "ctx" in toolbar
     assert "left" in toolbar
     assert "generic" in toolbar
-    assert "1 notes" in toolbar
+    assert "1 checkpoints" in toolbar
+
+
+def test_dashboard_and_direct_report_commands_are_research_focused(app_config) -> None:
+    chat, output = make_chat(app_config)
+    chat.investigation.save_checkpoint(
+        chat.case,
+        objective="Trace network behavior",
+        completed_work=["Located the request builder"],
+        next_action="Trace callers",
+    )
+
+    assert chat._slash("/dashboard") is True
+    assert chat._slash("/report") is True
+
+    rendered = output.getvalue()
+    assert "Research dashboard" in rendered
+    assert "Trace callers" in rendered
+    assert "reports/RESEARCH_REPORT.md" in rendered
 
 
 def test_live_tool_event_is_human_readable(app_config) -> None:

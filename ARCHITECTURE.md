@@ -24,8 +24,8 @@ logging. External static utilities are temporary allowlisted subprocesses with `
   child shutdown.
 - `llama_client`: normalized Chat Completions messages, tool calls, and `reasoning_content`.
 - `mcp_server`: MCP protocol discovery/calls, loopback port lifecycle, and the internal MCP client.
-- `agent`, `session_manager`, and `ui`: bounded tool loop, append-only sessions, compaction, and
-  line-oriented chat.
+- `agent`, `session_manager`, and `ui`: long-running tool controller, semantic checkpoints,
+  bounded working context, append-only sessions, compaction, and interactive research workspace.
 - `tools.registry` and `tools.dispatcher`: schema discovery, profile filtering, execution, and
   truncation.
 - `large_files`: contentless FTS5 token index plus source offsets.
@@ -80,11 +80,12 @@ is actually crossed. Phases are unlimited; the legacy ceiling key is accepted on
 compatibility and is not enforced. Transient model calls use bounded retries.
 
 After the first substantive evidence operation, an empty state triggers an internal reminder to
-create and maintain TODOs, Findings, and synthesis notes. A final response is not accepted until a
-fresh note follows the latest investigation activity. If the model ignores the reminder, the agent
-saves a checkpoint containing the objective, bounded arguments and result previews, current
-Findings/TODOs, the model synthesis, and a next action. A tool-name list alone is not treated as
-meaningful continuity. Prose that resembles a tool call is never executed.
+create and maintain TODOs and Findings. A final response is not accepted until a typed semantic
+checkpoint follows the latest investigation activity. Checkpoints contain research progress,
+evidence learned, changed durable IDs, uncertainty, unresolved questions, and an exact next action;
+they never contain tool arguments, result dumps, or failures. Low-value fallback content is skipped
+and operational detail remains in session/audit streams. Prose that resembles a tool call is never
+executed.
 
 ## Profile selection
 
@@ -136,3 +137,9 @@ summarization fails, findings, recent notes, open TODOs, profile, and the prior 
 deterministic fallback. Compaction never deletes full session history, findings, notes, or TODOs.
 Large evidence enters context only through search results, bounded ranges, indexed chunks, or
 modules. Knowledge uses matching excerpts rather than prompt injection.
+
+The controller reserves the next completion budget when calculating context pressure. Only the six
+most recent tool results and reasoning blocks are retained in full by default; older payloads become
+small receipts whose complete contents remain in session JSONL or saved output. The active objective
+is not repeated at every tool window. React Native and Native profiles receive one bounded local
+methodology brief when activated.

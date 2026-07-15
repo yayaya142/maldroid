@@ -2,6 +2,20 @@
 
 ## 0.1.0 - Unreleased
 
+- Rebuilt long-investigation memory around schema-v2 typed Checkpoints, meaningful research Notes,
+  complete MCP state readback, deterministic reports, low-value checkpoint rejection, and v1 case
+  migration without data loss.
+- Added bounded working-context retention: response-budget reservation, configurable recent full
+  tool results, session-backed receipts for older payloads, reasoning pruning, and non-repeating
+  objectives across autonomous phases.
+- Added an interactive research dashboard, direct artifact/network/behavior triage, Finding
+  drill-down, concise timeline, and one-command deterministic report generation.
+- Added core artifact inventory, URL/domain/IP/email/WebSocket extraction, behavior-family search,
+  and byte-range hex/ASCII tools for very large evidence.
+- Added React Native bundle behavior/module triage and bridge inventory, plus Native ELF dependency,
+  relocation, JNI, and hardening tools.
+- Added automatically routed deep React Native and Native/Ghidra MCP investigation methodologies;
+  internal subagent orchestration remains intentionally deferred pending long-run acceptance.
 - Fixed `MalDroid_save_finding` for natural evidence payloads that omit the optional description,
   added rollback across canonical state and Markdown views, and rendered Finding evidence, tags,
   timestamps, and tool provenance.

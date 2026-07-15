@@ -82,16 +82,30 @@ detected.
 
 The terminal workspace provides persistent input history, slash-command and profile completion,
 multiline input, rendered Markdown, live model/tool activity, elapsed time, and a bottom status bar
-with estimated context remaining, findings, TODOs, notes, and the active profile. Use Enter to send,
+with estimated context remaining, findings, TODOs, checkpoints, and the active profile. Use Enter to send,
 Alt+Enter for a newline, Tab to complete, arrow keys for history, Ctrl+L to redraw, and Ctrl+D to
 exit. `/help` is the complete command index; `/context`, `/checkpoints`, `/history`, `/mcp`, and
 `/shortcuts` expose the most useful live views. Reasoning defaults to `medium`; `/reasoning` shows
 all levels and `/reasoning high` changes the budget immediately without restarting llama-server.
 
+Research-oriented shortcuts avoid unnecessary model turns:
+
+```text
+/dashboard                 live objective, context, Findings, TODOs, and next action
+/inventory [PATH]          file-type/size inventory and large-text candidates
+/indicators [PATH]         URLs, domains, IPs, emails, and WebSockets
+/triage [PATH]             high-signal behavior families in one static pass
+/findings [FIND-ID]        list or expand a complete Finding
+/timeline [COUNT]          concise tool/state/compaction timeline
+/report                    rebuild reports/RESEARCH_REPORT.md from durable state
+```
+
 Long investigations run through an autonomous phase controller. Every configured tool-round window
-creates a durable checkpoint and continues the same objective without returning to the prompt or
+creates a typed semantic checkpoint and continues the same objective without returning to the prompt or
 throwing away usable context. Compaction is independent and runs only when the actual context ratio
-crosses its configured threshold. Phases are unlimited, with three automatic retries for transient
+crosses its configured threshold. Older tool payloads become small active-context receipts while
+their full session/output records remain on disk. The next completion budget is reserved before
+the threshold is calculated. Phases are unlimited, with three automatic retries for transient
 model-server failures. During streaming generation, the active status line shows elapsed time,
 generated tokens, context consumption, and estimated tokens remaining.
 
@@ -105,10 +119,11 @@ manual session override; `/profile auto` restores adaptation.
 
 MalDroid does not rely on the local model to remember progress voluntarily. It directs the model to
 create and complete TODOs, turn supported facts and labeled hypotheses into evidence-backed
-Findings, and save meaningful phase notes. Before accepting a final answer it requires a fresh note
-after the latest evidence work. If the model ignores that instruction, the automatic checkpoint
-records the objective, bounded tool inputs/results, structured case state, synthesis, and next
-action—not merely tool names. Context is compacted automatically at 72% usage by default, with
+Findings, and save typed semantic checkpoints. Before accepting a final answer it requires fresh
+continuity after the latest evidence work. If the model ignores that instruction, MalDroid keeps
+only a semantic synthesis and durable IDs; tool arguments, results, and failures remain in audit
+streams. Low-value fallback content is skipped rather than promoted to research. Context is
+compacted automatically at 72% usage by default, with
 durable case state used as a fallback if model summarization fails.
 
 ## MCP tools
@@ -225,8 +240,10 @@ line ranges, uses exact or regex search, and stores oversized results under `too
 large-text index stores chunk boundaries and a contentless FTS5 token index; it does not store a
 second readable copy of the source.
 
-Findings, TODOs, notes, session events, and summaries survive exit and resume. Every code-based
-finding should identify the case path, line or offset range, tool, and confidence.
+Findings, TODOs, typed checkpoints, meaningful research notes, session events, reports, and
+summaries survive exit and resume. Operational failures and tool dumps stay in session/audit logs;
+they are rejected from research Notes. Every code-based finding should identify the case path,
+line or offset range, tool, and confidence.
 
 ## Knowledge
 
@@ -237,7 +254,8 @@ maldroid knowledge reindex
 ```
 
 Built-in, user, and case playbooks are indexed locally with SQLite FTS5. Only bounded matching
-excerpts enter model context.
+excerpts enter model context. React Native and Native profiles automatically receive a bounded
+methodology guide covering Metro/Hermes data-flow work and ELF/JNI/Ghidra MCP investigation.
 
 ## Troubleshooting
 

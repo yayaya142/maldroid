@@ -34,6 +34,7 @@ def test_default_model_performance_settings() -> None:
     assert config.limits.max_tool_rounds == 8
     assert config.limits.max_task_phases == 0
     assert config.limits.model_retry_attempts == 3
+    assert config.limits.retained_tool_results == 6
 
 
 @pytest.mark.parametrize(

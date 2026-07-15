@@ -84,7 +84,32 @@ class SelectProfileInput(Arguments):
 
 class SaveNoteInput(Arguments):
     text: str = Field(min_length=1, max_length=50000)
+    kind: Literal["research_note", "decision", "hypothesis"] = "research_note"
+    title: str | None = Field(default=None, min_length=1, max_length=300)
     evidence: list[EvidenceReference] = Field(default_factory=list)
+
+
+class SaveCheckpointInput(Arguments):
+    objective: str = Field(min_length=1, max_length=12000)
+    completed_work: list[str] = Field(default_factory=list, max_length=50)
+    evidence_learned: list[str] = Field(default_factory=list, max_length=50)
+    findings_changed: list[str] = Field(default_factory=list, max_length=50)
+    todos_changed: list[str] = Field(default_factory=list, max_length=50)
+    unresolved_questions: list[str] = Field(default_factory=list, max_length=50)
+    uncertainty: list[str] = Field(default_factory=list, max_length=50)
+    next_action: str | None = Field(default=None, max_length=4000)
+    status: Literal["in_progress", "complete", "blocked"] = "in_progress"
+    phase: int | None = Field(default=None, ge=1)
+    automatic: bool = False
+
+
+class ListRecordsInput(Arguments):
+    page: int = Field(default=1, ge=1)
+    page_size: int = Field(default=25, ge=1, le=100)
+
+
+class GetRecordInput(Arguments):
+    record_id: str = Field(min_length=1, max_length=100)
 
 
 class SaveFindingInput(Arguments):
@@ -304,12 +329,26 @@ def register_evidence(context: ToolContext, arguments: BaseModel) -> dict[str, A
 
 def read_case_state(context: ToolContext, _: BaseModel) -> dict[str, Any]:
     state = context.case.state
+    open_todos = [item.model_dump() for item in state.todos if item.status == "open"]
     return {
+        "schema_version": state.schema_version,
         "active_profile": state.active_profile,
         "summary": state.summary,
-        "finding_count": len(state.findings),
-        "open_todos": [item.model_dump() for item in state.todos if item.status == "open"],
-        "recent_notes": [item.model_dump() for item in state.notes[-10:]],
+        "counts": {
+            "findings": len(state.findings),
+            "open_todos": len(open_todos),
+            "completed_todos": sum(item.status == "completed" for item in state.todos),
+            "research_notes": len(state.notes),
+            "checkpoints": len(state.checkpoints),
+        },
+        "findings": [item.model_dump() for item in state.findings[-20:]],
+        "open_todos": open_todos,
+        "latest_checkpoint": state.checkpoints[-1].model_dump() if state.checkpoints else None,
+        "recent_research_notes": [item.model_dump() for item in state.notes[-5:]],
+        "readback": {
+            "complete": False,
+            "hint": "Use list/get state tools for complete paginated histories.",
+        },
     }
 
 
@@ -332,7 +371,71 @@ def select_case_profile(_: ToolContext, arguments: BaseModel) -> dict[str, Any]:
 
 def save_note(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
     values = SaveNoteInput.model_validate(arguments)
-    return context.investigation.save_note(context.case, values.text, values.evidence).model_dump()
+    return context.investigation.save_note(
+        context.case,
+        values.text,
+        values.evidence,
+        kind=values.kind,
+        title=values.title,
+    ).model_dump()
+
+
+def save_checkpoint(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
+    values = SaveCheckpointInput.model_validate(arguments)
+    return context.investigation.save_checkpoint(
+        context.case,
+        **values.model_dump(),
+    ).model_dump()
+
+
+def _record_page(records: list[Any], values: ListRecordsInput) -> dict[str, Any]:
+    start = (values.page - 1) * values.page_size
+    selected = records[start : start + values.page_size]
+    return {
+        "page": values.page,
+        "page_size": values.page_size,
+        "total": len(records),
+        "truncated": start + len(selected) < len(records),
+        "records": [item.model_dump() for item in selected],
+    }
+
+
+def list_findings(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
+    return _record_page(context.case.state.findings, ListRecordsInput.model_validate(arguments))
+
+
+def list_notes(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
+    return _record_page(context.case.state.notes, ListRecordsInput.model_validate(arguments))
+
+
+def list_todos(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
+    return _record_page(context.case.state.todos, ListRecordsInput.model_validate(arguments))
+
+
+def list_checkpoints(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
+    return _record_page(context.case.state.checkpoints, ListRecordsInput.model_validate(arguments))
+
+
+def _get_record(records: list[Any], record_id: str, label: str) -> dict[str, Any]:
+    item = next((value for value in records if value.id == record_id), None)
+    if item is None:
+        raise ValueError(f"{label} not found: {record_id}")
+    return item.model_dump()
+
+
+def get_finding(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
+    values = GetRecordInput.model_validate(arguments)
+    return _get_record(context.case.state.findings, values.record_id, "Finding")
+
+
+def get_note(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
+    values = GetRecordInput.model_validate(arguments)
+    return _get_record(context.case.state.notes, values.record_id, "Note")
+
+
+def get_checkpoint(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
+    values = GetRecordInput.model_validate(arguments)
+    return _get_record(context.case.state.checkpoints, values.record_id, "Checkpoint")
 
 
 def save_finding(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
@@ -466,7 +569,50 @@ def register_core_tools(registry: ToolRegistry) -> None:
             Arguments,
             read_case_state,
         ),
-        ("save_note", "Save a persistent investigation note.", SaveNoteInput, save_note),
+        (
+            "save_note",
+            "Save a meaningful research note, decision, or hypothesis; never log tool activity.",
+            SaveNoteInput,
+            save_note,
+        ),
+        (
+            "save_checkpoint",
+            "Save typed research continuity with learned evidence and an exact next action.",
+            SaveCheckpointInput,
+            save_checkpoint,
+        ),
+        (
+            "list_findings",
+            "List complete findings with pagination.",
+            ListRecordsInput,
+            list_findings,
+        ),
+        ("get_finding", "Read one finding by stable ID.", GetRecordInput, get_finding),
+        (
+            "list_notes",
+            "List meaningful research notes with pagination.",
+            ListRecordsInput,
+            list_notes,
+        ),
+        ("get_note", "Read one research note by stable ID.", GetRecordInput, get_note),
+        (
+            "list_todos",
+            "List open and completed TODOs with pagination.",
+            ListRecordsInput,
+            list_todos,
+        ),
+        (
+            "list_checkpoints",
+            "List typed research checkpoints with pagination.",
+            ListRecordsInput,
+            list_checkpoints,
+        ),
+        (
+            "get_checkpoint",
+            "Read one typed research checkpoint by stable ID.",
+            GetRecordInput,
+            get_checkpoint,
+        ),
         (
             "save_finding",
             "Save a structured evidence-backed finding.",

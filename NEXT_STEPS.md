@@ -3,19 +3,27 @@
 The owner has reprioritized reliability and research quality. Follow
 `NEXT_AGENT_MASTER_PLAN.md`; do not add broad new tools before the durable-state gate is trustworthy.
 
-1. `REL-010` — Retest the fixed `MalDroid_save_finding` path on the owner's macOS case. Record
+1. `PLATFORM-011` — Install the long-investigation upgrade on the owner's macOS host. Run a minimum
+   one-hour React Native investigation and one Native/Ghidra MCP investigation. Record context
+   usage across phases, pruned-result receipts, checkpoint contents, Findings/TODO/report parity,
+   direct CLI triage latency, Ghidra connector tool names, model/server versions, and any repeated
+   or low-value state. Acceptance: a fresh session resumes from MCP state without chat history and
+   `reports/RESEARCH_REPORT.md` is useful without manual cleanup.
+2. `REL-010` — Retest the fixed `MalDroid_save_finding` path on the owner's macOS case. Record
    the structured tool call/result, case state before/after, rendered Markdown, audit/session events,
    installed commit, and model/server versions. Add a benign regression test that fails for the
    same payload shape if a distinct failure remains.
-2. `REL-011` — Define canonical-state, transaction, revision, idempotency, rendering, and recovery
+3. `REL-011` — Define canonical-state, transaction, revision, idempotency, rendering, and recovery
    invariants in an ADR with executable contract tests.
-3. `REL-012` through `REL-020` — Execute the durable-state reliability chain in the exact dependency
+4. `REL-012` through `REL-020` — Execute the durable-state reliability chain in the exact dependency
    order documented by the master plan.
-4. `STATE-010` through `STATE-016` — Replace free-form automatic continuity with meaningful typed
-   checkpoints and complete readback.
-5. `CLI-010` — Completed: `maldroid cases` opens the configured cases directory while preserving
+5. `STATE-010`, `STATE-011`, `STATE-012`, `STATE-014`, and `STATE-016` — Partially implemented by
+   `PLATFORM-010`: typed checkpoints, record separation, low-value rejection, checkpoint UI, and
+   evidence-aware final enforcement exist. Finish record linking, telemetry, revision semantics,
+   and adversarial long-run acceptance in dependency order after `REL-011`.
+6. `CLI-010` — Completed: `maldroid cases` opens the configured cases directory while preserving
    `--list` and `--json` automation behavior.
-6. `REL-001` — After the reliability gates, on the user's macOS host run installer dry-run, installation, doctor command
+7. `REL-001` — After the reliability gates, on the user's macOS host run installer dry-run, installation, doctor command
    preview, and `doctor --model-tool-test` using the authorized Gemma 4 GGUF. Record llama.cpp
    version and `/props` template behavior. Acceptance: structured array/object tool call and final
    response pass through MalDroid MCP independently of WebUI built-ins. Connect an external MCP client to the printed endpoint,
@@ -33,7 +41,8 @@ The owner has reprioritized reliability and research quality. Follow
    shell and file authority clearly. After upgrading the installed package, verify that the
    automatically started MCP endpoint connects from the WebUI at `/mcp` with no second terminal,
    both directly and with the per-connection proxy enabled. Run one evidence-inspection turn and
-   confirm a durable checkpoint appears even if the model initially omits `MalDroid_save_note`;
+   confirm a typed durable checkpoint appears even if the model initially omits
+   `MalDroid_save_checkpoint`;
    lower `limits.auto_compact_ratio` temporarily and confirm automatic compaction resumes from it.
    Exercise the terminal workspace in macOS Terminal: command/profile completion, Alt+Enter,
    persistent history, Ctrl+C cancellation, live tool reporting, `/context`, `/reasoning` changes,
@@ -50,10 +59,10 @@ The owner has reprioritized reliability and research quality. Follow
    Add one real local Streamable HTTP connector and one legacy SSE connector, restart MalDroid,
    verify their `MCP_<nickname>_` tools appear and execute, then confirm an offline saved connector
    warns without blocking startup and survives a default uninstall/reinstall.
-7. `REL-002` — Run the full suite and installer lifecycle on Kali rolling and Apple Silicon.
-8. `COMPAT-001` — Expand benign multi-architecture ELF and versioned Blutter fixtures on target
+8. `REL-002` — Run the full suite and installer lifecycle on Kali rolling and Apple Silicon.
+9. `COMPAT-001` — Expand benign multi-architecture ELF and versioned Blutter fixtures on target
    platforms and record exact external-tool versions.
-9. `RESEARCH-001` — Deepen version-specific static playbooks according to Gate 9 of the master plan while preserving the dynamic-analysis
+10. `RESEARCH-001` — Deepen version-specific static playbooks according to Gate 9 of the master plan while preserving the dynamic-analysis
    exclusion.
 
 Only one task may be active at a time. Do not mark a profile complete with placeholders or mocks.

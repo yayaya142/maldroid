@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from maldroid.constants import CASE_SCHEMA_VERSION, STATE_SCHEMA_VERSION
 
@@ -69,8 +69,44 @@ class InvestigationNote(BaseModel):
     model_config = ConfigDict(extra="forbid")
     id: str
     text: str
+    kind: Literal["research_note", "decision", "hypothesis", "user_note"] = "research_note"
+    title: str | None = None
     evidence: list[EvidenceReference] = Field(default_factory=list)
     created_at: str = Field(default_factory=now_iso)
+
+
+class InvestigationCheckpoint(BaseModel):
+    """Typed continuity record; operational logs belong in session/audit streams."""
+
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    objective: str = Field(min_length=1, max_length=12000)
+    completed_work: list[str] = Field(default_factory=list, max_length=50)
+    evidence_learned: list[str] = Field(default_factory=list, max_length=50)
+    findings_changed: list[str] = Field(default_factory=list, max_length=50)
+    todos_changed: list[str] = Field(default_factory=list, max_length=50)
+    unresolved_questions: list[str] = Field(default_factory=list, max_length=50)
+    uncertainty: list[str] = Field(default_factory=list, max_length=50)
+    next_action: str | None = Field(default=None, max_length=4000)
+    status: Literal["in_progress", "complete", "blocked"] = "in_progress"
+    phase: int | None = Field(default=None, ge=1)
+    automatic: bool = False
+    created_at: str = Field(default_factory=now_iso)
+
+    @model_validator(mode="after")
+    def meaningful(self) -> InvestigationCheckpoint:
+        substantive = (
+            self.completed_work
+            or self.evidence_learned
+            or self.findings_changed
+            or self.todos_changed
+            or self.unresolved_questions
+        )
+        if not substantive:
+            raise ValueError("checkpoint must contain substantive research progress or open work")
+        if self.status != "complete" and not self.next_action:
+            raise ValueError("next_action is required unless the checkpoint is complete")
+        return self
 
 
 class CaseMetadata(BaseModel):
@@ -95,6 +131,7 @@ class CaseState(BaseModel):
     findings: list[Finding] = Field(default_factory=list)
     todos: list[TodoItem] = Field(default_factory=list)
     notes: list[InvestigationNote] = Field(default_factory=list)
+    checkpoints: list[InvestigationCheckpoint] = Field(default_factory=list)
     sessions: list[str] = Field(default_factory=list)
     knowledge_documents_used: list[str] = Field(default_factory=list)
     external_tool_versions: dict[str, str] = Field(default_factory=dict)

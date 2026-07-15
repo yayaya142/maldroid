@@ -10,6 +10,7 @@ from typing import Any
 from maldroid.case_manager import Case
 from maldroid.config import AppConfig
 from maldroid.external_mcp import ExternalMcpRuntime
+from maldroid.knowledge_manager import KnowledgeManager
 from maldroid.llama_client import REASONING_BUDGETS, AssistantMessage, ModelClient, ReasoningLevel
 from maldroid.prompts import SYSTEM_PROMPT, profile_prompt
 from maldroid.session_manager import SessionManager
@@ -18,7 +19,7 @@ from maldroid.tools.models import mcp_tool_name
 from maldroid.tools.registry import ToolRegistry
 
 CHECKPOINT_TOOLS = {
-    mcp_tool_name("save_note"),
+    mcp_tool_name("save_checkpoint"),
 }
 STRUCTURED_STATE_TOOLS = {
     mcp_tool_name("save_finding"),
@@ -34,16 +35,16 @@ NON_INVESTIGATION_TOOLS = {
 CHECKPOINT_REMINDER = (
     "Durable investigation state is required before the final answer. Update or complete relevant "
     "TODOs, save each evidence-backed conclusion with MalDroid_save_finding, then call "
-    "MalDroid_save_note with a synthesis of completed work, exact evidence paths and lines or "
-    "offsets, facts versus hypotheses, uncertainty, unresolved questions, and the exact next "
-    "action. Do not replace conclusions with a list of tool names."
+    "MalDroid_save_checkpoint with completed work, evidence learned, changed Finding/TODO IDs, "
+    "uncertainty, unresolved questions, and the exact next action. Never put tool names, tool "
+    "arguments, status messages, or errors into research notes or checkpoints."
 )
 STATE_DISCIPLINE_REMINDER = (
     "Maintain the case files while you investigate. Create concrete TODOs for the remaining plan "
     "with MalDroid_update_todo, complete them as work finishes, and call MalDroid_save_finding as "
-    "soon as a supported fact or clearly labeled hypothesis emerges. Notes are phase syntheses; a "
-    "tool-call list alone is not meaningful progress. Continue the investigation after updating "
-    "state."
+    "soon as a supported fact or clearly labeled hypothesis emerges. Use MalDroid_save_note only "
+    "for a durable research insight, decision, or hypothesis. Operational activity and failures "
+    "belong in the audit log. Continue the investigation after updating state."
 )
 CONTINUATION_INSTRUCTION = (
     "Continue the same user task autonomously from the durable checkpoint. Do not ask the user to "
@@ -79,6 +80,7 @@ class MalDroidAgent:
         self._auto_profile_enabled = auto_profile_enabled
         self.external_mcp = external_mcp
         self.messages: list[dict[str, Any]] = []
+        self._active_objective = ""
         model_event_setter = getattr(self.client, "set_event_handler", None)
         if model_event_setter is not None:
             model_event_setter(self._handle_model_event)
@@ -91,7 +93,7 @@ class MalDroidAgent:
     def _handle_model_event(self, event: str, data: dict[str, Any]) -> None:
         self._emit(event, **data)
 
-    def _reset_messages(self, summary: str = "") -> None:
+    def _reset_messages(self, summary: str = "", active_objective: str = "") -> None:
         self.messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {
@@ -106,9 +108,51 @@ class MalDroidAgent:
             self.messages.append(
                 {"role": "system", "content": "Persistent summary from prior work:\n" + summary}
             )
+        if active_objective:
+            self.messages.append(
+                {
+                    "role": "system",
+                    "content": "Active research objective:\n" + active_objective[:12000],
+                }
+            )
+        methodology = self._profile_methodology(self.case.state.active_profile)
+        if methodology:
+            self.messages.append({"role": "system", "content": methodology})
+
+    def _profile_methodology(self, profile: str) -> str:
+        queries = {
+            "react-native": "React Native Investigation Methodology",
+            "native": "Native Ghidra MCP Investigation Methodology",
+        }
+        query = queries.get(profile)
+        if not query:
+            return ""
+        try:
+            manager = KnowledgeManager(self.case)
+            if not manager.list_documents():
+                manager.reindex()
+            results = manager.search(query, profile, 5)
+            match = next(
+                (item for item in results if str(item.get("title", "")).lower() == query.lower()),
+                results[0] if results else None,
+            )
+            if not match:
+                return ""
+            excerpt = manager.read_range(str(match["document_key"]), 1, 180)
+            content = "\n".join(excerpt["lines"])
+            return (
+                f"Active {profile} research methodology (bounded local playbook):\n"
+                + content[:16000]
+            )
+        except Exception as exc:
+            self.sessions.record(
+                "knowledge_routing_error", content={"profile": profile, "error": str(exc)}
+            )
+            return ""
 
     def respond(self, text: str) -> str:
         self._detect_and_switch_profile()
+        self._active_objective = text
         self.messages.append({"role": "user", "content": text})
         self.sessions.record("message", role="user", content=text)
         phase = 1
@@ -120,7 +164,6 @@ class MalDroidAgent:
         structured_state_updated = False
         state_reminder_sent = False
         investigation_calls = 0
-        activity: list[dict[str, Any]] = []
         while True:
             tools = self.available_tool_schemas()
             if not self._auto_profile_enabled:
@@ -154,7 +197,7 @@ class MalDroidAgent:
                         self.sessions.record("checkpoint_required", content={})
                         checkpoint_requested = True
                         continue
-                    self._save_automatic_checkpoint(assistant.content, activity)
+                    self._save_automatic_checkpoint(assistant.content)
                 return assistant.content
             phase_tool_rounds += 1
             total_tool_rounds += 1
@@ -178,7 +221,6 @@ class MalDroidAgent:
                     output_file=result.output_file,
                     error=result.error.message if result.error else None,
                 )
-                activity.append(self._activity_record(call.name, call.arguments, result))
                 if call.name in CHECKPOINT_TOOLS:
                     if result.status == "completed" and investigation_performed:
                         checkpoint_saved = True
@@ -206,6 +248,7 @@ class MalDroidAgent:
                     mcp_tool_name("detect_profile"),
                 }:
                     self._detect_and_switch_profile()
+            self._prune_working_context()
             if investigation_calls and not structured_state_updated and not state_reminder_sent:
                 self.messages.append({"role": "system", "content": STATE_DISCIPLINE_REMINDER})
                 self.sessions.record("state_discipline_required", content={})
@@ -214,7 +257,7 @@ class MalDroidAgent:
             round_rollover = phase_tool_rounds >= self.config.limits.max_tool_rounds
             context_rollover = self.should_auto_compact()
             if round_rollover or context_rollover:
-                self._save_phase_checkpoint(text, activity, phase, total_tool_rounds)
+                self._save_phase_checkpoint(text, phase, total_tool_rounds)
                 rollover_reason = "context_threshold" if context_rollover else "tool_window"
                 self._emit(
                     "phase_rollover",
@@ -232,13 +275,10 @@ class MalDroidAgent:
                 structured_state_updated = False
                 state_reminder_sent = False
                 investigation_calls = 0
-                activity = []
                 self.messages.append(
                     {
                         "role": "system",
-                        "content": CONTINUATION_INSTRUCTION
-                        + "\n\nOriginal objective:\n"
-                        + text[:12000],
+                        "content": CONTINUATION_INSTRUCTION,
                     }
                 )
 
@@ -274,20 +314,38 @@ class MalDroidAgent:
     def _save_phase_checkpoint(
         self,
         objective: str,
-        activity: list[dict[str, Any]],
         phase: int,
         total_tool_rounds: int,
     ) -> None:
-        work = self._format_activity(activity[-20:])
-        text = (
-            f"Autonomous phase {phase} checkpoint after {total_tool_rounds} tool rounds.\n\n"
-            f"Original objective:\n{objective[:4000]}\n\n"
-            f"Evidence work performed:\n{work}\n\n"
-            f"Durable investigation state:\n{self._durable_state_snapshot()}\n\n"
-            "Next action: continue unresolved TODOs and convert supported results into findings. "
-            "The agent is continuing automatically from this checkpoint."
+        findings = [item.id for item in self.case.state.findings[-20:]]
+        open_todos = [item.id for item in self.case.state.todos if item.status == "open"][-20:]
+        completed_todos = [item.id for item in self.case.state.todos if item.status == "completed"][
+            -20:
+        ]
+        completed = []
+        if findings:
+            completed.append(
+                "Evidence-backed conclusions were preserved in Findings: " + ", ".join(findings)
+            )
+        if completed_todos:
+            completed.append("Investigation tasks completed: " + ", ".join(completed_todos))
+        unresolved = ["Continue open investigation task " + item for item in open_todos] or [
+            "Review the accumulated evidence and decide whether the objective is complete."
+        ]
+        result = self.dispatcher.execute(
+            mcp_tool_name("save_checkpoint"),
+            {
+                "objective": objective[:12000],
+                "completed_work": completed,
+                "findings_changed": findings,
+                "todos_changed": completed_todos + open_todos,
+                "unresolved_questions": unresolved,
+                "next_action": unresolved[0],
+                "status": "in_progress",
+                "phase": phase,
+                "automatic": True,
+            },
         )
-        result = self.dispatcher.execute(mcp_tool_name("save_note"), {"text": text[:40000]})
         self.sessions.record(
             "phase_checkpoint",
             content={
@@ -304,22 +362,35 @@ class MalDroidAgent:
             status=result.status,
         )
 
-    def _save_automatic_checkpoint(
-        self, draft: str, activity: list[dict[str, Any]] | None = None
-    ) -> None:
-        evidence_work = self._format_activity((activity or [])[-20:])
-        text = (
-            "Automatic progress checkpoint because the model did not call MalDroid_save_note.\n\n"
-            "Model synthesis:\n"
-            + draft[:8000]
-            + "\n\nEvidence work performed:\n"
-            + evidence_work
-            + "\n\nDurable investigation state:\n"
-            + self._durable_state_snapshot()
-            + "\n\nNext action: resume open TODOs and verify unresolved hypotheses against exact evidence."
+    def _save_automatic_checkpoint(self, draft: str) -> None:
+        findings = [item.id for item in self.case.state.findings[-20:]]
+        open_todos = [item.id for item in self.case.state.todos if item.status == "open"][-20:]
+        synthesis = self._semantic_checkpoint_text(draft)
+        if not synthesis and not findings and not open_todos:
+            self._emit("automatic_checkpoint", status="skipped_low_value")
+            self.sessions.record(
+                "automatic_checkpoint",
+                content={"status": "skipped_low_value", "reason": "no semantic research state"},
+            )
+            return
+        next_action = (
+            "Continue open TODO " + open_todos[0]
+            if open_todos
+            else "Verify the synthesis against exact evidence before beginning new work."
         )
-        text = text[:40000]
-        result = self.dispatcher.execute(mcp_tool_name("save_note"), {"text": text})
+        result = self.dispatcher.execute(
+            mcp_tool_name("save_checkpoint"),
+            {
+                "objective": "Preserve the current investigation before returning control.",
+                "completed_work": [synthesis] if synthesis else [],
+                "findings_changed": findings,
+                "todos_changed": open_todos,
+                "unresolved_questions": [next_action] if open_todos else [],
+                "next_action": next_action,
+                "status": "in_progress" if open_todos else "complete",
+                "automatic": True,
+            },
+        )
         self._emit("automatic_checkpoint", status=result.status)
         self.sessions.record(
             "automatic_checkpoint",
@@ -329,36 +400,26 @@ class MalDroidAgent:
             },
         )
 
-    def _activity_record(self, name: str, arguments: str, result: Any) -> dict[str, Any]:
-        try:
-            parsed_arguments: Any = json.loads(arguments)
-        except (TypeError, json.JSONDecodeError):
-            parsed_arguments = arguments
-        record: dict[str, Any] = {
-            "tool": name,
-            "status": result.status,
-            "arguments": parsed_arguments,
-        }
-        if result.status == "completed":
-            record["result"] = result.data
-            if result.output_file:
-                record["output_file"] = result.output_file
-            if result.truncated:
-                record["truncated"] = True
-        elif result.error:
-            record["error"] = result.error.message
-        return record
-
-    def _format_activity(self, activity: list[dict[str, Any]]) -> str:
-        if not activity:
-            return "- No evidence operations were recorded."
-        lines = []
-        for item in activity:
-            rendered = json.dumps(item, ensure_ascii=False, default=str)
-            if len(rendered) > 1000:
-                rendered = rendered[:1000] + "…"
-            lines.append("- " + rendered)
-        return "\n".join(lines)
+    @staticmethod
+    def _semantic_checkpoint_text(draft: str) -> str:
+        operational_markers = (
+            "MalDroid_",
+            '"tool"',
+            '"arguments"',
+            '"status"',
+            '"error"',
+            "tool failed",
+            "tool call",
+            "tool result",
+        )
+        lines = [
+            line.strip()
+            for line in draft.splitlines()
+            if line.strip()
+            and not any(marker.lower() in line.lower() for marker in operational_markers)
+        ]
+        cleaned = "\n".join(lines)[:8000]
+        return cleaned if len(cleaned) >= 30 else ""
 
     def _durable_state_snapshot(self) -> str:
         findings = self.case.state.findings[-10:]
@@ -392,6 +453,10 @@ class MalDroidAgent:
     def profile_mode(self) -> str:
         return "auto" if self._auto_profile_enabled else "manual"
 
+    @property
+    def active_objective(self) -> str:
+        return self._active_objective
+
     def enable_auto_profile(self) -> None:
         self._auto_profile_enabled = True
         self.sessions.record("profile_mode_change", content={"mode": "auto"})
@@ -413,6 +478,9 @@ class MalDroidAgent:
                 "content": "Profile changed to " + profile + ". " + profile_prompt(profile),
             }
         )
+        methodology = self._profile_methodology(profile)
+        if methodology:
+            self.messages.append({"role": "system", "content": methodology})
         self.sessions.case_manager.save(self.case)
         self.sessions.record(
             "profile_change",
@@ -483,6 +551,51 @@ class MalDroidAgent:
         )
         return max(1, len(serialized) // 4)
 
+    def reserved_tokens(self) -> int:
+        """Capacity kept free for the next completion, including model reasoning."""
+        return min(self.config.llama.max_response_tokens, self.case.state.context_size // 3)
+
+    def _prune_working_context(self) -> None:
+        """Replace old tool payloads with receipts; full results remain in session JSONL/output."""
+        tool_indexes = [
+            index for index, message in enumerate(self.messages) if message.get("role") == "tool"
+        ]
+        keep = self.config.limits.retained_tool_results
+        old_indexes = tool_indexes[:-keep]
+        compacted = 0
+        for index in old_indexes:
+            message = self.messages[index]
+            content = message.get("content")
+            if isinstance(content, str) and '"context_compacted"' in content:
+                continue
+            receipt: dict[str, Any] = {
+                "status": "completed",
+                "context_compacted": True,
+                "note": "Full tool result remains in the session log.",
+            }
+            try:
+                payload = json.loads(content) if isinstance(content, str) else {}
+                if isinstance(payload, dict):
+                    receipt["status"] = payload.get("status", "completed")
+                    if payload.get("output_file"):
+                        receipt["output_file"] = payload["output_file"]
+                    error = payload.get("error")
+                    if isinstance(error, dict) and error.get("code"):
+                        receipt["error_code"] = error["code"]
+            except json.JSONDecodeError:
+                pass
+            message["content"] = json.dumps(receipt, ensure_ascii=False)
+            compacted += 1
+        assistant_indexes = [
+            index
+            for index, message in enumerate(self.messages)
+            if message.get("role") == "assistant" and message.get("reasoning_content")
+        ]
+        for index in assistant_indexes[:-keep]:
+            self.messages[index].pop("reasoning_content", None)
+        if compacted:
+            self.sessions.record("context_prune", content={"tool_results_compacted": compacted})
+
     def available_tool_schemas(self) -> list[dict[str, Any]]:
         tools = self.registry.schemas(self.case.state.active_profile)
         if self.external_mcp is not None:
@@ -490,7 +603,8 @@ class MalDroidAgent:
         return tools
 
     def context_ratio(self) -> float:
-        return self.estimate_tokens() / self.case.state.context_size
+        committed = self.estimate_tokens() + self.reserved_tokens()
+        return committed / self.case.state.context_size
 
     def should_auto_compact(self) -> bool:
         return self.context_ratio() >= self.config.limits.auto_compact_ratio
@@ -512,7 +626,7 @@ class MalDroidAgent:
             summary = self._durable_fallback_summary(f"Model compaction failed: {exc}")
         self.sessions.record("compaction", content={"summary": summary})
         self.sessions.save_summary(summary)
-        self._reset_messages(summary)
+        self._reset_messages(summary, self._active_objective)
         self._emit("compaction_complete", summary_length=len(summary))
         return summary
 
@@ -528,10 +642,23 @@ class MalDroidAgent:
                     for item in self.case.state.findings[-20:]
                 )
             )
+        if self.case.state.checkpoints:
+            sections.append(
+                "Recent research checkpoints:\n"
+                + "\n".join(
+                    f"- {item.id} [{item.status}]: "
+                    + "; ".join(item.evidence_learned or item.completed_work)
+                    + (f" Next: {item.next_action}" if item.next_action else "")
+                    for item in self.case.state.checkpoints[-10:]
+                )
+            )
         if self.case.state.notes:
             sections.append(
-                "Recent progress notes:\n"
-                + "\n".join(f"- {item.id}: {item.text}" for item in self.case.state.notes[-20:])
+                "Research notes:\n"
+                + "\n".join(
+                    f"- {item.id} [{item.kind}]: {item.title or item.text[:300]}"
+                    for item in self.case.state.notes[-10:]
+                )
             )
         open_todos = [item for item in self.case.state.todos if item.status == "open"]
         if open_todos:

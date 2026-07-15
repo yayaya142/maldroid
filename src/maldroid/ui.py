@@ -36,17 +36,23 @@ from maldroid.tools.registry import ToolRegistry
 
 COMMANDS: dict[str, str] = {
     "/help": "Show commands and keyboard shortcuts",
+    "/dashboard": "Show the live research dashboard and exact continuation state",
     "/status": "Show the complete workspace status",
     "/context": "Show context usage and estimated capacity remaining",
     "/reasoning": "Show or change the model reasoning level",
     "/profile": "Show or change the active analysis profile",
     "/tools": "List tools available to the active profile",
     "/files": "List registered case files",
-    "/findings": "Show durable investigation findings",
+    "/findings": "List findings or expand one stable Finding ID",
     "/todo": "List or update TODO items",
     "/note": "Save a durable progress note",
     "/checkpoints": "Show recent durable notes and session summary",
     "/history": "Show current session statistics",
+    "/timeline": "Show a concise recent activity timeline without hidden reasoning",
+    "/inventory": "Inventory artifacts and highlight large-file candidates",
+    "/indicators": "Extract URLs, domains, IPs, emails, and WebSockets",
+    "/triage": "Search high-signal behavior families in one pass",
+    "/report": "Build the deterministic Markdown research report",
     "/compact": "Save a summary and reclaim context",
     "/clear": "Clear chat context while preserving case state",
     "/server": "Show llama.cpp and MCP connection information",
@@ -378,7 +384,8 @@ class InteractiveChat:
         self.console.print(
             "[dim]Enter[/dim] send  [dim]Alt+Enter[/dim] newline  "
             "[dim]Tab[/dim] complete  [dim]↑/↓[/dim] history  "
-            "[dim]Ctrl+D[/dim] exit  [cyan]/help[/cyan] commands\n"
+            "[dim]Ctrl+D[/dim] exit  [cyan]/dashboard[/cyan] research state  "
+            "[cyan]/help[/cyan] commands\n"
         )
 
     def _bottom_toolbar(self) -> FormattedText:
@@ -400,7 +407,7 @@ class InteractiveChat:
                 ("class:bottom-toolbar", " · "),
                 ("class:toolbar.key", f"{open_todos} todos"),
                 ("class:bottom-toolbar", " · "),
-                ("class:toolbar.key", f"{len(self.case.state.notes)} notes "),
+                ("class:toolbar.key", f"{len(self.case.state.checkpoints)} checkpoints "),
             ]
         )
 
@@ -424,6 +431,8 @@ class InteractiveChat:
             return False
         if name == "/help":
             self._show_help()
+        elif name == "/dashboard":
+            self._show_dashboard()
         elif name == "/shortcuts":
             self._show_shortcuts()
         elif name == "/status":
@@ -439,7 +448,7 @@ class InteractiveChat:
         elif name == "/files":
             self._render_tool_result(self.dispatcher.execute(mcp_tool_name("list_case_files"), {}))
         elif name == "/findings":
-            self._show_findings()
+            self._show_findings(rest)
         elif name == "/todo":
             self._todo(rest)
         elif name == "/note":
@@ -448,6 +457,32 @@ class InteractiveChat:
             self._show_checkpoints()
         elif name == "/history":
             self._show_history()
+        elif name == "/timeline":
+            self._show_timeline(rest)
+        elif name == "/inventory":
+            self._render_tool_result(
+                self.dispatcher.execute(mcp_tool_name("inventory_case"), {"path": rest or "."})
+            )
+        elif name == "/indicators":
+            self._render_tool_result(
+                self.dispatcher.execute(
+                    mcp_tool_name("extract_network_indicators"), {"path": rest or "."}
+                )
+            )
+        elif name == "/triage":
+            self._render_tool_result(
+                self.dispatcher.execute(
+                    mcp_tool_name("search_behavior_patterns"), {"path": rest or "."}
+                )
+            )
+        elif name == "/report":
+            result = self.dispatcher.execute(mcp_tool_name("build_research_report"), {})
+            if result.status == "completed":
+                self.console.print(
+                    f"[green]✓[/green] Research report rebuilt: [bold]{result.data['path']}[/bold]"
+                )
+            else:
+                self._render_tool_result(result)
         elif name == "/compact":
             with self.console.status("[cyan]Compacting context…[/cyan]", spinner="dots") as status:
                 self._status = status
@@ -521,6 +556,7 @@ class InteractiveChat:
             ("Findings", str(len(self.case.state.findings))),
             ("Open TODOs", str(sum(item.status == "open" for item in self.case.state.todos))),
             ("Progress notes", str(len(self.case.state.notes))),
+            ("Research checkpoints", str(len(self.case.state.checkpoints))),
         ]
         if server.get("api_key_enabled"):
             rows.insert(9, ("API key", str(server.get("api_key") or "unavailable")))
@@ -636,9 +672,31 @@ class InteractiveChat:
             )
         )
 
-    def _show_findings(self) -> None:
+    def _show_findings(self, record_id: str = "") -> None:
         if not self.case.state.findings:
             self.console.print("[dim]No findings have been recorded yet.[/dim]")
+            return
+        if record_id:
+            finding = next(
+                (item for item in self.case.state.findings if item.id == record_id), None
+            )
+            if finding is None:
+                self.console.print(f"[red]Finding not found:[/red] {record_id}")
+                return
+            evidence = (
+                "\n".join(f"- `{item.path}` — {item.description}" for item in finding.evidence)
+                or "No evidence references recorded."
+            )
+            body = (
+                f"**Status:** {finding.status}  \n"
+                f"**Confidence:** {finding.confidence}  \n"
+                f"**Severity:** {finding.severity}  \n"
+                f"**Tags:** {', '.join(finding.tags) or 'none'}\n\n"
+                f"{finding.summary}\n\n**Evidence**\n\n{evidence}"
+            )
+            self.console.print(
+                Panel(Markdown(body), title=f"{finding.id}: {finding.title}", border_style="cyan")
+            )
             return
         table = Table("ID", "Severity", "Status", "Finding", box=box.SIMPLE, padding=(0, 1))
         for item in self.case.state.findings:
@@ -670,11 +728,11 @@ class InteractiveChat:
         if not text:
             self.console.print("Usage: [cyan]/note TEXT[/cyan]")
             return
-        note = self.investigation.save_note(self.case, text)
+        note = self.investigation.save_note(self.case, text, kind="user_note")
         self.console.print(f"[green]✓[/green] Durable note saved: [bold]{note.id}[/bold]")
 
     def _show_checkpoints(self) -> None:
-        if not self.case.state.notes and not self.case.state.summary:
+        if not self.case.state.checkpoints and not self.case.state.summary:
             self.console.print("[dim]No progress checkpoints have been recorded yet.[/dim]")
             return
         blocks: list[Any] = []
@@ -685,12 +743,90 @@ class InteractiveChat:
                     Markdown(self.case.state.summary),
                 ]
             )
-        if self.case.state.notes:
-            blocks.append(Text("Recent durable notes", style="bold cyan"))
-            for note in self.case.state.notes[-5:]:
-                blocks.append(Text(f"{note.id} · {note.created_at}", style="dim"))
-                blocks.append(Text(note.text))
+        if self.case.state.checkpoints:
+            blocks.append(Text("Typed research continuity", style="bold cyan"))
+            for checkpoint in self.case.state.checkpoints[-5:]:
+                blocks.append(
+                    Text(
+                        f"{checkpoint.id} · {checkpoint.status} · {checkpoint.created_at}",
+                        style="dim",
+                    )
+                )
+                learned = checkpoint.evidence_learned or checkpoint.completed_work
+                blocks.append(Text("; ".join(learned) or checkpoint.objective))
+                if checkpoint.next_action:
+                    blocks.append(Text("Next: " + checkpoint.next_action, style="cyan"))
         self.console.print(Panel(Group(*blocks), title="Checkpoints", border_style="cyan"))
+
+    def _show_dashboard(self) -> None:
+        used, total, remaining, percent = self._context_numbers()
+        open_todos = [item for item in self.case.state.todos if item.status == "open"]
+        latest = self.case.state.checkpoints[-1] if self.case.state.checkpoints else None
+        summary = Table.grid(padding=(0, 2))
+        summary.add_column(style="dim", no_wrap=True)
+        summary.add_column()
+        summary.add_row("Objective", self.agent.active_objective or "No active turn")
+        summary.add_row("Profile", f"{self.case.state.active_profile} ({self.agent.profile_mode})")
+        summary.add_row("Context", f"{percent:.1f}% committed · ~{remaining:,} free of {total:,}")
+        summary.add_row("Findings", str(len(self.case.state.findings)))
+        summary.add_row("Open TODOs", str(len(open_todos)))
+        summary.add_row("Checkpoints", str(len(self.case.state.checkpoints)))
+        if latest:
+            summary.add_row("Latest continuity", f"{latest.id} · {latest.status}")
+            summary.add_row("Next action", latest.next_action or "Complete")
+        self.console.print(Panel(summary, title="Research dashboard", border_style="cyan"))
+        if open_todos:
+            table = Table("ID", "Research task", box=box.SIMPLE, padding=(0, 1))
+            for item in open_todos[:10]:
+                table.add_row(item.id, item.text)
+            self.console.print(Panel(table, title="Immediate TODOs", border_style="cyan"))
+
+    def _show_timeline(self, limit_text: str) -> None:
+        try:
+            limit = min(100, max(5, int(limit_text or "25")))
+        except ValueError:
+            self.console.print("Usage: [cyan]/timeline [5-100][/cyan]")
+            return
+        events: list[dict[str, Any]] = []
+        if self.agent.sessions.history_path.exists():
+            for line in self.agent.sessions.history_path.read_text(
+                encoding="utf-8", errors="replace"
+            ).splitlines():
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if event.get("type") in {
+                    "tool_call",
+                    "tool_result",
+                    "phase_checkpoint",
+                    "compaction",
+                    "profile_change",
+                    "model_retry",
+                    "context_prune",
+                    "automatic_checkpoint",
+                }:
+                    events.append(event)
+        table = Table("Time", "Event", "Summary", box=box.SIMPLE, padding=(0, 1))
+        for event in events[-limit:]:
+            raw_content = event.get("content")
+            content: dict[str, Any] = raw_content if isinstance(raw_content, dict) else {}
+            event_type = str(event.get("type", "event"))
+            if event_type == "tool_call":
+                detail = str(content.get("name", "tool"))
+            elif event_type == "tool_result":
+                payload = content.get("content")
+                detail = "result recorded" if payload else "result"
+            elif event_type == "compaction":
+                detail = "Context compacted; durable state retained"
+            else:
+                detail = ", ".join(
+                    f"{key}={value}"
+                    for key, value in content.items()
+                    if key not in {"summary", "error"}
+                )[:160]
+            table.add_row(str(event.get("timestamp", ""))[11:19], event_type, detail)
+        self.console.print(Panel(table, title="Research timeline", border_style="cyan"))
 
     def _show_history(self) -> None:
         history_path = self.agent.sessions.history_path
@@ -747,8 +883,9 @@ class InteractiveChat:
     def _context_numbers(self) -> tuple[int, int, int, float]:
         used = self.agent.estimate_tokens()
         total = max(1, self.case.state.context_size)
-        remaining = max(0, total - used)
-        percent = min(100.0, used / total * 100)
+        committed = used + self.agent.reserved_tokens()
+        remaining = max(0, total - committed)
+        percent = min(100.0, committed / total * 100)
         return used, total, remaining, percent
 
     @staticmethod

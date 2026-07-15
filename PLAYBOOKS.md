@@ -31,3 +31,6 @@ maldroid knowledge list
 Update the source Markdown and reindex. Playbooks remain static-only and must not instruct MalDroid
 to execute samples, use dynamic instrumentation, upload artifacts, or access a network.
 
+The React Native and Native profiles automatically route one bounded methodology document into the
+active model context. The canonical guides are `React Native Investigation Methodology` and
+`Native Ghidra MCP Investigation Methodology`; other playbooks remain query-driven.

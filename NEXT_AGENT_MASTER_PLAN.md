@@ -1,9 +1,23 @@
 # MalDroid Reliability and Research Platform Master Plan
 
-Status: approved planning backlog; implementation has not started  
+Status: active gated backlog; `PLATFORM-010` cross-gate foundation implemented locally
 Owner priority: make MalDroid a trustworthy daily research CLI before expanding breadth  
 Execution model: one agent and one task ID at a time  
 Canonical original requirements: `Tasks.MD` (read-only)
+
+## 0. Owner reprioritization implemented on 2026-07-15
+
+The owner explicitly reprioritized broad long-investigation usability ahead of the original
+one-item reliability chain. `PLATFORM-010` implemented a coherent first slice across the existing
+gates: state schema v2 typed Checkpoints, separation and quality enforcement for Notes, paginated
+state readback, deterministic reports, working-context receipts/reservation, interactive research
+commands, deep React Native and Native/Ghidra methodologies, automatic guide routing, and focused
+large-evidence/profile tools.
+
+This does not close the remaining transaction/revision/idempotency work in `REL-011..020`, and it
+does not claim physical-host acceptance. `PLATFORM-011` is the next real-model acceptance gate.
+Internal subagent orchestration was considered and deliberately deferred until typed state and
+long-run context behavior are verified on the owner's cases.
 
 ## 1. Instructions for the next agent
 

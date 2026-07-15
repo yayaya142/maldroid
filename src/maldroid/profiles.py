@@ -24,10 +24,21 @@ PROFILES = {
     "react-native": ProfileDefinition(
         "react-native",
         "implemented",
-        "Treat Metro and Hermes conclusions as heuristic unless a tool reports exact parsing.",
+        "Begin with MalDroid_search_knowledge for 'React Native investigation methodology'. "
+        "Classify JavaScript, Metro, Hermes, and source-map artifacts before interpreting code. "
+        "For large bundles build the module index, then trace behavior across entrypoints, native "
+        "bridges, storage, identity, network construction, command handling, and sensitive Android "
+        "capabilities. Treat textual occurrences as leads, not data flow, and require bounded "
+        "source-to-sink evidence before confirming behavior.",
     ),
     "native": ProfileDefinition(
-        "native", "implemented", "Focus on static ELF and decompiler artifacts."
+        "native",
+        "implemented",
+        "Begin with MalDroid_search_knowledge for 'Native Ghidra MCP investigation methodology'. "
+        "Inventory ELF architecture, hardening, imports, exports, dependencies, JNI registration, "
+        "and high-signal strings before decompilation. Use connected Ghidra MCP tools in bounded "
+        "steps to follow xrefs and caller/callee paths from sources to sinks. Decompiler output is "
+        "a hypothesis: verify important claims against disassembly, references, and exact addresses.",
     ),
     "flutter": ProfileDefinition(
         "flutter", "implemented", "Focus on static Flutter AOT and Blutter artifacts."

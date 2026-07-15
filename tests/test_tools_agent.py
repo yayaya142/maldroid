@@ -80,6 +80,60 @@ def test_failed_finding_view_write_rolls_back_canonical_state(
     assert manager.open(case.root).state.findings == []
 
 
+def test_typed_checkpoint_and_complete_state_readback(app_config: AppConfig) -> None:
+    _, case, _, dispatcher = make_dispatcher(app_config)
+    saved = dispatcher.execute(
+        mcp_tool_name("save_checkpoint"),
+        {
+            "objective": "Trace the registration flow",
+            "completed_work": ["Mapped the request builder"],
+            "evidence_learned": ["Registration sends the device identifier"],
+            "unresolved_questions": ["Which caller supplies the endpoint?"],
+            "next_action": "Trace callers of registerDevice",
+        },
+    )
+
+    assert saved.status == "completed"
+    assert case.state.notes == []
+    assert case.state.checkpoints[0].id == "CHECK-0001"
+    rendered = (case.root / "notes" / "CHECKPOINTS.md").read_text(encoding="utf-8")
+    assert "Registration sends the device identifier" in rendered
+    assert "Trace callers of registerDevice" in rendered
+
+    state = dispatcher.execute(mcp_tool_name("read_case_state"), {})
+    assert state.data["counts"]["checkpoints"] == 1
+    assert state.data["latest_checkpoint"]["id"] == "CHECK-0001"
+    listed = dispatcher.execute(mcp_tool_name("list_checkpoints"), {"page_size": 10})
+    assert listed.data["records"][0]["objective"] == "Trace the registration flow"
+
+
+def test_checkpoint_rejects_operationally_empty_payload(app_config: AppConfig) -> None:
+    _, _, _, dispatcher = make_dispatcher(app_config)
+    result = dispatcher.execute(
+        mcp_tool_name("save_checkpoint"),
+        {"objective": "Keep going", "next_action": "Call another tool"},
+    )
+    assert result.status == "error"
+    assert "substantive research progress" in result.error.message
+
+
+def test_research_note_rejects_tool_activity_but_user_note_remains_free(
+    app_config: AppConfig,
+) -> None:
+    manager, case, _, dispatcher = make_dispatcher(app_config)
+    rejected = dispatcher.execute(
+        mcp_tool_name("save_note"),
+        {"text": 'Tool result: {"tool":"MalDroid_search_text","status":"error"}'},
+    )
+
+    assert rejected.status == "error"
+    assert "tool activity and errors belong in the session audit" in rejected.error.message
+    assert case.state.notes == []
+
+    note = InvestigationManager(manager).save_note(case, "quick human marker", kind="user_note")
+    assert note.kind == "user_note"
+
+
 def test_documented_system_prompt_matches_runtime_prompt() -> None:
     document = (Path(__file__).resolve().parents[1] / "SYSTEM_PROMPT.md").read_text(
         encoding="utf-8"
@@ -97,6 +151,37 @@ def test_registry_profile_filtering(app_config: AppConfig) -> None:
     assert generic < react_native
     assert all(name.startswith(MCP_TOOL_PREFIX) for name in react_native)
     assert not any("flutter" in name or "unity" in name for name in generic)
+
+
+@pytest.mark.parametrize(
+    ("profile", "marker"),
+    [
+        ("react-native", "React Native Investigation Methodology"),
+        ("native", "Native and Ghidra MCP Investigation Methodology"),
+    ],
+)
+def test_agent_routes_profile_methodology_into_context(
+    app_config: AppConfig, profile: str, marker: str
+) -> None:
+    manager, case, registry, dispatcher = make_dispatcher(app_config)
+    case.state.active_profile = profile
+    manager.save(case)
+    agent = MalDroidAgent(
+        app_config,
+        case,
+        FakeClient(),
+        registry,
+        dispatcher,
+        SessionManager(case, manager),
+        auto_profile_enabled=False,
+    )
+
+    methodology = "\n".join(
+        str(message.get("content", ""))
+        for message in agent.messages
+        if message.get("role") == "system"
+    )
+    assert marker in methodology
 
 
 def test_dispatcher_executes_and_rejects_profile_tool(app_config: AppConfig) -> None:
@@ -351,10 +436,12 @@ class CheckpointingClient:
                 content=None,
                 tool_calls=[
                     ToolCall(
-                        id="note-1",
-                        name=mcp_tool_name("save_note"),
+                        id="checkpoint-1",
+                        name=mcp_tool_name("save_checkpoint"),
                         arguments=(
-                            '{"text":"Inspected sample.txt metadata. Next: read relevant lines."}'
+                            '{"objective":"Inspect the sample",'
+                            '"completed_work":["Inspected sample.txt metadata"],'
+                            '"next_action":"Read relevant lines"}'
                         ),
                     )
                 ],
@@ -373,7 +460,7 @@ def test_agent_requires_durable_checkpoint_after_investigation(app_config: AppCo
 
     assert response == "Checkpoint saved; inspect relevant lines next."
     assert client.calls == 4
-    assert case.state.notes[-1].text.startswith("Inspected sample.txt metadata")
+    assert case.state.checkpoints[-1].completed_work == ["Inspected sample.txt metadata"]
     events = [json.loads(line) for line in sessions.history_path.read_text().splitlines()]
     assert "checkpoint_required" in {event["type"] for event in events}
 
@@ -416,11 +503,13 @@ def test_agent_saves_automatic_checkpoint_when_model_ignores_reminder(
     response = agent.respond("Inspect the sample")
 
     assert response == "Metadata inspected; read the suspicious range next."
-    assert case.state.notes[-1].text.startswith("Automatic progress checkpoint")
-    assert "read the suspicious range next" in case.state.notes[-1].text
-    assert '"tool": "MalDroid_get_file_info"' in case.state.notes[-1].text
-    assert '"path": "sample.txt"' in case.state.notes[-1].text
-    assert "Durable investigation state" in case.state.notes[-1].text
+    checkpoint = case.state.checkpoints[-1]
+    assert checkpoint.automatic is True
+    assert "read the suspicious range next" in checkpoint.completed_work[0]
+    rendered = checkpoint.model_dump_json()
+    assert "MalDroid_get_file_info" not in rendered
+    assert '"path":"sample.txt"' not in rendered
+    assert case.state.notes == []
 
 
 class StructuredStateClient:
@@ -552,6 +641,33 @@ def test_auto_compaction_threshold_is_configurable(app_config: AppConfig) -> Non
     assert agent.should_auto_compact() is True
 
 
+def test_old_tool_payloads_are_pruned_from_active_context_only(app_config: AppConfig) -> None:
+    data = app_config.model_dump()
+    data["limits"]["retained_tool_results"] = 2
+    config = AppConfig.model_validate(data)
+    manager, case, registry, dispatcher = make_dispatcher(config)
+    sessions = SessionManager(case, manager)
+    agent = MalDroidAgent(config, case, FakeClient(), registry, dispatcher, sessions)
+    for number in range(4):
+        agent.messages.append(
+            {
+                "role": "tool",
+                "tool_call_id": f"call-{number}",
+                "content": json.dumps({"status": "completed", "data": "evidence-" + "x" * 5000}),
+            }
+        )
+
+    before = agent.estimate_tokens()
+    agent._prune_working_context()
+    after = agent.estimate_tokens()
+
+    assert after < before - 2000
+    assert "context_compacted" in agent.messages[-4]["content"]
+    assert "evidence-" in agent.messages[-1]["content"]
+    history = sessions.history_path.read_text(encoding="utf-8")
+    assert "context_prune" in history
+
+
 class ReasoningClient(FakeClient):
     reasoning_level = "unlimited"
 
@@ -631,11 +747,10 @@ def test_agent_rolls_long_task_into_next_phase_without_stopping(
     assert client.tool_turns == 3
     assert client.compactions == 0
     assert any(event == "phase_rollover" for event, _ in reported)
-    checkpoint = next(
-        note for note in case.state.notes if note.text.startswith("Autonomous phase 1 checkpoint")
-    )
-    assert '"path": "sample.txt"' in checkpoint.text
-    assert "Evidence work performed" in checkpoint.text
+    checkpoint = next(item for item in case.state.checkpoints if item.phase == 1)
+    assert checkpoint.automatic is True
+    assert "MalDroid_get_file_info" not in checkpoint.model_dump_json()
+    assert case.state.notes == []
     assert any(event == "state_discipline_required" for event, _ in reported)
 
 

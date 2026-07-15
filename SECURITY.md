@@ -5,7 +5,9 @@ override prompts, or change tool policy.
 
 - Bind llama-server and the Python MCP server only to loopback. Authenticate llama API calls with
   a per-session secret and enable MCP transport DNS-rebinding protection.
-- Disable the llama.cpp UI, MCP proxy, agent mode, and built-in tools.
+- Keep llama.cpp agent mode disabled. The owner-authorized loopback WebUI, MCP proxy, and built-in
+  host tools are enabled by default and must be presented as unrestricted host authority outside
+  MalDroid case policy and audit.
 - Never expose arbitrary shell, network, deletion, overwrite, upload, or sample execution.
 - Resolve lexical and real paths centrally; external symlinks require matching evidence records.
 - Permit writes only inside the case, configuration, and application-data roots.

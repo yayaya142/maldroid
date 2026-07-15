@@ -92,3 +92,14 @@ def test_native_profile_inspects_benign_host_elf(app_config: AppConfig) -> None:
     result = dispatcher.execute(mcp_tool_name("inspect_elf_file"), {"path": target.name})
     assert result.status == "completed"
     assert "ELF Header" in result.data["preview"]
+    dependencies = dispatcher.execute(
+        mcp_tool_name("inspect_native_dependencies"), {"path": target.name}
+    )
+    assert dependencies.status == "completed"
+    assert isinstance(dependencies.data["needed_libraries"], list)
+    jni = dispatcher.execute(mcp_tool_name("inspect_jni_surface"), {"path": target.name})
+    assert jni.status == "completed"
+    assert jni.data["static_jni_exports"] == []
+    hardening = dispatcher.execute(mcp_tool_name("inspect_native_hardening"), {"path": target.name})
+    assert hardening.status == "completed"
+    assert hardening.data["program_headers_output"].startswith("tool-output/")
