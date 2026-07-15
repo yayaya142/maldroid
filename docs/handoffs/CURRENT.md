@@ -3,6 +3,8 @@
 Task: `PLATFORM-010`
 Next task: `PLATFORM-011`
 
+Implementation commits: `259226e`, `6e4e744`
+
 ## Outcome
 
 The owner reprioritized MalDroid around real multi-hour research usability. The local implementation
@@ -89,8 +91,9 @@ project hygiene, installer dry-run, wheel build, and archive verification. The w
 `dist/maldroid-0.1.0-py3-none-any.whl` (121,025 bytes after the macOS fallback fix).
 
 GitHub Actions run `29430555735` passed Kali and exposed one macOS-only failure: the new behavior
-search required ripgrep, which the macOS image does not install. The focused follow-up adds and
-tests the bounded streaming fallback. A replacement CI run is required after the follow-up commit.
+search required ripgrep, which the macOS image does not install. Commit `6e4e744` added and tested
+the bounded streaming fallback. Replacement run `29430877237` passed both macOS 26 and Kali,
+including lint, formatting, all 106 tests, and installer dry-run.
 
 ## Known limitations
 
@@ -110,6 +113,5 @@ tests the bounded streaming fallback. A replacement CI run is required after the
 git diff --check && git status --short
 ```
 
-Commit the macOS fallback as `PLATFORM-010 add portable behavior search fallback`, push `main`, and
-wait for both CI jobs. Then install the resulting commit on the owner's macOS host for
-`PLATFORM-011`.
+Install current `main` on the owner's macOS host and begin `PLATFORM-011` with a real one-hour React
+Native investigation followed by a Native/Ghidra MCP investigation.
