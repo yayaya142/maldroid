@@ -5,7 +5,12 @@ from unittest.mock import Mock
 
 import pytest
 
-from maldroid.llama_client import REASONING_BUDGETS, LocalLlamaClient
+from maldroid.llama_client import (
+    REASONING_BUDGETS,
+    LocalLlamaClient,
+    RepetitiveGenerationError,
+    detect_repetitive_suffix,
+)
 
 
 def stream_chunk(
@@ -108,3 +113,77 @@ def test_streaming_aggregates_reasoning_content_tools_and_usage() -> None:
     assert any(event == "generation_progress" for event, _ in events)
     complete = next(data for event, data in events if event == "generation_complete")
     assert complete == {"completion_tokens": 7, "exact": True}
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "שלום שלום שלום שלום שלום שלום ",
+        "final phrase final phrase final phrase final phrase final phrase final phrase ",
+        "א" * 20,
+    ],
+)
+def test_repetitive_suffix_detector_handles_words_phrases_and_unicode(text: str) -> None:
+    match = detect_repetitive_suffix(text)
+
+    assert match is not None
+    assert match.repetitions >= 6
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "This is a normal answer with a short conclusion.",
+        '{"items": [1, 1, 1, 1, 1, 1], "status": "complete"}',
+        "for item in items:\n    print(item)\n",
+        "---\n---\n---\n---\n---\n---\n",
+    ],
+)
+def test_repetitive_suffix_detector_avoids_normal_text(text: str) -> None:
+    assert detect_repetitive_suffix(text) is None
+
+
+class ClosableStream(list):
+    def __init__(self, chunks) -> None:
+        super().__init__(chunks)
+        self.closed = False
+
+    def close(self) -> None:
+        self.closed = True
+
+
+def test_streaming_aborts_repetition_and_closes_response() -> None:
+    events = []
+    stream = ClosableStream([stream_chunk(content="שלום ") for _ in range(6)])
+    client = LocalLlamaClient(
+        "http://127.0.0.1:7575/v1",
+        None,
+        "local-model",
+        event_handler=lambda event, data: events.append((event, data)),
+    )
+    client.client = Mock()
+    client.client.chat.completions.create.return_value = stream
+
+    with pytest.raises(RepetitiveGenerationError):
+        client.complete([{"role": "user", "content": "test"}], [])
+
+    assert stream.closed is True
+    assert any(event == "generation_repetition_detected" for event, _ in events)
+    assert not any(event == "generation_complete" for event, _ in events)
+
+
+def test_repetition_guard_can_be_disabled() -> None:
+    client = LocalLlamaClient(
+        "http://127.0.0.1:7575/v1",
+        None,
+        "local-model",
+        repetition_recovery_enabled=False,
+    )
+    client.client = Mock()
+    client.client.chat.completions.create.return_value = [
+        stream_chunk(content="שלום ") for _ in range(6)
+    ]
+
+    message = client.complete([{"role": "user", "content": "test"}], [])
+
+    assert message.content == "שלום " * 6

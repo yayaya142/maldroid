@@ -30,6 +30,7 @@ def test_default_model_performance_settings() -> None:
     assert config.llama.ui_mcp_proxy_enabled is True
     assert config.llama.built_in_tools_enabled is True
     assert config.llama.reasoning_level == "medium"
+    assert config.llama.repetition_recovery_enabled is True
     assert config.limits.auto_compact_ratio == 0.72
     assert config.limits.max_tool_rounds == 8
     assert config.limits.max_task_phases == 0
@@ -76,3 +77,9 @@ def test_config_get_reset_and_invalid_values() -> None:
     with pytest.raises(Exception, match="Invalid value"):
         set_config_value(AppConfig(), "llama.reasoning_level", "extreme")
     assert set_config_value(AppConfig(), "limits.max_task_phases", "0").limits.max_task_phases == 0
+    assert (
+        set_config_value(
+            AppConfig(), "llama.repetition_recovery_enabled", "false"
+        ).llama.repetition_recovery_enabled
+        is False
+    )

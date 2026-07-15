@@ -162,3 +162,14 @@ def test_state_discipline_event_is_visible(app_config) -> None:
 
     rendered = output.getvalue()
     assert "TODO/Finding state" in rendered
+
+
+def test_repetition_recovery_events_are_visible(app_config) -> None:
+    chat, output = make_chat(app_config)
+
+    chat._handle_agent_event("generation_repetition_detected", {})
+    chat._handle_agent_event("repetition_recovery", {"new_session": 2})
+
+    rendered = output.getvalue()
+    assert "Repeated model output detected" in rendered
+    assert "clean session 2" in rendered

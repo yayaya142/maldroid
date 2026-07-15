@@ -1,9 +1,9 @@
 # Current Handoff
 
-Task: `CLI-011`
+Task: `MODEL-010`
 Next task: `PLATFORM-011`
 
-Implementation commits: `505e6e8`, `edde4e5`
+Implementation commit: pending
 
 ## Outcome
 
@@ -15,6 +15,28 @@ The repository now also has a modern local Web product surface. `maldroid server
 three-pane workspace with investigation conversations, multilingual/RTL chat, bounded files,
 research state, activity, settings, reports, and MCP connectors. Bare `maldroid` asks for Web or
 CLI; `maldroid cli` selects the terminal explicitly.
+
+## Repeated-output recovery
+
+- The local streaming client examines only the final 8,192 characters of answer and reasoning
+  channels. Six strongly repeated words/phrases or an extreme repeated-character suffix stops the
+  stream before the response consumes the remaining token budget.
+- Detection metadata contains only channel and size/count values. The partial repeated output is
+  never appended to assistant history, Notes, Findings, TODOs, or Checkpoints.
+- The controller saves at most 24,000 characters of durable case state, creates a new
+  `SessionManager`, restores the active objective, and continues the same turn with a
+  non-repetition instruction. At most 10,000 characters of recent retained tool results enter only
+  the new working context as explicitly untrusted data; they are not written to the persistent
+  summary or semantic research records.
+- Recovery is limited to two fresh sessions per turn. A third loop returns a controlled message
+  while keeping all durable state. This signal bypasses ordinary transient-request backoff.
+- `llama.repetition_recovery_enabled` defaults to `true`. It is discoverable through CLI config and
+  exposed as an English checkbox in Web Model Settings. Settings remain editable only while the
+  active model runtime is stopped, consistent with all persistent Web settings.
+- CLI status and Web Activity show detection, recovery session changes, and safe exhaustion. No
+  hidden reasoning or repeated content is exposed.
+- ADR 0015 records the streaming threshold, clean-session boundary, persistence policy, attempt
+  limit, and opt-out.
 
 ## One-command update
 
@@ -142,7 +164,10 @@ Focused and full tests:
 ./scripts/dev test
 ```
 
-Results: all focused suites passed; the current full suite passed with `122 passed`.
+Results: all focused suites passed. Repetition-specific coverage includes Hebrew words, phrases,
+Unicode character runs, normal prose/code/JSON false-positive fixtures, disabled behavior, stream
+closure, fresh-session continuation, objective carry-over, and bounded exhaustion. The current full
+suite passed with `135 passed`.
 
 Release gate:
 
@@ -150,10 +175,10 @@ Release gate:
 ./scripts/dev release-check
 ```
 
-The current final run passed Ruff formatting/lint, mypy for 43 source files, 122 tests with 71%
+The current final run passed Ruff formatting/lint, mypy for 43 source files, 135 tests with 71%
 coverage, project hygiene, installer dry-run, wheel build, and archive verification. The wheel is
-`dist/maldroid-0.1.0-py3-none-any.whl` (149,497 bytes) and contains the updater, Web server, and all three
-static assets. `node --check src/maldroid/web/static/app.js` also passed.
+`dist/maldroid-0.1.0-py3-none-any.whl` and contains the repetition guard, updater, Web server, and
+all three static assets. `node --check src/maldroid/web/static/app.js` also passed.
 
 GitHub Actions run `29433131792` passed on macOS 26 and Kali for commit `2f6a537`. Both jobs passed
 dependency bootstrap (including the explicit WebSocket backend), Ruff, mypy, formatting, all 115
@@ -172,6 +197,8 @@ including lint, formatting, all 106 tests, and installer dry-run.
 
 - No real Gemma 4, llama-server, macOS Terminal, or Ghidra MCP long-run acceptance occurred in this
   Linux workspace.
+- Repetition thresholds have deterministic multilingual synthetic coverage but still require tuning
+  against real Gemma 4 loops and long legitimate outputs on the owner's macOS host.
 - Web UI activation, Hebrew model output, real project switching, and Ghidra MCP execution still
   require the owner's configured macOS model and tools. The local browser smoke test deliberately
   kept the missing Linux model offline.
@@ -189,7 +216,7 @@ including lint, formatting, all 106 tests, and installer dry-run.
 ## Next command
 
 ```bash
-git diff --check && git status --short
+./scripts/dev release-check
 ```
 
 Install current `main` once on the owner's macOS host, run `maldroid update` from the installed

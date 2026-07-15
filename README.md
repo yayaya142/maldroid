@@ -129,6 +129,12 @@ the threshold is calculated. Phases are unlimited, with three automatic retries 
 model-server failures. During streaming generation, the active status line shows elapsed time,
 generated tokens, context consumption, and estimated tokens remaining.
 
+Runaway repeated output is detected while it streams. By default MalDroid stops the bad generation,
+starts a clean append-only session, carries forward durable state and bounded recent tool results,
+and continues the same request automatically. The repeated partial text is not stored as research
+or returned to the model. Disable this behavior with
+`maldroid config set llama.repetition_recovery_enabled false`.
+
 Profile selection is automatic by default. MalDroid recursively inspects bounded artifact names,
 archive entries, ELF magic, and small content samples, then activates React Native, Flutter, Unity,
 Cordova, Cocos, Native, or Generic tools with evidence-backed confidence. Mixed apps use scored

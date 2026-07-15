@@ -35,6 +35,16 @@ def test_web_api_requires_per_process_token(tmp_path: Path) -> None:
         assert response.json()["error"] == "Unauthorized local workspace request"
 
 
+def test_web_settings_expose_enabled_repetition_recovery(tmp_path: Path) -> None:
+    workspace = WebWorkspace(web_config(tmp_path))
+    with authorized_client(workspace) as client:
+        bootstrap = client.get("/api/bootstrap").json()
+        page = client.get("/").text
+
+    assert bootstrap["settings"]["llama"]["repetition_recovery_enabled"] is True
+    assert 'data-key="llama.repetition_recovery_enabled"' in page
+
+
 def test_web_project_creation_listing_and_bounded_file_preview(tmp_path: Path) -> None:
     source = tmp_path / "decompiled-app"
     source.mkdir()

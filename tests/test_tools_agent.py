@@ -10,7 +10,12 @@ from maldroid.case_manager import CaseManager
 from maldroid.config import AppConfig
 from maldroid.investigation import InvestigationManager
 from maldroid.knowledge_manager import KnowledgeManager
-from maldroid.llama_client import AssistantMessage, ToolCall
+from maldroid.llama_client import (
+    AssistantMessage,
+    RepetitionMatch,
+    RepetitiveGenerationError,
+    ToolCall,
+)
 from maldroid.paths import PathPolicy
 from maldroid.prompts import SYSTEM_PROMPT
 from maldroid.session_manager import SessionManager
@@ -845,3 +850,67 @@ def test_agent_retries_transient_model_failure(
     assert client.calls == 2
     assert delays == [1.0]
     assert any(event == "model_retry" for event, _ in reported)
+
+
+class RepeatingThenHealthyClient:
+    def __init__(self, failures: int = 1) -> None:
+        self.calls = 0
+        self.failures = failures
+        self.messages = []
+
+    def complete(self, messages, tools):
+        self.calls += 1
+        self.messages = messages
+        if self.calls <= self.failures:
+            raise RepetitiveGenerationError(RepetitionMatch(5, 12, 60), "answer")
+        return AssistantMessage(content="Recovered without repetition.")
+
+
+def test_agent_recovers_repetition_in_fresh_session(app_config: AppConfig) -> None:
+    manager, case, registry, dispatcher = make_dispatcher(app_config)
+    original = SessionManager(case, manager)
+    client = RepeatingThenHealthyClient()
+    reported = []
+    agent = MalDroidAgent(
+        app_config,
+        case,
+        client,
+        registry,
+        dispatcher,
+        original,
+        event_handler=lambda event, details: reported.append((event, details)),
+    )
+    agent.messages.append({"role": "tool", "content": '{"data":"RECENT-EVIDENCE"}'})
+
+    response = agent.respond("בדוק את הקובץ")
+
+    assert response == "Recovered without repetition."
+    assert client.calls == 2
+    assert agent.sessions.number == original.number + 1
+    assert any(event == "repetition_recovery" for event, _ in reported)
+    assert any(message.get("content") == "בדוק את הקובץ" for message in client.messages)
+    assert "mechanical repetition loop" in "\n".join(
+        str(message.get("content", "")) for message in client.messages
+    )
+    assert "RECENT-EVIDENCE" in str(client.messages)
+    assert "RECENT-EVIDENCE" not in original.summary_path.read_text(encoding="utf-8")
+    assert "שלום" not in original.history_path.read_text(encoding="utf-8")
+
+
+def test_agent_bounds_repetition_recovery_attempts(app_config: AppConfig) -> None:
+    manager, case, registry, dispatcher = make_dispatcher(app_config)
+    client = RepeatingThenHealthyClient(failures=10)
+    agent = MalDroidAgent(
+        app_config,
+        case,
+        client,
+        registry,
+        dispatcher,
+        SessionManager(case, manager),
+    )
+
+    response = agent.respond("Inspect safely")
+
+    assert "Generation was stopped" in response
+    assert client.calls == 3
+    assert agent.sessions.number == 3

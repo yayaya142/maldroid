@@ -70,6 +70,7 @@ class WorkspaceRuntime:
             self.config.llama.temperature,
             self.config.llama.max_response_tokens,
             self.config.llama.reasoning_level,
+            repetition_recovery_enabled=self.config.llama.repetition_recovery_enabled,
         )
         self.registry, self.local_dispatcher = build_tool_runtime(
             self.config, self.case, self.manager

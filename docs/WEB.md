@@ -47,6 +47,11 @@ Settings cover model paths and performance, context and research limits, cases, 
 connectors. Persistent settings can only be changed while the model runtime is stopped. External
 MCP URLs retain the same loopback and credential restrictions as the CLI.
 
+The Model settings panel also controls automatic repeated-output recovery. It is enabled by
+default. When triggered, Activity shows the stopped generation and new session; the same request
+continues with durable and bounded recent context, without placing the repeated partial response in
+the conversation or research records.
+
 File listing and preview never read the filesystem directly. They call the shared dispatcher and
 central `PathPolicy`, so case roots, evidence mappings, line limits, output limits, static-only
 rules, and audit behavior remain identical across CLI and Web.
@@ -61,4 +66,3 @@ open_browser = true
 ```
 
 `web.host` is fixed by schema and cannot be changed to a network interface.
-

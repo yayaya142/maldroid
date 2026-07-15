@@ -131,6 +131,13 @@ are reconstructed only from structured API deltas. The terminal uses streaming e
 token/context telemetry; the complete reconstructed assistant message remains the sole history and
 tool-loop input.
 
+An enabled-by-default repetition guard examines a bounded suffix of answer and reasoning streams.
+When a word, phrase, or character enters a strong mechanical loop, the client closes the stream
+before the partial message reaches history. The controller writes metadata only, summarizes durable
+state and bounded recent tool results, creates a new append-only session, restores the objective,
+and continues. Two recoveries are permitted per turn; further repetition stops safely. ADR 0015
+defines the thresholds, persistence boundary, and opt-out.
+
 ## External MCP connectors
 
 The persistent external connector registry is separate from the case-scoped MalDroid MCP server.

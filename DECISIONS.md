@@ -1,5 +1,8 @@
 # Architecture Decisions
 
+- ADR 0015: Bounded streaming repetition detection aborts runaway local generations and resumes the
+  same objective in a fresh session with durable and recent high-value context; it is enabled by
+  default and recovery attempts are bounded.
 - ADR 0013: CLI and Web are presentation surfaces over one `WorkspaceRuntime`; only one global
   model workspace may run, and the Web surface is token-authenticated and loopback-only.
 - ADR 0014: Self-update is explicit, fixed to the official `main` branch, temporary, globally

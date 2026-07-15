@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
@@ -17,6 +18,58 @@ REASONING_BUDGETS: dict[ReasoningLevel, int] = {
     "high": 3072,
     "unlimited": -1,
 }
+REPETITION_TAIL_CHARACTERS = 8192
+
+
+@dataclass(frozen=True)
+class RepetitionMatch:
+    unit_characters: int
+    repetitions: int
+    repeated_characters: int
+
+
+class RepetitiveGenerationError(RuntimeError):
+    """Raised when a local generation is aborted after entering a repetition loop."""
+
+    def __init__(self, match: RepetitionMatch, channel: str):
+        super().__init__(f"Repetitive {channel} generation was stopped")
+        self.match = match
+        self.channel = channel
+
+
+def detect_repetitive_suffix(text: str) -> RepetitionMatch | None:
+    """Detect a strongly repeated suffix without retaining or returning its content."""
+    tail = text[-REPETITION_TAIL_CHARACTERS:]
+    tokens = re.findall(r"\S+", tail)
+    for width in range(1, min(12, len(tokens) // 6) + 1):
+        token_unit = tokens[-width:]
+        repetitions = 1
+        cursor = len(tokens) - (2 * width)
+        while cursor >= 0 and tokens[cursor : cursor + width] == token_unit:
+            repetitions += 1
+            cursor -= width
+        repeated_characters = len(" ".join(token_unit * repetitions))
+        if repetitions >= 6 and repeated_characters >= 24:
+            return RepetitionMatch(
+                unit_characters=len(" ".join(token_unit)),
+                repetitions=repetitions,
+                repeated_characters=repeated_characters,
+            )
+
+    for width in range(1, min(64, len(tail) // 6) + 1):
+        character_unit = tail[-width:]
+        if not character_unit or not any(character.isalnum() for character in character_unit):
+            continue
+        repetitions = 1
+        cursor = len(tail) - (2 * width)
+        while cursor >= 0 and tail[cursor : cursor + width] == character_unit:
+            repetitions += 1
+            cursor -= width
+        minimum_repetitions = 12 if width == 1 else 6
+        repeated_characters = width * repetitions
+        if repetitions >= minimum_repetitions and repeated_characters >= 16:
+            return RepetitionMatch(width, repetitions, repeated_characters)
+    return None
 
 
 @dataclass
@@ -64,12 +117,14 @@ class LocalLlamaClient:
         max_tokens: int = 4096,
         reasoning_level: ReasoningLevel = "medium",
         event_handler: ModelEventHandler | None = None,
+        repetition_recovery_enabled: bool = True,
     ):
         self.client = OpenAI(base_url=base_url, api_key=api_key or "local-no-auth")
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.reasoning_level = reasoning_level
+        self.repetition_recovery_enabled = repetition_recovery_enabled
         self.event_handler = event_handler
 
     def set_event_handler(self, handler: ModelEventHandler | None) -> None:
@@ -102,7 +157,12 @@ class LocalLlamaClient:
             request["tools"] = tools
             request["parallel_tool_calls"] = False
         response = self.client.chat.completions.create(**request)
-        return self._consume_stream(response)
+        try:
+            return self._consume_stream(response)
+        finally:
+            close = getattr(response, "close", None)
+            if callable(close):
+                close()
 
     def _consume_stream(self, response: Iterable[Any]) -> AssistantMessage:
         content_parts: list[str] = []
@@ -111,6 +171,8 @@ class LocalLlamaClient:
         actual_completion_tokens: int | None = None
         content_characters = 0
         reasoning_characters = 0
+        content_tail = ""
+        reasoning_tail = ""
         self._emit("generation_start")
         for chunk in response:
             usage = getattr(chunk, "usage", None)
@@ -128,9 +190,25 @@ class LocalLlamaClient:
             if content:
                 content_parts.append(content)
                 content_characters += len(content)
+                content_tail = (content_tail + content)[-REPETITION_TAIL_CHARACTERS:]
             if reasoning:
                 reasoning_parts.append(reasoning)
                 reasoning_characters += len(reasoning)
+                reasoning_tail = (reasoning_tail + reasoning)[-REPETITION_TAIL_CHARACTERS:]
+            if self.repetition_recovery_enabled:
+                for channel, tail in (("answer", content_tail), ("reasoning", reasoning_tail)):
+                    match = detect_repetitive_suffix(tail)
+                    if match is None:
+                        continue
+                    metadata = {
+                        "channel": channel,
+                        "unit_characters": match.unit_characters,
+                        "repetitions": match.repetitions,
+                        "repeated_characters": match.repeated_characters,
+                    }
+                    self._emit("generation_repetition_detected", **metadata)
+                    self._emit("generation_aborted", reason="repetition", **metadata)
+                    raise RepetitiveGenerationError(match, channel)
             for item in getattr(delta, "tool_calls", None) or []:
                 index = int(getattr(item, "index", 0) or 0)
                 aggregate = call_parts.setdefault(index, {"id": "", "name": "", "arguments": ""})

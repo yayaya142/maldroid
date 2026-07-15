@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added enabled-by-default streaming repetition detection and bounded automatic recovery in a fresh
+  session, preserving durable investigation state without retaining the repeated partial output.
 - Added `maldroid update`: fixed-official-repository depth-one clone, temporary source cleanup,
   non-interactive installation, commit reporting, runtime exclusion, and previous-venv rollback on
   installation failure.

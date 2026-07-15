@@ -270,6 +270,19 @@ class InteractiveChat:
         elif event == "generation_complete":
             self._turn_generated_tokens += int(data.get("completion_tokens", 0))
             self._current_generation_tokens = 0
+        elif event == "generation_repetition_detected":
+            self._current_generation_tokens = 0
+            self._update_status("Stopping repeated output…")
+            self.console.print(
+                "[yellow]Repeated model output detected; generation stopped.[/yellow]"
+            )
+        elif event == "repetition_recovery":
+            session = int(data.get("new_session", 0))
+            self._update_status(f"Recovering in session {session}…")
+            self.console.print(f"[cyan]Continuing automatically in clean session {session}.[/cyan]")
+        elif event == "repetition_recovery_exhausted":
+            self._current_generation_tokens = 0
+            self._update_status("Generation stopped safely")
         elif event == "tool_start":
             self._turn_tools += 1
             name = self._short_tool_name(str(data.get("name", "tool")))

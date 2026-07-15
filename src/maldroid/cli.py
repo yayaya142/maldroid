@@ -102,6 +102,9 @@ CONFIG_DESCRIPTIONS = {
     "llama.temperature": "Sampling temperature for assistant responses.",
     "llama.max_response_tokens": "Maximum generated tokens per model response.",
     "llama.reasoning_level": "Reasoning budget: off, low, medium, high, or unlimited.",
+    "llama.repetition_recovery_enabled": (
+        "Detect runaway repeated output and continue the turn in a fresh session."
+    ),
     "llama.api_key_enabled": "Enable a random per-run key for the loopback model API.",
     "llama.ui_enabled": "Serve the built-in llama.cpp WebUI.",
     "llama.ui_mcp_proxy_enabled": "Enable the experimental WebUI-to-MCP CORS proxy.",

@@ -151,6 +151,9 @@ function updateProgress(event, data) {
   const labels = {
     model_start: ["Thinking", `Research phase ${data.phase || 1} · tool round ${(data.total_tool_rounds || 0) + 1}`],
     generation_progress: ["Reasoning", `Generating locally · approximately ${data.completion_tokens_estimate || 0} tokens`],
+    generation_repetition_detected: ["Stopping repeated output", "A local generation loop was detected…"],
+    repetition_recovery: ["Recovering automatically", `Continuing safely in session ${data.new_session || "new"}…`],
+    repetition_recovery_exhausted: ["Generation stopped safely", "Investigation state was preserved."],
     tool_start: ["Running a tool", shortTool(data.name)], tool_result: [data.status === "completed" ? "Tool completed" : "Tool needs attention", shortTool(data.name)],
     checkpoint_required: ["Saving research", "Creating a durable progress checkpoint…"], state_discipline_required: ["Organizing research", "Updating findings and TODOs…"],
     compaction_start: ["Compacting context", "Preserving durable state and reclaiming context…"], phase_rollover: ["Continuing autonomously", `Starting research phase ${(data.completed_phase || 1) + 1}…`]
@@ -159,7 +162,7 @@ function updateProgress(event, data) {
 }
 
 function addActivity(event, data = {}) {
-  const titleMap = { model_start:"Model reasoning started", generation_complete:"Generation completed", tool_start:`Running ${shortTool(data.name)}`, tool_result:`${shortTool(data.name)} ${data.status || "completed"}`, checkpoint_required:"Durable checkpoint requested", automatic_checkpoint:"Checkpoint saved", phase_rollover:"Autonomous phase continued", compaction_complete:"Context compacted", external_mcp_connection:`MCP ${data.nickname || "connector"}` };
+  const titleMap = { model_start:"Model reasoning started", generation_complete:"Generation completed", generation_repetition_detected:"Repeated output stopped", repetition_recovery:"Continued in a fresh session", repetition_recovery_exhausted:"Repeated generation stopped safely", tool_start:`Running ${shortTool(data.name)}`, tool_result:`${shortTool(data.name)} ${data.status || "completed"}`, checkpoint_required:"Durable checkpoint requested", automatic_checkpoint:"Checkpoint saved", phase_rollover:"Autonomous phase continued", compaction_complete:"Context compacted", external_mcp_connection:`MCP ${data.nickname || "connector"}` };
   if (!titleMap[event] && event === "generation_progress") return;
   state.activities.unshift({ event, title: titleMap[event] || event.replaceAll("_", " "), detail: activityDetail(data), time: new Date() }); state.activities = state.activities.slice(0, 100);
   if (!$("[data-tab='activity']").classList.contains("active")) state.unread++;

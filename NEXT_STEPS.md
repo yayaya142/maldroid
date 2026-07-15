@@ -3,6 +3,10 @@
 The owner has reprioritized reliability and research quality. Follow
 `NEXT_AGENT_MASTER_PLAN.md`; do not add broad new tools before the durable-state gate is trustworthy.
 
+Completed out of sequence by explicit owner reprioritization: `MODEL-010` adds enabled-by-default
+streaming repetition detection, clean-session recovery with bounded carry-over, CLI/Web activity,
+and the Web Settings toggle. Physical Gemma tuning is included in `PLATFORM-011`.
+
 1. `PLATFORM-011` — Install the long-investigation and Web-workspace upgrade on the owner's macOS
    host. Verify `maldroid` mode selection, `maldroid server`, exclusive CLI/Web locking, project
    creation/switching, Hebrew input/output RTL, settings, bounded file preview, live activity,

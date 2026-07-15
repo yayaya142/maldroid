@@ -132,6 +132,7 @@
             <div class="field-row"><label>Context size<input type="number" data-key="general.default_context_size"></label><label>Response tokens<input type="number" data-key="llama.max_response_tokens"></label></div>
             <div class="field-row"><label>GPU layers<input type="number" data-key="llama.gpu_layers"></label><label>Batch size<input type="number" data-key="llama.batch_size"></label></div>
             <label>Default reasoning<select data-key="llama.reasoning_level"><option>off</option><option>low</option><option>medium</option><option>high</option><option>unlimited</option></select></label>
+            <label class="check-label"><input type="checkbox" data-key="llama.repetition_recovery_enabled"> Automatically recover runaway repeated output in a fresh session</label>
           </section>
           <section data-settings-panel="workspace">
             <label>Cases directory<input data-key="general.cases_directory"></label>

@@ -2564,6 +2564,15 @@ The owner reprioritized a second, high-quality product surface. Implemented requ
 * File browsing uses central path policy and bounded tools rather than an unrestricted Web file API.
 * The static-only evidence boundary remains unchanged.
 
+## 41A. Runaway generation recovery
+
+The local streaming client must detect strong repeated-word, phrase, and character suffixes before
+they consume the entire generation budget. When enabled, the controller must close the bad stream,
+exclude partial repeated output from research and model history, create a new append-only session,
+restore durable state plus bounded recent tool results and the active objective, and continue. Limit
+automatic recovery attempts so the controller cannot loop indefinitely. Expose an English Web
+Settings toggle and a validated CLI configuration key; default the feature to enabled.
+
 ## 42. Definition of done
 
 The project is complete only when:
@@ -2640,5 +2649,4 @@ Build it.
 אני רוצה שכל מה שקשור לפייתון וזה יהיה בסביבה ויראוטלית עם venu (יש בצורה אוטומטית כבר בלי לבלבל את הAGENT) 
 
 2-  אני יודע שזה כבר מופיע אבל אני רוצה שתבצע מחקר מקיף על כל סוגי השפות שיש בשביל לדעת איך לעשות להם REVESE נכון ולחקור נכון.
-
 

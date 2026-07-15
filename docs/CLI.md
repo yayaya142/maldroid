@@ -51,6 +51,16 @@ the unhelpful generic “no ToolResult payload” failure when the server suppli
 If all retries fail, the turn pauses with a clear external-dependency panel while the CLI and case
 remain open; it does not terminate the session or discard durable work.
 
+Mechanical repeated-output loops are handled separately from connection retries. The streaming
+guard stops the response, preserves only detection metadata, opens a fresh append-only session with
+durable state and bounded recent tool results, and continues the same objective. Recovery is capped
+at two fresh sessions per turn. It defaults on and can be changed persistently with:
+
+```bash
+maldroid config set llama.repetition_recovery_enabled false
+maldroid config reset llama.repetition_recovery_enabled
+```
+
 The controller reserves the next completion budget in its context calculation. By default only the
 six most recent tool results and reasoning blocks remain in full active context; older results are
 replaced with small receipts while complete session JSONL and saved output remain available. The
