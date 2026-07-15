@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added latest-turn green file/directory markers to the Web Files explorer and hid routine log
+  paths by default behind a persistent presentation-only reveal control.
 - Added a Web Live Work Stop control with real turn cancellation, active stream closure, safe-boundary
   tool handling, preserved durable research state, and no llama-server restart.
 - Added a central Web Live Work surface with elapsed time, phase/tool/token telemetry, current

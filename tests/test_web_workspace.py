@@ -58,6 +58,8 @@ def test_web_shell_exposes_chat_theme_sidebar_restore_and_file_controls(tmp_path
     assert 'id="theme-toggle"' in page
     assert 'id="theme-setting"' in page
     assert 'id="file-filter"' in page
+    assert 'id="toggle-logs"' in page
+    assert "Used in latest turn" in page
     assert ".composer-disabled.hidden+.composer{display:block}" in styles
     assert "body.sidebar-collapsed .mobile-menu{display:grid}" in styles
     assert "minmax(0,1fr)" in styles
@@ -65,6 +67,10 @@ def test_web_shell_exposes_chat_theme_sidebar_restore_and_file_controls(tmp_path
     assert ".inspector.open{transform:none}" in styles
     assert 'localStorage.setItem("maldroid-theme"' in script
     assert "collapsedDirectories" in script
+    assert "touchedFiles" in script
+    assert "markTouchedFiles" in script
+    assert "isLogPath" in script
+    assert 'localStorage.setItem("maldroid-show-logs"' in script
     assert "syncPaneState" in script
 
 

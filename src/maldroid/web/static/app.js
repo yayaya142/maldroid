@@ -1,6 +1,6 @@
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
-const state = { bootstrap: null, workspace: { active: false }, activeId: null, socket: null, busy: false, activities: [], unread: 0, files: [], collapsedDirectories: new Set(), selectedFile: null, fileFilter: "", theme: "dark", work: { startedAt: 0, timer: null, phase: 1, tools: 0, tokens: 0, context: 0, steps: [] } };
+const state = { bootstrap: null, workspace: { active: false }, activeId: null, socket: null, busy: false, activities: [], unread: 0, files: [], collapsedDirectories: new Set(), selectedFile: null, fileFilter: "", touchedFiles: new Set(), showLogs: false, theme: "dark", work: { startedAt: 0, timer: null, phase: 1, tools: 0, tokens: 0, context: 0, steps: [] } };
 
 async function api(path, options = {}) {
   const response = await fetch(path, { ...options, headers: { "Content-Type": "application/json", ...(options.headers || {}) } });
@@ -11,6 +11,7 @@ async function api(path, options = {}) {
 
 async function boot() {
   initializeTheme();
+  initializeFilePreferences();
   try {
     state.bootstrap = await api("/api/bootstrap");
     state.workspace = state.bootstrap.workspace;
@@ -64,10 +65,10 @@ async function handleSocket(message) {
   if (message.type === "activity") { addActivity(message.event, message.data); updateProgress(message.event, message.data); return; }
   if (message.type === "runtime_start") { startLiveWork("Starting local model", "Loading llama.cpp and case-scoped MCP tools…", false); setBusy(true, "Starting local model", "Loading llama.cpp and case-scoped MCP tools…"); return; }
   if (message.type === "runtime_ready") { state.workspace = message.workspace; state.activeId = state.workspace.case.case_id; setBusy(false); renderWorkspace(); await refreshBootstrap(); await loadProjectData(state.activeId); $("#message-input").focus(); toast("Local model and MCP workspace are ready. You can message MalDroid below."); return; }
-  if (message.type === "turn_start") { startLiveWork("Thinking", "Planning the next research step…", true); setBusy(true, "Thinking", "Planning the next research step…"); return; }
+  if (message.type === "turn_start") { state.touchedFiles.clear(); renderFiles(); startLiveWork("Thinking", "Planning the next research step…", true); setBusy(true, "Thinking", "Planning the next research step…"); return; }
   if (message.type === "turn_stopping") { $("#stop-turn").disabled = true; $("#progress-title").textContent = "Stopping"; $("#progress-detail").textContent = "Finishing the current safe boundary…"; appendLiveWorkStep("turn_stopping"); return; }
-  if (message.type === "turn_stopped") { state.workspace = message.workspace; setBusy(false); renderWorkspace(); renderResearch(); $("#message-input").focus(); toast("Model turn stopped. Durable research state was preserved."); return; }
-  if (message.type === "assistant") { addMessage("assistant", message.content); state.workspace = message.workspace; setBusy(false); renderWorkspace(); renderResearch(); return; }
+  if (message.type === "turn_stopped") { state.workspace = message.workspace; setBusy(false); renderWorkspace(); renderResearch(); await loadFiles(); $("#message-input").focus(); toast("Model turn stopped. Durable research state was preserved."); return; }
+  if (message.type === "assistant") { addMessage("assistant", message.content); state.workspace = message.workspace; setBusy(false); renderWorkspace(); renderResearch(); await loadFiles(); return; }
   if (message.type === "error") { setBusy(false); toast(message.error, true); }
 }
 
@@ -94,7 +95,7 @@ function renderProjects() {
 
 async function activateProject(caseId) {
   if (state.busy) return toast("Wait for the active operation to finish.", true);
-  state.activeId = caseId; renderProjects();
+  state.activeId = caseId; state.touchedFiles.clear(); renderProjects();
   if (!state.socket || state.socket.readyState !== WebSocket.OPEN) return toast("Workspace connection is reconnecting.", true);
   state.socket.send(JSON.stringify({ type: "activate", case_id: caseId }));
   if (innerWidth <= 900) $(".sidebar").classList.remove("open");
@@ -175,6 +176,7 @@ function updateProgress(event, data) {
   if (event === "model_start") { state.work.phase = data.phase || state.work.phase; state.work.context = data.input_tokens_estimate || state.work.context; }
   if (event === "generation_progress") state.work.tokens = data.completion_tokens_estimate || state.work.tokens;
   if (event === "tool_start") state.work.tools += 1;
+  if (event === "tool_start" || event === "tool_result") markTouchedFiles(data);
   renderLiveWorkMetrics();
   if (event !== "generation_progress" && event !== "generation_start" && event !== "generation_complete") appendLiveWorkStep(event, data);
 }
@@ -246,22 +248,27 @@ async function loadFiles() {
 function renderFiles() {
   const tree = $("#file-tree"), query = state.fileFilter;
   tree.replaceChildren(); tree.className = "file-tree";
+  const logs = state.files.filter(item => isLogPath(item.path));
   const visible = state.files.filter(item => {
+    if (!state.showLogs && isLogPath(item.path)) return false;
     if (query) return item.path.toLowerCase().includes(query);
     const parents = item.path.split("/").slice(0, -1);
     return !parents.some((_, index) => state.collapsedDirectories.has(parents.slice(0, index + 1).join("/")));
   });
-  $("#file-count").textContent = query ? `${visible.length} matches` : `${state.files.length} items`;
+  $("#file-count").textContent = query ? `${visible.length} matches` : `${visible.length} items${!state.showLogs && logs.length ? ` · ${logs.length} hidden` : ""}`;
+  const logToggle = $("#toggle-logs"); logToggle.textContent = state.showLogs ? "Showing logs" : "Logs hidden"; logToggle.setAttribute("aria-pressed", String(state.showLogs)); logToggle.setAttribute("aria-label", state.showLogs ? "Hide log files" : "Show log files");
   if (state.filesTruncated) tree.append(el("div", "file-limit", `Showing the first ${state.filesLimit} entries`));
   for (const item of visible) {
     const depth = Math.max(0, item.path.split("/").length - 1), directory = item.type === "directory";
-    const row = el("div", `file-row ${item.type}${state.selectedFile === item.path ? " selected" : ""}`);
-    row.style.paddingLeft = `${5 + depth * 14}px`; row.title = item.path;
+    const normalizedPath = normalizeCasePath(item.path), touched = item.type !== "directory" && state.touchedFiles.has(normalizedPath), containsTouched = directory && [...state.touchedFiles].some(path => path === normalizedPath || path.startsWith(`${normalizedPath}/`));
+    const row = el("div", `file-row ${item.type}${state.selectedFile === item.path ? " selected" : ""}${touched ? " touched" : ""}${containsTouched ? " contains-touched" : ""}`);
+    row.style.paddingLeft = `${5 + depth * 14}px`; row.title = touched ? `${item.path} · Used by MalDroid in the latest turn` : containsTouched ? `${item.path} · Contains work from the latest turn` : item.path;
     row.append(
       el("span", "file-disclosure", directory ? (state.collapsedDirectories.has(item.path) ? "▸" : "▾") : ""),
       el("span", "file-icon", fileIcon(item)),
       el("span", "file-label", item.path.split("/").pop())
     );
+    if (touched || containsTouched) { const marker = el("span", `file-worked-dot${containsTouched ? " directory-marker" : ""}`); marker.title = touched ? "Used by MalDroid in the latest turn" : "Contains work from the latest turn"; marker.setAttribute("aria-label", marker.title); row.append(marker); }
     if (directory) {
       row.tabIndex = 0; row.setAttribute("role", "button"); row.setAttribute("aria-expanded", String(!state.collapsedDirectories.has(item.path)));
       const toggle = () => { state.collapsedDirectories.has(item.path) ? state.collapsedDirectories.delete(item.path) : state.collapsedDirectories.add(item.path); renderFiles(); };
@@ -303,6 +310,7 @@ async function handleAction(action,target){
   else if(action==="toggle-theme")setTheme(state.theme === "dark" ? "light" : "dark");
   else if(action==="toggle-inspector"){if(innerWidth<=900){document.body.classList.remove("inspector-collapsed");$(".sidebar").classList.remove("open");$(".inspector").classList.toggle("open")}else document.body.classList.toggle("inspector-collapsed");syncPaneState()}
   else if(action==="refresh-files")await loadFiles(); else if(action==="close-preview")$("#file-preview").classList.add("hidden");
+  else if(action==="toggle-logs"){state.showLogs=!state.showLogs;localStorage.setItem("maldroid-show-logs",String(state.showLogs));renderFiles()}
   else if(action==="clear-activity"){state.activities=[];state.unread=0;renderActivity()}
   else if(action==="profile")showChoiceMenu(target,["auto","generic","react-native","native"],state.workspace.case?.profile,choice=>runCommand("profile",{profile:choice}));
   else if(action==="reasoning")showChoiceMenu(target,["off","low","medium","high","unlimited"],state.workspace.reasoning,choice=>runCommand("reasoning",{level:choice}));
@@ -334,8 +342,13 @@ function el(tag,className="",text=""){const node=document.createElement(tag);if(
 function getPath(object,path){return path.split(".").reduce((value,key)=>value?.[key],object)}
 function shortProfile(value){return ({"react-native":"RN",native:"Native",generic:"Auto"})[value]||value}
 function shortTool(value=""){return value.replace(/^MalDroid_/,"").replace(/^MCP_[^_]+_/,"").replaceAll("_"," ")}
-function activityDetail(data){if(data.arguments)return Object.entries(data.arguments).slice(0,2).map(([k,v])=>`${k}: ${String(v).slice(0,60)}`).join(" · ");if(data.error)return String(data.error).slice(0,120);if(data.action)return data.action;return data.status||"Local workspace"}
-function liveToolDetail(data){const args=data.arguments||{},safeKeys=["path","query","pattern","start_line","end_line","offset","length","nickname"],details=safeKeys.filter(key=>args[key]!==undefined).slice(0,2).map(key=>`${key}: ${String(args[key]).slice(0,60)}`);return details.join(" · ")||"Running a bounded local tool"}
+function activityDetail(data){if(data.arguments){const args=parsedToolArguments(data.arguments),detail=Object.entries(args).slice(0,2).map(([k,v])=>`${k}: ${String(v).slice(0,60)}`).join(" · ");if(detail)return detail}if(data.error)return String(data.error).slice(0,120);if(data.action)return data.action;return data.status||"Local workspace"}
+function parsedToolArguments(value){if(value&&typeof value==="object")return value;if(typeof value==="string"){try{const parsed=JSON.parse(value);return parsed&&typeof parsed==="object"?parsed:{}}catch{return {}}}return {}}
+function liveToolDetail(data){const args=parsedToolArguments(data.arguments),safeKeys=["path","query","pattern","start_line","end_line","offset","length","nickname"],details=safeKeys.filter(key=>args[key]!==undefined).slice(0,2).map(key=>`${key}: ${String(args[key]).slice(0,60)}`);return details.join(" · ")||"Running a bounded local tool"}
+function normalizeCasePath(value=""){let path=String(value).replaceAll("\\","/");const root=String(state.workspace.case?.path||"").replaceAll("\\","/").replace(/\/$/,"");if(root&&path.startsWith(`${root}/`))path=path.slice(root.length+1);return path.replace(/^\.\//,"").replace(/\/{2,}/g,"/")}
+function markTouchedFiles(data={}){const args=parsedToolArguments(data.arguments),candidates=[];for(const [key,value]of Object.entries(args)){if(key==="path"||key.endsWith("_path")||key==="paths"){if(Array.isArray(value))candidates.push(...value);else candidates.push(value)}}if(data.output_file)candidates.push(data.output_file);for(const value of candidates){if(typeof value!=="string")continue;const path=normalizeCasePath(value);if(path&&path!==".")state.touchedFiles.add(path)}renderFiles()}
+function isLogPath(path=""){const parts=String(path).toLowerCase().split("/");return parts.includes("logs")||parts[parts.length-1].endsWith(".log")}
+function initializeFilePreferences(){state.showLogs=localStorage.getItem("maldroid-show-logs")==="true"}
 function relativeTime(value){const seconds=Math.max(0,(Date.now()-new Date(value).getTime())/1000);if(seconds<60)return"just now";if(seconds<3600)return`${Math.floor(seconds/60)}m ago`;if(seconds<86400)return`${Math.floor(seconds/3600)}h ago`;return`${Math.floor(seconds/86400)}d ago`}
 function formatBytes(bytes=0){if(bytes<1024)return`${bytes} B`;if(bytes<1048576)return`${(bytes/1024).toFixed(1)} KB`;return`${(bytes/1048576).toFixed(1)} MB`}
 function fileIcon(item){if(item.type==="directory")return"▰";if(item.type==="symlink")return"↗";const extension=item.path.split(".").pop().toLowerCase();if(["js","jsx","ts","tsx"].includes(extension))return"JS";if(["java","kt","smali"].includes(extension))return"J";if(["c","cc","cpp","h","hpp"].includes(extension))return"C";if(["so","elf","bin","dex"].includes(extension))return"◆";if(["json","toml","yaml","yml","xml"].includes(extension))return"{}";if(["md","txt","log"].includes(extension))return"≡";return"·"}

@@ -4,6 +4,9 @@ Last updated: 2026-07-15
 
 ## Completed
 
+- The Web Files explorer now highlights files used in the latest model turn with a green marker
+  and marks containing directories with a green ring. Routine log paths are hidden by default
+  behind a persistent reveal control; this changes presentation only, not bounded model access.
 - Web Live Work now includes a Stop control for active model turns. The WebSocket remains responsive,
   the active generation stream is closed, partial output is discarded, and the workspace returns
   to chat without unloading the model. Durable state and completed tool results are preserved;

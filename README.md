@@ -101,6 +101,11 @@ center pane; Actions are optional direct operations, not the chat entry point. T
 supports persistent Dark and Light appearance, a searchable/collapsible file tree, and a header
 restore button whenever the project sidebar is collapsed.
 
+Files used by MalDroid in the latest model turn receive a green marker; parent directories receive
+a green ring so work remains visible in a collapsed tree. Routine log files are hidden by default
+and can be revealed with the **Logs hidden** control. This is a browser-only view preference and
+does not remove files or limit the model's bounded case access.
+
 The layout is designed for normal 100% browser zoom: Projects and Files use fluid widths on desktop,
 the chat stays centered in its remaining space, and both side panes become header-controlled drawers
 on compact laptop, tablet, and phone widths instead of forcing horizontal overflow.

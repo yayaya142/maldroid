@@ -43,7 +43,10 @@ pages. There is no non-loopback option.
   research records remain available. If a synchronous tool is already running, the panel shows
   `Stopping` until that operation reaches its safe return boundary.
 - The Files tab provides name/path filtering, collapsible directories, type-aware icons, item
-  counts, selected-file state, keyboard navigation, and bounded previews with line numbers.
+  counts, selected-file state, keyboard navigation, and bounded previews with line numbers. A solid
+  green marker identifies a file used in the latest turn and a green ring identifies a containing
+  directory. Routine log paths are hidden by default; **Logs hidden** reveals them and remembers the
+  browser preference.
 
 ## Feature parity
 
@@ -81,6 +84,10 @@ the conversation or research records.
 File listing and preview never read the filesystem directly. They call the shared dispatcher and
 central `PathPolicy`, so case roots, evidence mappings, line limits, output limits, static-only
 rules, and audit behavior remain identical across CLI and Web.
+
+Latest-turn markers are derived only from bounded activity path arguments and reset on the next
+turn or case switch. Hiding logs is a presentation filter only: it neither deletes log files nor
+changes which files MalDroid tools can access.
 
 ## Configuration
 

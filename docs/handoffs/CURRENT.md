@@ -1,9 +1,9 @@
 # Current Handoff
 
-Task: `WEB-005`
+Task: `WEB-006`
 Next task: `PLATFORM-011`
 
-Implementation commit: `f239e59`
+Implementation commit: pending
 
 ## Outcome
 
@@ -17,6 +17,22 @@ research state, activity, settings, reports, and MCP connectors. Bare `maldroid`
 CLI; `maldroid cli` selects the terminal explicitly.
 
 ## Web usability follow-up
+
+### Latest-turn Files visibility
+
+- Files referenced by bounded tool activity in the latest turn receive a solid green marker.
+  Containing directories receive a green ring, so the active location remains visible when a tree
+  branch is collapsed. Markers reset when a new turn starts or the active project changes.
+- Tool arguments are parsed whether the activity transport supplies an object or JSON string, and
+  absolute case paths are normalized to case-relative explorer paths. The tree reloads after a
+  completed or stopped turn so newly created output files can be marked.
+- Paths containing a `logs` segment and `.log` files are hidden from the Web tree by default. The
+  English `Logs hidden` control reveals them and persists the browser-only preference. Dispatcher,
+  path-policy, audit, and model access are unchanged.
+- Local browser verification covered the real packaged server at 1280×720 and 390×844. The green
+  legend rendered at 7px with the intended color/glow; the log control changed accessible state,
+  and the phone viewport had no document-level horizontal overflow. The old smoke-test projects
+  pointed to removed temporary directories, so live model-path marking remains in `PLATFORM-011`.
 
 ### Live work transparency
 

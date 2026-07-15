@@ -99,6 +99,10 @@
       <section id="panel-files" class="inspector-panel active">
         <div class="panel-toolbar file-toolbar"><span>CASE EXPLORER</span><div><small id="file-count">0 items</small><button class="icon-button" data-action="refresh-files" title="Refresh files">↻</button></div></div>
         <div class="file-search"><span>⌕</span><input id="file-filter" type="search" placeholder="Filter files by name or path…" aria-label="Filter case files"></div>
+        <div class="file-options">
+          <span class="worked-legend"><i></i> Used in latest turn</span>
+          <button id="toggle-logs" type="button" data-action="toggle-logs" aria-pressed="false" aria-label="Show log files">Logs hidden</button>
+        </div>
         <div id="file-tree" class="file-tree empty-state">No project selected.</div>
         <div id="file-preview" class="file-preview hidden">
           <div class="preview-header"><div><strong id="preview-name"></strong><span id="preview-meta"></span></div><button class="icon-button" data-action="close-preview">×</button></div>

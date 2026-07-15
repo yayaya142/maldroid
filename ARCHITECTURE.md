@@ -14,6 +14,9 @@ A global file lease prevents concurrent CLI/Web model runtimes.
 The browser owns presentation-only preferences such as dark/light appearance and collapsed panes;
 these do not enter case or model configuration. The Files inspector renders the bounded dispatcher
 inventory as a searchable, collapsible tree, while all reads still pass through `PathPolicy`.
+It derives latest-turn file markers from bounded tool activity path arguments and clears them at
+the next turn or case switch. Log-path suppression and its persisted reveal toggle are strictly
+browser presentation: the dispatcher inventory, audit data, and model/tool authority are unchanged.
 Composer visibility follows explicit runtime state; CSS cannot infer or override model readiness.
 
 The desktop grid uses clamped project/inspector widths and a zero-minimum flexible chat column, so
