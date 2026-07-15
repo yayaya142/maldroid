@@ -272,6 +272,9 @@ jobs passed dependency bootstrap, Ruff, formatting, all 136 tests, coverage, and
 GitHub Actions run `29439037420` passed `WEB-004` on macOS 26 and Kali for commit `a844713`. Both
 jobs passed dependency bootstrap, Ruff, formatting, all 137 tests, coverage, and installer dry-run.
 
+GitHub Actions run `29439876995` passed `WEB-005` on macOS 26 and Kali for commit `021e732`. Both
+jobs passed dependency bootstrap, Ruff, formatting, all 140 tests, coverage, and installer dry-run.
+
 GitHub Actions run `29430555735` passed Kali and exposed one macOS-only failure: the new behavior
 search required ripgrep, which the macOS image does not install. Commit `6e4e744` added and tested
 the bounded streaming fallback. Replacement run `29430877237` passed both macOS 26 and Kali,

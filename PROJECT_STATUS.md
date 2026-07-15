@@ -164,8 +164,9 @@ Last updated: 2026-07-15
 
 ## Current test status
 
-The local 140-test suite and release gate pass with 72% coverage. The latest completed cross-platform
-run covers `WEB-004`; `WEB-005` cancellation CI is recorded in the handoff after its push. See
+The local 140-test suite and release gate pass with 72% coverage. GitHub Actions run `29439876995`
+passes `WEB-005` on macOS 26 and Kali, including dependency bootstrap, lint, formatting, all tests,
+coverage, and installer dry-run. See
 `docs/handoffs/CURRENT.md` for exact commands and environment-gated acceptance work.
 
 ## Immediate task
