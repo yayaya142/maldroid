@@ -3,11 +3,20 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from typing import Any
 
 from maldroid.case_manager import Case, CaseManager
 from maldroid.io_utils import append_jsonl, atomic_write_text
 from maldroid.models import SessionEvent
+
+SESSION_NUMBER = re.compile(r"^session-(\d+)(?:-summary)?\.(?:jsonl|md)$")
+
+
+def session_sequence(path: Path) -> int:
+    """Return a numeric session sequence so session 10000 sorts after session 9999."""
+    match = SESSION_NUMBER.match(path.name)
+    return int(match.group(1)) if match else -1
 
 
 class SessionManager:
@@ -18,7 +27,7 @@ class SessionManager:
         directory.mkdir(parents=True, exist_ok=True)
         numbers = []
         for path in directory.glob("session-*.jsonl"):
-            match = re.match(r"session-(\d+)\.jsonl", path.name)
+            match = SESSION_NUMBER.match(path.name)
             if match:
                 numbers.append(int(match.group(1)))
         self.number = max(numbers, default=0) + 1
@@ -44,7 +53,11 @@ class SessionManager:
     @staticmethod
     def load_latest_summary(case: Case) -> str:
         directory = case.internal / "sessions"
-        summaries = sorted(directory.glob("session-*-summary.md")) if directory.exists() else []
+        summaries = (
+            sorted(directory.glob("session-*-summary.md"), key=session_sequence)
+            if directory.exists()
+            else []
+        )
         if not summaries:
             return case.state.summary
         text = summaries[-1].read_text(encoding="utf-8", errors="replace")

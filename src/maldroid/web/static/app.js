@@ -1,6 +1,6 @@
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
-const state = { bootstrap: null, workspace: { active: false }, activeId: null, socket: null, busy: false, activities: [], unread: 0, files: [], collapsedDirectories: new Set(), selectedFile: null, fileFilter: "", touchedFiles: new Set(), showLogs: false, theme: "dark", work: { startedAt: 0, timer: null, phase: 1, tools: 0, tokens: 0, context: 0, steps: [] } };
+const state = { bootstrap: null, workspace: { active: false }, activeId: null, socket: null, socketQueue: Promise.resolve(), busy: false, activities: [], unread: 0, files: [], collapsedDirectories: new Set(), selectedFile: null, fileFilter: "", touchedFiles: new Set(), showLogs: false, theme: "dark", work: { startedAt: 0, timer: null, phase: 1, tools: 0, tokens: 0, context: 0, steps: [] } };
 
 async function api(path, options = {}) {
   const response = await fetch(path, { ...options, headers: { "Content-Type": "application/json", ...(options.headers || {}) } });
@@ -57,11 +57,17 @@ function connectSocket() {
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
   const socket = new WebSocket(`${protocol}//${location.host}/ws`);
   state.socket = socket;
-  socket.onmessage = (event) => handleSocket(JSON.parse(event.data));
-  socket.onclose = () => setTimeout(connectSocket, 1200);
+  socket.onmessage = (event) => {
+    const message = JSON.parse(event.data);
+    state.socketQueue = state.socketQueue
+      .then(() => state.socket === socket ? handleSocket(message) : undefined)
+      .catch(error => { setBusy(false); toast(error.message, true); });
+  };
+  socket.onclose = () => { if (state.socket !== socket) return; state.socket = null; setTimeout(connectSocket, 1200); };
 }
 
 async function handleSocket(message) {
+  if (message.type === "connected") { state.workspace = message.workspace || { active: false }; setBusy(false); await refreshBootstrap(); state.activeId = state.workspace.case?.case_id || null; renderWorkspace(); renderProjects(); if (state.activeId) await loadProjectData(state.activeId); else clearProjectData(); return; }
   if (message.type === "activity") { addActivity(message.event, message.data); updateProgress(message.event, message.data); return; }
   if (message.type === "runtime_start") { startLiveWork("Starting local model", "Loading llama.cpp and case-scoped MCP tools…", false); setBusy(true, "Starting local model", "Loading llama.cpp and case-scoped MCP tools…"); return; }
   if (message.type === "runtime_ready") { state.workspace = message.workspace; state.activeId = state.workspace.case.case_id; setBusy(false); renderWorkspace(); await refreshBootstrap(); await loadProjectData(state.activeId); $("#message-input").focus(); toast("Local model and MCP workspace are ready. You can message MalDroid below."); return; }
@@ -69,7 +75,7 @@ async function handleSocket(message) {
   if (message.type === "turn_stopping") { $("#stop-turn").disabled = true; $("#progress-title").textContent = "Stopping"; $("#progress-detail").textContent = "Finishing the current safe boundary…"; appendLiveWorkStep("turn_stopping"); return; }
   if (message.type === "turn_stopped") { state.workspace = message.workspace; setBusy(false); renderWorkspace(); renderResearch(); await loadFiles(); $("#message-input").focus(); toast("Model turn stopped. Durable research state was preserved."); return; }
   if (message.type === "assistant") { addMessage("assistant", message.content); state.workspace = message.workspace; setBusy(false); renderWorkspace(); renderResearch(); await loadFiles(); return; }
-  if (message.type === "error") { setBusy(false); toast(message.error, true); }
+  if (message.type === "error") { setBusy(false); try { await refreshBootstrap(); state.activeId = state.workspace.case?.case_id || null; renderWorkspace(); renderProjects(); if (state.activeId) await loadProjectData(state.activeId); else clearProjectData(); } catch {} toast(message.error, true); }
 }
 
 async function refreshBootstrap() {
@@ -110,7 +116,7 @@ function renderWorkspace() {
   $("#messages").classList.toggle("hidden", !current);
   $("#composer-disabled").classList.toggle("hidden", Boolean(active));
   $("#composer").classList.toggle("hidden", !active);
-  $("#composer-disabled").textContent = current ? "Starting the local model and research tools…" : "Open an investigation to begin";
+  $("#composer-disabled").textContent = current ? (state.busy ? "Starting the local model and research tools…" : "Local model offline. Check Settings, then reopen this investigation.") : "Open an investigation to begin";
   const status = $("#runtime-status"); status.className = `status-pill ${active ? "" : "idle"}`; $("span", status).textContent = active ? "Model ready" : "Model offline";
   if (active) {
     $("#profile-button").textContent = `${capitalize(state.workspace.profile_mode)} · ${state.workspace.case.profile}⌄`;
@@ -131,6 +137,8 @@ async function loadProjectData(caseId) {
   }
   await loadFiles(); renderResearch(); scrollMessages();
 }
+
+function clearProjectData() { state.files = []; state.selectedFile = null; state.touchedFiles.clear(); $("#messages").replaceChildren(); $("#file-preview").classList.add("hidden"); renderFiles(); }
 
 function addMessage(role, content, timestamp = null, scroll = true) {
   if (!content) return;
@@ -173,6 +181,8 @@ function updateProgress(event, data) {
     generation_repetition_detected: ["Stopping repeated output", "A local generation loop was detected…"],
     repetition_recovery: ["Recovering automatically", `Continuing safely in session ${data.new_session || "new"}…`],
     repetition_recovery_exhausted: ["Generation stopped safely", "Investigation state was preserved."],
+    tool_loop_warning: ["Changing research strategy", `The result from ${shortTool(data.name)} did not change…`],
+    tool_loop_stopped: ["Repeated tool loop stopped", "Completed results and durable research remain safe."],
     tool_start: ["Running a tool", shortTool(data.name)], tool_result: [data.status === "completed" ? "Tool completed" : "Tool needs attention", shortTool(data.name)],
     checkpoint_required: ["Saving research", "Creating a durable progress checkpoint…"], state_discipline_required: ["Organizing research", "Updating findings and TODOs…"],
     compaction_start: ["Compacting context", "Preserving durable state and reclaiming context…"], phase_rollover: ["Continuing autonomously", `Starting research phase ${(data.completed_phase || 1) + 1}…`]
@@ -220,6 +230,8 @@ function appendLiveWorkStep(event, data = {}) {
     generation_repetition_detected: ["Repeated output stopped", "Protecting the context before automatic recovery", "warning"],
     repetition_recovery: ["Continued in a clean session", `Recovery attempt ${data.attempt || 1}`, "success"],
     repetition_recovery_exhausted: ["Recovery stopped safely", "Investigation state was preserved for the next message", "warning"],
+    tool_loop_warning: ["Repeated tool result detected", `Changing strategy after ${data.repetitions || 3} unchanged results`, "warning"],
+    tool_loop_stopped: ["Repeated tool loop stopped", "No more duplicate work will be performed in this turn", "warning"],
     turn_stopping: ["Stop requested", "Waiting for the current safe boundary", "warning"],
     turn_cancelled: ["Model turn stopped", "Durable research state and completed tool results were preserved", "success"],
   };
@@ -230,7 +242,7 @@ function appendLiveWorkStep(event, data = {}) {
 }
 
 function addActivity(event, data = {}) {
-  const titleMap = { model_start:"Model turn started", generation_first_token:"First model token received", generation_complete:"Generation completed", empty_response_recovery:"Recovering empty model response", empty_response_recovered:"Empty response recovered", empty_response_recovery_failed:"Empty response recovery failed", generation_repetition_detected:"Repeated output stopped", repetition_recovery:"Continued in a fresh session", repetition_recovery_exhausted:"Repeated generation stopped safely", turn_cancelled:"Model turn stopped", tool_start:`Running ${shortTool(data.name)}`, tool_result:`${shortTool(data.name)} ${data.status || "completed"}`, checkpoint_required:"Durable checkpoint requested", automatic_checkpoint:"Checkpoint saved", phase_rollover:"Autonomous phase continued", compaction_complete:"Context compacted", external_mcp_connection:`MCP ${data.nickname || "connector"}` };
+  const titleMap = { model_start:"Model turn started", generation_first_token:"First model token received", generation_complete:"Generation completed", empty_response_recovery:"Recovering empty model response", empty_response_recovered:"Empty response recovered", empty_response_recovery_failed:"Empty response recovery failed", generation_repetition_detected:"Repeated output stopped", repetition_recovery:"Continued in a fresh session", repetition_recovery_exhausted:"Repeated generation stopped safely", tool_loop_warning:"Changing repeated tool strategy", tool_loop_stopped:"Repeated tool loop stopped", turn_cancelled:"Model turn stopped", tool_start:`Running ${shortTool(data.name)}`, tool_result:`${shortTool(data.name)} ${data.status || "completed"}`, checkpoint_required:"Durable checkpoint requested", automatic_checkpoint:"Checkpoint saved", phase_rollover:"Autonomous phase continued", compaction_complete:"Context compacted", external_mcp_connection:`MCP ${data.nickname || "connector"}` };
   if (event === "generation_progress" || event === "prompt_progress" || event === "generation_start") return;
   state.activities.unshift({ event, title: titleMap[event] || event.replaceAll("_", " "), detail: activityDetail(data), time: new Date() }); state.activities = state.activities.slice(0, 100);
   if (!$("[data-tab='activity']").classList.contains("active")) state.unread++;
@@ -296,7 +308,7 @@ function renderFiles() {
 async function openFile(path) {
   state.selectedFile = path; renderFiles();
   const preview=$("#file-preview"); preview.classList.remove("hidden"); $("#preview-name").textContent=path; $("#preview-meta").textContent="Loading bounded preview…"; $("#preview-content").textContent="";
-  try { const result=await api(`/api/projects/${encodeURIComponent(state.activeId)}/file?path=${encodeURIComponent(path)}&start=1&end=500`); if(result.status!=="completed") throw new Error(result.error?.message||"Preview failed"); const data=result.data; $("#preview-meta").textContent=data.lines?`${data.returned_lines} lines · bounded preview`:`${data.length || 4096} bytes · hexadecimal preview`; $("#preview-content").textContent=data.lines?data.lines.map(x=>`${String(x.line).padStart(6)}  ${x.text}`).join("\n"):JSON.stringify(data,null,2); } catch(error){$("#preview-content").textContent=error.message;}
+  try { const result=await api(`/api/projects/${encodeURIComponent(state.activeId)}/file?path=${encodeURIComponent(path)}&start=1&end=500`); if(result.status!=="completed") throw new Error(result.error?.message||"Preview failed"); const data=result.data; $("#preview-meta").textContent=data.lines?`${data.returned_lines} lines · bounded preview${data.content_truncated?" · long lines shortened":""}`:`${data.length || 4096} bytes · hexadecimal preview`; $("#preview-content").textContent=data.lines?data.lines.map(x=>`${String(x.line).padStart(6)}  ${x.text}${x.truncated?" … [line shortened]":""}`).join("\n"):JSON.stringify(data,null,2); } catch(error){$("#preview-content").textContent=error.message;}
 }
 
 function renderResearch() {
@@ -323,6 +335,7 @@ async function handleAction(action,target){
   else if(action==="refresh-files")await loadFiles(); else if(action==="close-preview")$("#file-preview").classList.add("hidden");
   else if(action==="toggle-logs"){state.showLogs=!state.showLogs;localStorage.setItem("maldroid-show-logs",String(state.showLogs));renderFiles()}
   else if(action==="clear-activity"){state.activities=[];state.unread=0;renderActivity()}
+  else if(action==="stop-workspace")await stopWorkspace();
   else if(action==="profile")showChoiceMenu(target,["auto","generic","react-native","native"],state.workspace.case?.profile,choice=>runCommand("profile",{profile:choice}));
   else if(action==="reasoning")showChoiceMenu(target,["off","low","medium","high","unlimited"],state.workspace.reasoning,choice=>runCommand("reasoning",{level:choice}));
   else if(action==="command-palette")showActionMenu(target);
@@ -332,7 +345,8 @@ async function handleAction(action,target){
 
 async function createProject(event){event.preventDefault();const button=$("#create-project-button");button.disabled=true;$("#project-error").textContent="";try{const data=Object.fromEntries(new FormData(event.target));const result=await api("/api/projects",{method:"POST",body:JSON.stringify(data)});$("#project-dialog").close();event.target.reset();await refreshBootstrap();activateProject(result.project.case_id)}catch(error){$("#project-error").textContent=error.message}finally{button.disabled=false}}
 
-function fillSettings(){if(!state.bootstrap)return;for(const input of $$("[data-key]",$("#settings-form"))){const value=getPath(state.bootstrap.settings,input.dataset.key);if(input.type==="checkbox")input.checked=Boolean(value);else input.value=value??""}}
+function fillSettings(){if(!state.bootstrap)return;for(const input of $$("[data-key]",$("#settings-form"))){const value=getPath(state.bootstrap.settings,input.dataset.key);if(input.type==="checkbox")input.checked=Boolean(value);else input.value=value??""}$("#stop-workspace").disabled=!state.workspace.active||state.busy}
+async function stopWorkspace(){if(state.busy)return toast("Stop the active turn before stopping the model.",true);const button=$("#stop-workspace");button.disabled=true;try{await api("/api/workspace/stop",{method:"POST"});await refreshBootstrap();state.activeId=state.workspace.case?.case_id||state.activeId;renderWorkspace();renderProjects();toast("Local model stopped. Settings can now be changed.")}catch(error){toast(error.message,true)}finally{button.disabled=!state.workspace.active}}
 async function saveSettings(event){event.preventDefault();const changes={};for(const input of $$("[data-key]",event.target)){const old=getPath(state.bootstrap.settings,input.dataset.key),value=input.type==="checkbox"?input.checked:input.value;if(String(value)!==String(old))changes[input.dataset.key]=value}try{if(Object.keys(changes).length){const result=await api("/api/settings",{method:"PATCH",body:JSON.stringify(changes)});state.bootstrap.settings=result.settings}$("#settings-dialog").close();toast("Settings saved.")}catch(error){$("#settings-error").textContent=error.message}}
 
 function renderConnectors(){const root=$("#connector-list");root.replaceChildren();const connectors=state.bootstrap?.connectors||[];if(!connectors.length)root.append(el("div","empty-state","No external MCP connectors configured."));for(const connector of connectors){const row=el("div","connector-row"),copy=el("div");copy.append(el("strong","",connector.nickname),el("span","",connector.url));const test=el("button","","Test"),remove=el("button","","Remove");test.type=remove.type="button";test.onclick=()=>testConnector(connector.nickname);remove.onclick=()=>removeConnector(connector.nickname);row.append(copy,test,remove);root.append(row)}}

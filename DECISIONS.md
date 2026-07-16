@@ -1,5 +1,7 @@
 # Architecture Decisions
 
+- ADR 0018: Long-running work uses deterministic shutdown summaries, identical-tool outcome guards,
+  non-following broad traversal, bounded streamed artifacts, and authoritative Web/session recovery.
 - ADR 0017: Local model turns use one retry authority, cached and observable streaming, cross-turn
   thought stripping, cached profile detection, non-blocking final delivery, and one bounded empty
   response recovery.

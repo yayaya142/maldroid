@@ -41,6 +41,8 @@ a Stop request while the synchronous controller is working. Cancellation closes 
 stream and is checked at every model/tool boundary. Partial generation is discarded; durable state
 and completed tool results remain available, and llama-server stays loaded. An already-running
 synchronous tool finishes before cancellation is acknowledged as complete. See ADR 0016.
+Client-side socket transitions are consumed serially, preventing a fast turn from overtaking an
+earlier authoritative bootstrap/history reload.
 
 ## Update lifecycle
 
@@ -132,6 +134,11 @@ compatibility and is not enforced. Transient model calls use bounded controller 
 retries are disabled so attempts cannot multiply invisibly. Non-transient request errors fail
 immediately.
 
+Completed tool outcomes are fingerprinted from their canonical call and result. Three consecutive
+unchanged outcomes tell the model to change strategy; five end the turn with a durable, user-visible
+fallback instead of consuming unlimited context. This operational guard writes session/activity
+events only and never promotes the loop itself into a Note, Finding, or synthetic checkpoint.
+
 After the first substantive evidence operation, an empty state triggers an internal reminder to
 create and maintain TODOs and Findings. A final response is not accepted until a typed semantic
 checkpoint follows the latest investigation activity. Checkpoints contain research progress,
@@ -176,6 +183,11 @@ state and bounded recent tool results, creates a new append-only session, restor
 and continues. Two recoveries are permitted per turn; further repetition stops safely. ADR 0015
 defines the thresholds, persistence boundary, and opt-out.
 
+Runtime shutdown is deterministic and generation-free. It preserves any prior model synthesis and
+replaces one marked durable-state section built from typed case records. Repeated shutdowns therefore
+do not recursively grow the summary, and MCP/model process cleanup continues even if summary or one
+listener cleanup step fails. See ADR 0018.
+
 ## External MCP connectors
 
 The persistent external connector registry is separate from the case-scoped MalDroid MCP server.
@@ -203,6 +215,14 @@ summarization fails, findings, recent notes, open TODOs, profile, and the prior 
 deterministic fallback. Compaction never deletes full session history, findings, notes, or TODOs.
 Large evidence enters context only through search results, bounded ranges, indexed chunks, or
 modules. Knowledge uses matching excerpts rather than prompt injection.
+
+Broad repository traversal never follows nested symbolic links and skips routine internal/generated
+directories. Explicit registered evidence roots and explicitly requested generated outputs remain
+available through `PathPolicy`. Exact search, multi-family behavior triage, indicator extraction,
+framework search, line-range preview, and large-bundle metrics stream bounded chunks. Search
+previews center on the match even inside a minified logical line. When a global result, file, or time
+budget stops a scan, the result distinguishes exact totals from lower bounds and records the
+truncation reason; saved match artifacts are bounded as well as the inline MCP response.
 
 The controller reserves the next completion budget when calculating context pressure. Only the six
 most recent tool results and reasoning blocks are retained in full by default; older payloads become

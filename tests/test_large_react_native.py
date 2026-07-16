@@ -84,3 +84,91 @@ def test_react_native_module_index_and_bounded_search(app_config: AppConfig) -> 
     assert triage.data["results"]["native_bridge"][0]["module"] == "56"
     bridges = dispatcher.execute(mcp_tool_name("list_react_native_bridges"), {"path": bundle.name})
     assert bridges.data["bridges"][0]["name"] == "CommandBridge"
+
+
+def test_react_native_small_bundle_sample_does_not_count_the_head_twice(
+    app_config: AppConfig,
+) -> None:
+    manager = CaseManager(app_config)
+    case = manager.create()
+    case.state.active_profile = "react-native"
+    manager.save(case)
+    bundle = case.root / "small.bundle"
+    bundle.write_bytes(b"__d(function(){},1,[]);\n")
+    dispatcher = ToolDispatcher(
+        build_registry(),
+        ToolContext(
+            config=app_config,
+            case=case,
+            case_manager=manager,
+            investigation=InvestigationManager(manager),
+            path_policy=PathPolicy(case.root),
+        ),
+    )
+
+    result = dispatcher.execute(mcp_tool_name("inspect_javascript_bundle"), {"path": bundle.name})
+
+    assert result.status == "completed"
+    assert result.data["metro_wrapper_indicators"] == 1
+
+
+def test_react_native_inspection_streams_a_multi_megabyte_single_line(
+    app_config: AppConfig,
+) -> None:
+    manager = CaseManager(app_config)
+    case = manager.create()
+    case.state.active_profile = "react-native"
+    manager.save(case)
+    bundle = case.root / "single-line.bundle"
+    size = 3 * 1024 * 1024 + 17
+    bundle.write_bytes(b"x" * size)
+    dispatcher = ToolDispatcher(
+        build_registry(),
+        ToolContext(
+            config=app_config,
+            case=case,
+            case_manager=manager,
+            investigation=InvestigationManager(manager),
+            path_policy=PathPolicy(case.root),
+        ),
+    )
+
+    result = dispatcher.execute(mcp_tool_name("inspect_javascript_bundle"), {"path": bundle.name})
+
+    assert result.status == "completed"
+    assert result.data["line_count"] == 1
+    assert result.data["longest_line_bytes"] == size
+    assert result.data["appears_minified"] is True
+
+
+def test_bundle_search_does_not_duplicate_matches_from_block_overlap(
+    app_config: AppConfig,
+) -> None:
+    manager = CaseManager(app_config)
+    case = manager.create()
+    case.state.active_profile = "react-native"
+    manager.save(case)
+    marker = b"__d(function(){},1,[]);"
+    needle = b"BOUNDARY_NEEDLE"
+    first_block = marker + b"x" * (1024 * 1024 - len(marker) - 80) + needle
+    bundle = case.root / "boundary.bundle"
+    bundle.write_bytes(first_block + b"y" * 512)
+    dispatcher = ToolDispatcher(
+        build_registry(),
+        ToolContext(
+            config=app_config,
+            case=case,
+            case_manager=manager,
+            investigation=InvestigationManager(manager),
+            path_policy=PathPolicy(case.root),
+        ),
+    )
+    dispatcher.execute(mcp_tool_name("index_metro_bundle"), {"path": bundle.name})
+
+    result = dispatcher.execute(
+        mcp_tool_name("search_bundle_modules"),
+        {"path": bundle.name, "query": needle.decode()},
+    )
+
+    assert result.status == "completed"
+    assert result.data["returned_matches"] == 1

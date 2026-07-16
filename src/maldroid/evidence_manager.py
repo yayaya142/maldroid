@@ -35,28 +35,40 @@ class EvidenceManager:
         evidence_directory = case.root / "evidence"
         evidence_directory.mkdir(parents=True, exist_ok=True)
         destination = _unique_destination(evidence_directory / source_path.name)
-        if mode == "symlink":
-            destination.symlink_to(source_path.resolve(), target_is_directory=source_path.is_dir())
-        elif source_path.is_dir():
-            shutil.copytree(source_path, destination, symlinks=True)
-        else:
-            shutil.copy2(source_path, destination)
-        stat = source_path.stat()
-        record = EvidenceRecord(
-            id=f"EVID-{uuid.uuid4().hex[:8].upper()}",
-            case_path=destination.relative_to(case.root).as_posix(),
-            source_path=str(source_path),
-            source_resolved_path=str(source_path.resolve()),
-            mode=mode,
-            size=_path_size(source_path),
-            modified_at=datetime.fromtimestamp(stat.st_mtime)
-            .astimezone()
-            .isoformat(timespec="seconds"),
-            sha256=_sha256(source_path) if calculate_hash and source_path.is_file() else None,
-        )
-        case.state.evidence.append(record)
-        self.case_manager.save(case)
-        return record
+        record: EvidenceRecord | None = None
+        try:
+            if mode == "symlink":
+                destination.symlink_to(
+                    source_path.resolve(), target_is_directory=source_path.is_dir()
+                )
+            elif source_path.is_dir():
+                shutil.copytree(source_path, destination, symlinks=True)
+            else:
+                shutil.copy2(source_path, destination)
+            stat = source_path.stat()
+            record = EvidenceRecord(
+                id=f"EVID-{uuid.uuid4().hex[:8].upper()}",
+                case_path=destination.relative_to(case.root).as_posix(),
+                source_path=str(source_path),
+                source_resolved_path=str(source_path.resolve()),
+                mode=mode,
+                size=_path_size(source_path),
+                modified_at=datetime.fromtimestamp(stat.st_mtime)
+                .astimezone()
+                .isoformat(timespec="seconds"),
+                sha256=_sha256(source_path) if calculate_hash and source_path.is_file() else None,
+            )
+            case.state.evidence.append(record)
+            self.case_manager.save(case)
+            return record
+        except Exception:
+            if record is not None and record in case.state.evidence:
+                case.state.evidence.remove(record)
+            if destination.is_dir() and not destination.is_symlink():
+                shutil.rmtree(destination, ignore_errors=True)
+            else:
+                destination.unlink(missing_ok=True)
+            raise
 
 
 def _unique_destination(path: Path) -> Path:
@@ -72,9 +84,13 @@ def _path_size(path: Path) -> int:
     if path.is_file():
         return path.stat().st_size
     total = 0
-    for root, _, files in os.walk(path, followlinks=False):
+    for root, directories, files in os.walk(path, followlinks=False):
+        root_path = Path(root)
+        directories[:] = [name for name in directories if not (root_path / name).is_symlink()]
         for name in files:
-            candidate = Path(root) / name
+            candidate = root_path / name
+            if candidate.is_symlink():
+                continue
             try:
                 total += candidate.stat().st_size
             except OSError:

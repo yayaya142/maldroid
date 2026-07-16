@@ -38,7 +38,7 @@ from maldroid.external_mcp import (
     external_tool_alias,
 )
 from maldroid.knowledge_manager import KnowledgeManager
-from maldroid.llama_adapter import build_server_command, resolve_binary
+from maldroid.llama_adapter import build_server_command, resolve_binary, validate_context_size
 from maldroid.llama_client import LocalLlamaClient
 from maldroid.mcp_server import MalDroidMcpServer
 from maldroid.paths import data_directory, expand_path
@@ -267,7 +267,12 @@ def new(
     name: str | None = typer.Argument(None, help="Optional human-readable case name."),
     profile: str = typer.Option("generic", "--profile", help="Initial static-analysis profile."),
     context_size: int | None = typer.Option(
-        None, "--context-size", "-c", help="Override the configured model context size."
+        None,
+        "--context-size",
+        "-c",
+        min=2048,
+        max=1048576,
+        help="Override the configured model context size.",
     ),
     model: Path | None = typer.Option(None, "--model", help="Override the GGUF model path."),
     llama_server: Path | None = typer.Option(
@@ -310,7 +315,12 @@ def open_command(
     ),
     name: str | None = typer.Option(None, "--name", help="Name for a newly created case."),
     context_size: int | None = typer.Option(
-        None, "--context-size", "-c", help="Override the configured model context size."
+        None,
+        "--context-size",
+        "-c",
+        min=2048,
+        max=1048576,
+        help="Override the configured model context size.",
     ),
     model: Path | None = typer.Option(None, "--model", help="Override the GGUF model path."),
     llama_server: Path | None = typer.Option(
@@ -936,6 +946,11 @@ def _launch(
     no_color: bool,
 ) -> None:
     config = _config_with_overrides(load_config(), model, llama_server)
+    selected_context_size = validate_context_size(config, context_size)
+    if profile is not None:
+        requested_profile = get_profile(profile)
+        if requested_profile.status != "implemented":
+            raise MalDroidError(f"Profile is planned but not implemented in V1: {profile}")
     manager = CaseManager(config)
     if path is None:
         case = manager.create(name)
@@ -964,7 +979,7 @@ def _launch(
     if profile_definition.status != "implemented":
         raise MalDroidError(f"Profile is planned but not implemented in V1: {selected_profile}")
     case.state.active_profile = selected_profile
-    case.state.context_size = context_size or config.general.default_context_size
+    case.state.context_size = selected_context_size
     case.state.model_path = config.llama.model
     manager.save(case)
     _run_case(

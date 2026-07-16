@@ -118,6 +118,11 @@ Use **Stop** in Live Work to cancel the active turn without restarting llama-ser
 partial model output while retaining completed tool results and durable research records. A tool
 already in progress finishes its current safe operation before the turn closes.
 
+Use **Stop model** in Web Settings when persistent model/workspace settings need to change. This
+unloads the active local runtime without closing the Web server or forgetting the selected case.
+Reconnects and failed starts reload authoritative server state; an unavailable model is labeled
+offline instead of leaving the composer in a permanent starting state.
+
 Opening an existing directory creates only `.maldroid/` initially. Opening a file creates a
 managed case and registers a symlink by default. No analysis starts merely because an artifact is
 detected.
@@ -151,12 +156,24 @@ the threshold is calculated. Phases are unlimited, with three controller-owned r
 transient model-server failures; the SDK does not multiply those attempts. During streaming
 generation, the active status line shows elapsed time, generated tokens, context consumption, and
 estimated tokens remaining. Prompt caching and SSE keepalive are enabled for the local server.
+Shutdown does not trigger a hidden summarization generation: typed durable state is saved
+deterministically, with any earlier model synthesis preserved once rather than recursively nested.
+
+If the model receives the same unchanged tool result three times, MalDroid tells it to change
+strategy. Five consecutive identical outcomes stop the turn with a persisted explanation. Completed
+research remains safe, and the operational loop is not turned into a Note or synthetic checkpoint.
 
 Runaway repeated output is detected while it streams. By default MalDroid stops the bad generation,
 starts a clean append-only session, carries forward durable state and bounded recent tool results,
 and continues the same request automatically. The repeated partial text is not stored as research
 or returned to the model. Disable this behavior with
 `maldroid config set llama.repetition_recovery_enabled false`.
+
+Broad repository scans skip nested symbolic links and routine `.git`, `.maldroid`, `.venv`,
+`__pycache__`, and generated-output trees. Explicitly requested registered evidence and `tool-output` files remain
+available. Search, behavior triage, indicator extraction, and large-bundle helpers stream bounded
+chunks and label early-stopped totals as lower bounds rather than exact counts. Text-range and Web
+file previews also shorten an oversized logical line instead of loading the entire minified line.
 
 Profile selection is automatic by default. MalDroid recursively inspects bounded artifact names,
 archive entries, ELF magic, and small content samples, then activates React Native, Flutter, Unity,
@@ -287,7 +304,8 @@ loopback-only, and `--agent` stays forbidden.
 ## Evidence, findings, and large files
 
 Evidence is registered by symlink or copy and is never overwritten. The assistant reads bounded
-line ranges, uses exact or regex search, and stores oversized results under `tool-output/`. The
+line ranges with explicit long-line truncation, uses exact or regex search, and stores oversized
+results under `tool-output/`. The
 large-text index stores chunk boundaries and a contentless FTS5 token index; it does not store a
 second readable copy of the source.
 

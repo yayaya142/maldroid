@@ -5,6 +5,7 @@ import socket
 import pytest
 
 from maldroid.config import AppConfig
+from maldroid.exceptions import ConfigurationError
 from maldroid.llama_adapter import build_server_command, select_port
 
 
@@ -54,3 +55,9 @@ def test_explicit_occupied_port_fails() -> None:
         with pytest.raises(Exception, match="already in use"):
             select_port("127.0.0.1", port, explicit=True)
         assert select_port("127.0.0.1", port, explicit=False) != port
+
+
+@pytest.mark.parametrize("context_size", [0, 2047, 4096, 1048577])
+def test_one_run_context_override_is_validated(app_config: AppConfig, context_size: int) -> None:
+    with pytest.raises(ConfigurationError, match="context size"):
+        build_server_command(app_config, context_size=context_size)

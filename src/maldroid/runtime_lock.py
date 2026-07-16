@@ -39,15 +39,20 @@ class RuntimeLease:
                 f"{self.mode}. Only one CLI, Web, or update operation may run at a time."
             ) from exc
         self.acquired = True
-        atomic_write_json(
-            self.metadata_path,
-            {
-                "mode": self.mode,
-                "pid": os.getpid(),
-                "started_at": datetime.now().astimezone().isoformat(),
-                **self.details,
-            },
-        )
+        try:
+            atomic_write_json(
+                self.metadata_path,
+                {
+                    "mode": self.mode,
+                    "pid": os.getpid(),
+                    "started_at": datetime.now().astimezone().isoformat(),
+                    **self.details,
+                },
+            )
+        except Exception:
+            self.lock.release()
+            self.acquired = False
+            raise
         return self
 
     def release(self) -> None:

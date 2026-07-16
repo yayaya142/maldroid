@@ -59,8 +59,10 @@ connectors. The action menu provides non-chat operations; Files and Research pro
 state views.
 
 Settings cover model paths and performance, the stream-idle timeout, context and research limits,
-cases, ports, and MCP connectors. Persistent settings can only be changed while the model runtime is stopped. External
-MCP URLs retain the same loopback and credential restrictions as the CLI.
+cases, ports, and MCP connectors. Persistent settings can only be changed while the model runtime is
+stopped; use **Stop model** in the Settings footer to unload llama.cpp without closing the Web
+server or losing the selected investigation. External MCP URLs retain the same loopback and
+credential restrictions as the CLI.
 
 Appearance can be switched between Dark and Light from either the header icon or Workspace
 Settings. The preference is stored only in the local browser. Collapsing the project sidebar adds
@@ -89,9 +91,21 @@ from chat history, reasoning is temporarily disabled, and the same turn continue
 language. A second empty finish reports the finish reasons and points to model-template/token
 settings instead of returning the former generic empty-message notice.
 
+If a weak model calls the same tool with the same arguments and receives the same result three
+times, Live Work reports that MalDroid is changing strategy. Five consecutive unchanged outcomes
+end the turn safely instead of consuming unlimited context. The stop is recorded in conversation
+history, while the repeated operation itself is not promoted into Notes or Checkpoints.
+
+WebSocket reconnects and failed project starts reload the server's authoritative workspace and
+latest bounded history. An investigation whose model failed to start is explicitly labeled
+**Model offline** and remains available for Files/history inspection and a later retry; it no
+longer appears to be starting indefinitely. Incoming socket state transitions are handled in order
+so a fast turn cannot race an earlier project/history reload.
+
 File listing and preview never read the filesystem directly. They call the shared dispatcher and
 central `PathPolicy`, so case roots, evidence mappings, line limits, output limits, static-only
-rules, and audit behavior remain identical across CLI and Web.
+rules, and audit behavior remain identical across CLI and Web. A multi-megabyte minified line is
+shown as a marked bounded prefix rather than loaded into browser or backend memory in full.
 
 Latest-turn markers are derived only from bounded activity path arguments and reset on the next
 turn or case switch. Hiding logs is a presentation filter only: it neither deletes log files nor

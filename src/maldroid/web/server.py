@@ -8,6 +8,7 @@ import secrets
 import socket
 import threading
 import webbrowser
+from collections import deque
 from contextlib import suppress
 from pathlib import Path
 from typing import Any
@@ -41,6 +42,7 @@ from maldroid.paths import expand_path
 from maldroid.profiles import PROFILES, get_profile
 from maldroid.runtime import WorkspaceRuntime, build_tool_runtime
 from maldroid.runtime_lock import RuntimeLease
+from maldroid.session_manager import session_sequence
 from maldroid.tools.models import mcp_tool_name
 
 STATIC = Path(__file__).with_name("static")
@@ -106,6 +108,10 @@ class WebWorkspace:
 
     def create_project(self, payload: dict[str, Any]) -> Case:
         name = str(payload.get("name") or "New investigation").strip()[:128]
+        profile = str(payload.get("profile") or self.config.general.default_profile)
+        definition = get_profile(profile)
+        if definition.status != "implemented":
+            raise MalDroidError(f"Profile is not implemented: {profile}")
         source = str(payload.get("source_path") or "").strip()
         if not source:
             case = self.manager.create(name)
@@ -125,41 +131,50 @@ class WebWorkspace:
                 )
             else:
                 raise MalDroidError(f"Source path does not exist: {target}")
-        profile = str(payload.get("profile") or self.config.general.default_profile)
-        definition = get_profile(profile)
-        if definition.status != "implemented":
-            raise MalDroidError(f"Profile is not implemented: {profile}")
         case.state.active_profile = profile
         self.manager.save(case)
         return case
 
     def activate(self, case_id: str) -> dict[str, Any]:
-        with self._runtime_lock:
-            case = self.resolve_case(case_id, touch=True)
-            if self.runtime is not None:
-                if self.runtime.case.metadata.case_id == case_id:
-                    return self.snapshot()
-                self.runtime.stop()
-            self.selected_case = case
-            self.runtime = WorkspaceRuntime(
-                self.config,
-                case,
-                self.manager,
-                event_handler=self.emit,
-            )
-            try:
-                self.runtime.start()
-            except Exception:
-                self.runtime.stop(compact=False)
-                self.runtime = None
-                raise
-            return self.snapshot()
+        if not self._turn_lock.acquire(blocking=False):
+            raise MalDroidError("Another model turn is already running.")
+        try:
+            with self._runtime_lock:
+                case = self.resolve_case(case_id, touch=True)
+                if self.runtime is not None:
+                    if self.runtime.case.metadata.case_id == case_id:
+                        return self.snapshot()
+                    self.runtime.stop()
+                self.selected_case = case
+                self.runtime = WorkspaceRuntime(
+                    self.config,
+                    case,
+                    self.manager,
+                    event_handler=self.emit,
+                )
+                try:
+                    self.runtime.start()
+                except Exception:
+                    self.runtime.stop(save_summary=False)
+                    self.runtime = None
+                    raise
+                return self.snapshot()
+        finally:
+            self._turn_lock.release()
 
-    def stop_runtime(self) -> None:
-        with self._runtime_lock:
-            if self.runtime is not None:
-                self.runtime.stop()
-                self.runtime = None
+    def stop_runtime(self, wait_for_turn: bool = False) -> None:
+        if wait_for_turn and self._turn_lock.locked():
+            self.cancel_turn()
+        acquired = self._turn_lock.acquire(blocking=wait_for_turn)
+        if not acquired:
+            raise MalDroidError("Another model turn is already running.")
+        try:
+            with self._runtime_lock:
+                if self.runtime is not None:
+                    self.runtime.stop()
+                    self.runtime = None
+        finally:
+            self._turn_lock.release()
 
     def bind_events(
         self, loop: asyncio.AbstractEventLoop, queue: asyncio.Queue[dict[str, Any]]
@@ -175,9 +190,14 @@ class WebWorkspace:
     def emit(self, event: str, data: dict[str, Any]) -> None:
         loop, queue = self._event_loop, self._event_queue
         if loop is not None and queue is not None:
-            loop.call_soon_threadsafe(
-                queue.put_nowait, {"type": "activity", "event": event, "data": data}
-            )
+            try:
+                loop.call_soon_threadsafe(
+                    queue.put_nowait, {"type": "activity", "event": event, "data": data}
+                )
+            except RuntimeError:
+                if self._event_loop is loop:
+                    self._event_loop = None
+                    self._event_queue = None
 
     def respond(self, text: str) -> str:
         if not self._turn_lock.acquire(blocking=False):
@@ -212,6 +232,14 @@ class WebWorkspace:
             runtime.agent.cancel_turn()
 
     def command(self, action: str, payload: dict[str, Any]) -> dict[str, Any]:
+        if not self._turn_lock.acquire(blocking=False):
+            raise MalDroidError("Another model turn is already running.")
+        try:
+            return self._command_unlocked(action, payload)
+        finally:
+            self._turn_lock.release()
+
+    def _command_unlocked(self, action: str, payload: dict[str, Any]) -> dict[str, Any]:
         runtime = self._require_runtime()
         assert runtime.agent is not None
         assert runtime.dispatcher is not None
@@ -287,7 +315,7 @@ class WebWorkspace:
                 "data": {
                     "event_counts": counts,
                     "timeline": timeline,
-                    "session": runtime.sessions.history_path.name if runtime.sessions else None,
+                    "session": agent.sessions.history_path.name,
                 },
             }
         if action == "reasoning":
@@ -334,45 +362,47 @@ class WebWorkspace:
     def history(self, case_id: str, session: str | None = None) -> list[dict[str, Any]]:
         case = self.resolve_case(case_id)
         directory = case.internal / "sessions"
-        paths = sorted(directory.glob("session-*.jsonl"))
+        paths = sorted(directory.glob("session-*.jsonl"), key=session_sequence)
         if session:
             paths = [path for path in paths if path.name == Path(session).name]
         elif paths:
             paths = [paths[-1]]
-        output: list[dict[str, Any]] = []
+        output: deque[dict[str, Any]] = deque(maxlen=500)
         for path in paths:
-            for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
-                with suppress(json.JSONDecodeError):
-                    event = json.loads(line)
-                    if event.get("type") == "message" and event.get("role") in {
-                        "user",
-                        "assistant",
-                    }:
-                        content = event.get("content")
-                        if isinstance(content, dict):
-                            content = content.get("content", "")
-                        if content:
-                            output.append(
-                                {
-                                    "role": event["role"],
-                                    "content": content,
-                                    "timestamp": event.get("timestamp"),
-                                }
-                            )
-        return output
+            with path.open(encoding="utf-8", errors="replace") as handle:
+                for line in handle:
+                    with suppress(json.JSONDecodeError):
+                        event = json.loads(line)
+                        if event.get("type") == "message" and event.get("role") in {
+                            "user",
+                            "assistant",
+                        }:
+                            content = event.get("content")
+                            if isinstance(content, dict):
+                                content = content.get("content", "")
+                            if content:
+                                output.append(
+                                    {
+                                        "role": event["role"],
+                                        "content": content,
+                                        "timestamp": event.get("timestamp"),
+                                    }
+                                )
+        return list(output)
 
     def session_events(self, case: Case, limit: int = 100) -> list[dict[str, Any]]:
         directory = case.internal / "sessions"
-        paths = sorted(directory.glob("session-*.jsonl"))
+        paths = sorted(directory.glob("session-*.jsonl"), key=session_sequence)
         if not paths:
             return []
-        output: list[dict[str, Any]] = []
-        for line in paths[-1].read_text(encoding="utf-8", errors="replace").splitlines():
-            with suppress(json.JSONDecodeError):
-                value = json.loads(line)
-                if isinstance(value, dict):
-                    output.append(value)
-        return output[-limit:]
+        output: deque[dict[str, Any]] = deque(maxlen=max(1, min(limit, 5000)))
+        with paths[-1].open(encoding="utf-8", errors="replace") as handle:
+            for line in handle:
+                with suppress(json.JSONDecodeError):
+                    value = json.loads(line)
+                    if isinstance(value, dict):
+                        output.append(value)
+        return list(output)
 
     @staticmethod
     def _safe_timeline(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -720,7 +750,7 @@ def run_web_server(
         try:
             server.run(sockets=[sock])
         finally:
-            workspace.stop_runtime()
+            workspace.stop_runtime(wait_for_turn=True)
     finally:
         sock.close()
         lease.release()

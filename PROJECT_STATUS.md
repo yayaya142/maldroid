@@ -4,6 +4,22 @@ Last updated: 2026-07-16
 
 ## Completed
 
+- Full long-runtime audit (`PLATFORM-013`): repeated identical tool results now trigger a visible
+  strategy redirect at three and a safe persisted stop at five; shutdown summaries are deterministic
+  and never start another model generation. Manual profile selections cannot be overridden, failed
+  automatic detection retries later, repetition recovery uses the authoritative new session, and
+  empty/repetition fallbacks remain visible in history without creating junk research records.
+- Large-repository operations now share non-following traversal, skip routine internal/generated
+  directories during broad scans, allow explicitly requested generated output, and stream minified
+  lines and subprocess output. Core search, behavior triage, indicators, framework/native parsing,
+  React Native bundle metrics, knowledge indexing, and log/history views enforce global budgets and
+  report whether partial totals are exact. Evidence registration rolls back failed persistence and
+  refreshes the live path policy immediately.
+- Web project activation, commands, runtime stop, and model turns are mutually exclusive. Reconnects
+  restore authoritative workspace/history state, stale Files/chat data is cleared, offline startup
+  failures are labeled rather than appearing stuck, event delivery tolerates a closed page, and
+  Settings now provides **Stop model** so persistent configuration can be changed without exiting
+  the Web server. Runtime lock acquisition and multi-step cleanup are failure-safe.
 - Local model turns now avoid the largest compounded latency sources: profile detection is cached
   until evidence changes, SDK retries are disabled under one transient-only controller policy,
   completed-turn reasoning is stripped, prompt caching/SSE progress are enabled, and default
@@ -185,9 +201,11 @@ Last updated: 2026-07-16
 
 ## Current test status
 
-The local 140-test suite and release gate pass with 72% coverage. GitHub Actions run `29440563970`
-passes `WEB-006` on macOS 26 and Kali, including dependency bootstrap, lint, formatting, all tests,
-coverage, and installer dry-run. See
+The local 186-test suite and the `PLATFORM-013` consolidated release gate pass with 76% coverage;
+exact local results are recorded in `docs/handoffs/CURRENT.md`. Remote macOS/Kali status for the
+atomic `PLATFORM-013` commit is reported with its final delivery. The prior GitHub Actions baseline
+run `29440563970` passed on macOS 26 and Kali, including dependency bootstrap, lint, formatting, all
+tests, coverage, and installer dry-run. See
 `docs/handoffs/CURRENT.md` for exact commands and environment-gated acceptance work.
 
 ## Immediate task

@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from maldroid.io_utils import read_text_prefix, read_text_range_bounded, search_text_file_lines
+from maldroid.paths import walk_regular_entries
 from maldroid.tools.models import ToolContext
 
 
@@ -19,9 +22,8 @@ def inventory(
     limit: int = 500,
 ) -> list[dict[str, Any]]:
     root = context.read_path(case_path)
-    candidates = [root] if root.is_file() else (path for path in root.rglob("*") if path.is_file())
     results: list[dict[str, Any]] = []
-    for path in candidates:
+    for path in walk_regular_entries(root):
         lower = path.name.lower()
         if names and lower not in names and not (suffixes and path.suffix.lower() in suffixes):
             continue
@@ -47,35 +49,47 @@ def exact_search(
     limit: int = 100,
 ) -> dict[str, Any]:
     root = context.read_path(case_path)
-    candidates = [root] if root.is_file() else (path for path in root.rglob("*") if path.is_file())
     results: list[dict[str, Any]] = []
     total = 0
-    for path in candidates:
+    complete = True
+    deadline = time.monotonic() + context.config.limits.command_timeout_seconds
+    for path in walk_regular_entries(root):
+        if time.monotonic() >= deadline:
+            complete = False
+            break
         if suffixes and path.suffix.lower() not in suffixes:
             continue
         try:
             with path.open("rb") as handle:
                 if b"\x00" in handle.read(8192):
                     continue
-            with path.open(encoding="utf-8", errors="replace") as handle:
-                for number, line in enumerate(handle, 1):
-                    if query in line:
-                        total += 1
-                        if len(results) < limit:
-                            results.append(
-                                {
-                                    "path": display_path(context, root, case_path, path),
-                                    "line": number,
-                                    "preview": line.strip()[:1000],
-                                }
-                            )
+            found, file_matches, file_complete = search_text_file_lines(
+                path,
+                query,
+                case_sensitive=True,
+                max_results=max(0, limit - len(results)),
+                deadline=deadline,
+            )
+            total += found
+            results.extend(
+                {
+                    "path": display_path(context, root, case_path, path),
+                    "line": number,
+                    "preview": preview,
+                }
+                for number, preview in file_matches
+            )
+            if not file_complete:
+                complete = False
+                break
         except OSError:
             continue
     return {
         "query": query,
         "total_matches": total,
         "returned_matches": len(results),
-        "truncated": total > len(results),
+        "truncated": not complete or total > len(results),
+        "scan_complete": complete,
         "results": results,
     }
 
@@ -87,14 +101,21 @@ def bounded_read(
     if end_line < start_line or end_line - start_line + 1 > maximum:
         raise ValueError(f"Read range must be ordered and no larger than {maximum} lines.")
     path = context.read_path(case_path)
-    lines: list[dict[str, Any]] = []
-    with path.open(encoding="utf-8", errors="replace") as handle:
-        for number, line in enumerate(handle, 1):
-            if number > end_line:
-                break
-            if number >= start_line:
-                lines.append({"line": number, "text": line.rstrip()})
-    return {"path": case_path, "lines": lines, "returned_lines": len(lines)}
+    deadline = time.monotonic() + context.config.limits.command_timeout_seconds
+    lines, content_truncated, content_budget_exhausted = read_text_range_bounded(
+        path,
+        start_line,
+        end_line,
+        context.config.limits.max_tool_output_characters,
+        deadline=deadline,
+    )
+    return {
+        "path": case_path,
+        "lines": lines,
+        "returned_lines": len(lines),
+        "content_truncated": content_truncated,
+        "range_complete": not content_budget_exhausted,
+    }
 
 
 def run_allowlisted(
@@ -120,17 +141,17 @@ def run_allowlisted(
             timeout=context.config.limits.command_timeout_seconds,
             check=False,
         )
-    error_text = error.read_text(encoding="utf-8", errors="replace")[:4000]
+    error_text, _ = read_text_prefix(error, 4000)
     if completed.returncode:
         raise ValueError(f"{executable_name} exited with {completed.returncode}: {error_text}")
-    preview = output.read_text(encoding="utf-8", errors="replace")[:8000]
+    preview, truncated = read_text_prefix(output, 8000)
     return {
         "command": [executable_name, *arguments],
         "exit_status": completed.returncode,
         "output_file": output.relative_to(context.case.root).as_posix(),
         "stderr_file": error.relative_to(context.case.root).as_posix(),
         "preview": preview,
-        "truncated": output.stat().st_size > len(preview.encode("utf-8")),
+        "truncated": truncated,
     }
 
 

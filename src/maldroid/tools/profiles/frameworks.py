@@ -11,7 +11,8 @@ from typing import Any, TypeAlias
 from defusedxml import ElementTree as ET
 from pydantic import BaseModel, ConfigDict, Field
 
-from maldroid.paths import expand_path
+from maldroid.io_utils import read_text_prefix
+from maldroid.paths import expand_path, walk_regular_entries
 from maldroid.tools.models import ToolContext, ToolDefinition, ToolHandler
 from maldroid.tools.profiles.common import bounded_read, exact_search, inventory, run_allowlisted
 from maldroid.tools.registry import ToolRegistry
@@ -104,10 +105,8 @@ def run_blutter(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
             check=False,
         )
     if completed.returncode:
-        raise ValueError(
-            f"Blutter exited with {completed.returncode}: "
-            + stderr_path.read_text(errors="replace")[:4000]
-        )
+        error_text, _ = read_text_prefix(stderr_path, 4000)
+        raise ValueError(f"Blutter exited with {completed.returncode}: " + error_text)
     return {
         "command": ["python", str(script), values.libapp_path, output.name],
         "exit_status": completed.returncode,
@@ -214,11 +213,17 @@ def inspect_cordova_config(context: ToolContext, arguments: BaseModel) -> dict[s
 def list_cordova_plugins(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
     values = ArtifactInput.model_validate(arguments)
     root = context.read_path(values.path)
-    files = [root] if root.is_file() else list(root.rglob("*.xml"))
     plugins: list[dict[str, Any]] = []
-    for path in files[:500]:
-        if path.name.lower() not in {"config.xml", "plugin.xml"}:
+    scanned = 0
+    for path in walk_regular_entries(root):
+        if path.suffix.lower() != ".xml" or path.name.lower() not in {
+            "config.xml",
+            "plugin.xml",
+        }:
             continue
+        scanned += 1
+        if scanned > 500:
+            break
         try:
             xml_root = ET.parse(path).getroot()
             if xml_root is None:

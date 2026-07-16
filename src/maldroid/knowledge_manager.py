@@ -13,7 +13,9 @@ import yaml
 
 from maldroid.case_manager import Case
 from maldroid.exceptions import CaseError
-from maldroid.paths import config_directory, expand_path
+from maldroid.paths import config_directory, expand_path, walk_regular_entries
+
+KNOWLEDGE_ROOT_NAMES = ("builtin", "user", "case")
 
 
 class KnowledgeManager:
@@ -69,13 +71,15 @@ class KnowledgeManager:
 
     def reindex(self) -> dict[str, int]:
         documents: list[tuple[str, Path, dict[str, Any], str]] = []
-        for root in self.roots():
+        for namespace, root in zip(KNOWLEDGE_ROOT_NAMES, self.roots(), strict=False):
             if not root.exists():
                 continue
-            for path in root.rglob("*.md"):
+            for path in walk_regular_entries(root):
+                if path.suffix.lower() != ".md":
+                    continue
                 content = path.read_text(encoding="utf-8", errors="replace")
                 metadata, body = _front_matter(content)
-                key = f"{root.name}/{path.relative_to(root).as_posix()}"
+                key = f"{namespace}/{path.relative_to(root).as_posix()}"
                 metadata.setdefault("title", _first_heading(body) or path.stem)
                 metadata.setdefault(
                     "profile", path.parent.name if path.parent != root else "generic"

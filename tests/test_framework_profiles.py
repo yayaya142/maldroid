@@ -83,6 +83,42 @@ def test_unity_cordova_and_cocos_static_detection(app_config: AppConfig) -> None
     assert {"lua-text", "compiled-lua"} <= types
 
 
+def test_framework_profile_search_skips_nested_symlink_files(
+    app_config: AppConfig, tmp_path: Path
+) -> None:
+    case, _, dispatcher = dispatcher_for(app_config, "cordova")
+    outside = tmp_path / "outside.js"
+    outside.write_text("CORDOVA_OUTSIDE_CASE_SECRET", encoding="utf-8")
+    (case.root / "outside-link.js").symlink_to(outside)
+
+    result = dispatcher.execute(
+        mcp_tool_name("search_cordova_javascript"),
+        {"path": ".", "query": "CORDOVA_OUTSIDE_CASE_SECRET"},
+    )
+
+    assert result.status == "completed"
+    assert result.data["total_matches"] == 0
+
+
+def test_cordova_plugin_inventory_ignores_unrelated_xml_scan_noise(
+    app_config: AppConfig,
+) -> None:
+    case, _, dispatcher = dispatcher_for(app_config, "cordova")
+    for number in range(501):
+        (case.root / f"noise-{number:03}.xml").write_text("<unrelated />", encoding="utf-8")
+    config = case.root / "z-app" / "config.xml"
+    config.parent.mkdir()
+    config.write_text(
+        '<widget><plugin name="cordova-plugin-device" spec="2.1.0" /></widget>',
+        encoding="utf-8",
+    )
+
+    result = dispatcher.execute(mcp_tool_name("list_cordova_plugins"), {"path": "."})
+
+    assert result.status == "completed"
+    assert result.data["plugins"][0]["id"] == "cordova-plugin-device"
+
+
 @pytest.mark.skipif(not shutil.which("readelf"), reason="readelf is not installed")
 def test_native_profile_inspects_benign_host_elf(app_config: AppConfig) -> None:
     source = Path(shutil.which("true") or "/bin/true")

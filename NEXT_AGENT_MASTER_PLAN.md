@@ -1,6 +1,6 @@
 # MalDroid Reliability and Research Platform Master Plan
 
-Status: active gated backlog; `PLATFORM-010` and the shared Web workspace are implemented locally
+Status: active gated backlog; `PLATFORM-010`, `PLATFORM-012`, and `PLATFORM-013` are implemented locally
 Owner priority: make MalDroid a trustworthy daily research CLI before expanding breadth  
 Execution model: one agent and one task ID at a time  
 Canonical original requirements: `Tasks.MD` (read-only)
@@ -24,8 +24,15 @@ On 2026-07-16 the owner reprioritized Web 100%-zoom fit and real local-model res
 repeated profile scans, nested retries, forced checkpoint generations, post-answer Web compaction,
 and retained completed-turn thoughts. It also added llama.cpp prompt/cache/first-token telemetry and
 one history-safe empty-response recovery. This is locally tested but does not replace the physical
-Gemma 4/macOS acceptance in `PLATFORM-011`. Repeated identical tool/result strategy loops remain in
-`AGENT-013`; they were not conflated with transport/generation recovery.
+Gemma 4/macOS acceptance in `PLATFORM-011`.
+
+`PLATFORM-013` then performed the owner-requested full regression run. It added an identical
+tool/result warning-and-stop guard, generation-free deterministic shutdown summaries, safe
+non-following traversal and globally bounded large-repository searches/artifacts, transactional
+evidence/path-policy refresh, authoritative Web reconnect and concurrency handling, bounded history
+views, a Settings **Stop model** action, and extensive regression fixtures. This closes the
+unchanged-static-tool loop slice of `AGENT-013`; adaptive planning beyond that guard remains future
+work. Physical model, macOS, and Ghidra acceptance still belongs to `PLATFORM-011`.
 
 ## 1. Instructions for the next agent
 

@@ -6,6 +6,7 @@ import json
 import os
 import sys
 import time
+from collections import deque
 from pathlib import Path
 from typing import Any
 
@@ -247,9 +248,6 @@ class InteractiveChat:
             self.console.print(Padding(Markdown(response), (0, 0, 0, 2)))
         except Exception:
             self.console.print(Padding(response, (0, 0, 0, 2)))
-        if self.agent.should_auto_compact():
-            self.console.print("[yellow]Saving progress and reclaiming context…[/yellow]")
-            self.agent.compact()
         self._show_turn_footer(elapsed)
 
     def _handle_agent_event(self, event: str, data: dict[str, Any]) -> None:
@@ -283,6 +281,14 @@ class InteractiveChat:
         elif event == "repetition_recovery_exhausted":
             self._current_generation_tokens = 0
             self._update_status("Generation stopped safely")
+        elif event == "tool_loop_warning":
+            name = self._short_tool_name(str(data.get("name", "tool")))
+            self._update_status("Redirecting repeated tool work…")
+            self.console.print(
+                f"[yellow]Repeated unchanged result from {name}; changing strategy.[/yellow]"
+            )
+        elif event == "tool_loop_stopped":
+            self._update_status("Repeated tool loop stopped safely")
         elif event == "tool_start":
             self._turn_tools += 1
             name = self._short_tool_name(str(data.get("name", "tool")))
@@ -800,28 +806,29 @@ class InteractiveChat:
         except ValueError:
             self.console.print("Usage: [cyan]/timeline [5-100][/cyan]")
             return
-        events: list[dict[str, Any]] = []
+        events: deque[dict[str, Any]] = deque(maxlen=100)
         if self.agent.sessions.history_path.exists():
-            for line in self.agent.sessions.history_path.read_text(
+            with self.agent.sessions.history_path.open(
                 encoding="utf-8", errors="replace"
-            ).splitlines():
-                try:
-                    event = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if event.get("type") in {
-                    "tool_call",
-                    "tool_result",
-                    "phase_checkpoint",
-                    "compaction",
-                    "profile_change",
-                    "model_retry",
-                    "context_prune",
-                    "automatic_checkpoint",
-                }:
-                    events.append(event)
+            ) as handle:
+                for line in handle:
+                    try:
+                        event = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if event.get("type") in {
+                        "tool_call",
+                        "tool_result",
+                        "phase_checkpoint",
+                        "compaction",
+                        "profile_change",
+                        "model_retry",
+                        "context_prune",
+                        "automatic_checkpoint",
+                    }:
+                        events.append(event)
         table = Table("Time", "Event", "Summary", box=box.SIMPLE, padding=(0, 1))
-        for event in events[-limit:]:
+        for event in list(events)[-limit:]:
             raw_content = event.get("content")
             content: dict[str, Any] = raw_content if isinstance(raw_content, dict) else {}
             event_type = str(event.get("type", "event"))
@@ -845,13 +852,14 @@ class InteractiveChat:
         history_path = self.agent.sessions.history_path
         counts: dict[str, int] = {}
         if history_path.exists():
-            for line in history_path.read_text(encoding="utf-8", errors="replace").splitlines():
-                try:
-                    event = json.loads(line)
-                    event_type = str(event.get("type", "unknown"))
-                    counts[event_type] = counts.get(event_type, 0) + 1
-                except json.JSONDecodeError:
-                    counts["invalid"] = counts.get("invalid", 0) + 1
+            with history_path.open(encoding="utf-8", errors="replace") as handle:
+                for line in handle:
+                    try:
+                        event = json.loads(line)
+                        event_type = str(event.get("type", "unknown"))
+                        counts[event_type] = counts.get(event_type, 0) + 1
+                    except json.JSONDecodeError:
+                        counts["invalid"] = counts.get("invalid", 0) + 1
         table = Table(box=box.SIMPLE, show_header=False, padding=(0, 2))
         table.add_row("Session", str(self.agent.sessions.number))
         table.add_row("Log", str(history_path))

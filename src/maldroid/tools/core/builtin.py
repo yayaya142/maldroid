@@ -8,6 +8,10 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
+import threading
+import time
+from contextlib import suppress
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -15,9 +19,11 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from maldroid.evidence_manager import EvidenceManager
+from maldroid.io_utils import read_text_prefix, read_text_range_bounded, search_text_file_lines
 from maldroid.knowledge_manager import KnowledgeManager
 from maldroid.large_files import LargeTextIndexer
 from maldroid.models import EvidenceReference
+from maldroid.paths import DEFAULT_SCAN_IGNORED_DIRECTORIES, walk_regular_entries
 from maldroid.profile_detection import detect_profiles
 from maldroid.tools.models import ToolContext, ToolDefinition, ToolHandler
 from maldroid.tools.registry import ToolRegistry
@@ -180,15 +186,18 @@ def list_case_files(context: ToolContext, arguments: BaseModel) -> dict[str, Any
         for name in sorted(directories + files):
             candidate = current_path / name
             relative = _case_display_path(context, root, values.path, candidate)
+            is_symlink = candidate.is_symlink()
             entries.append(
                 {
                     "path": relative,
                     "type": "symlink"
-                    if candidate.is_symlink()
+                    if is_symlink
                     else "directory"
                     if candidate.is_dir()
                     else "file",
-                    "size": candidate.stat().st_size if candidate.is_file() else None,
+                    "size": (
+                        candidate.stat().st_size if not is_symlink and candidate.is_file() else None
+                    ),
                 }
             )
             if len(entries) >= maximum:
@@ -225,18 +234,21 @@ def read_file_range(context: ToolContext, arguments: BaseModel) -> dict[str, Any
     path = context.read_path(values.path)
     if not path.is_file() or _is_binary(path):
         raise ValueError("read_file_range requires a text file.")
-    lines: list[dict[str, Any]] = []
-    with path.open(encoding="utf-8", errors="replace") as handle:
-        for number, line in enumerate(handle, 1):
-            if number > values.end_line:
-                break
-            if number >= values.start_line:
-                lines.append({"line": number, "text": line.rstrip("\n\r")})
+    deadline = time.monotonic() + context.config.limits.command_timeout_seconds
+    lines, content_truncated, content_budget_exhausted = read_text_range_bounded(
+        path,
+        values.start_line,
+        values.end_line,
+        context.config.limits.max_tool_output_characters,
+        deadline=deadline,
+    )
     return {
         "path": values.path,
         "start_line": values.start_line,
         "end_line": values.end_line,
         "returned_lines": len(lines),
+        "content_truncated": content_truncated,
+        "range_complete": not content_budget_exhausted,
         "lines": lines,
     }
 
@@ -244,16 +256,28 @@ def read_file_range(context: ToolContext, arguments: BaseModel) -> dict[str, Any
 def search_text(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
     values = SearchInput.model_validate(arguments)
     target = context.read_path(values.path)
+    hard_limit = context.config.limits.max_search_results
     if shutil.which("rg"):
-        command = ["rg", "--line-number", "--with-filename", "--color", "never", "--fixed-strings"]
+        command = _base_rg_command(context, target) + ["--fixed-strings"]
         if not values.case_sensitive:
             command.append("--ignore-case")
         command.extend(["--", values.query, str(target)])
-        matches = _run_rg(context, command, target, values.path)
+        matches, total_exact = _run_rg(context, command, target, values.path, hard_limit)
     else:
-        matches = _python_exact_search(target, values.path, values.query, values.case_sensitive)
+        matches, total_exact = _python_exact_search(
+            context,
+            target,
+            values.path,
+            values.query,
+            values.case_sensitive,
+            hard_limit,
+        )
     return _paginate(
-        matches, values.page, values.page_size, context.config.limits.max_search_results
+        matches,
+        values.page,
+        values.page_size,
+        hard_limit,
+        total_exact=total_exact,
     )
 
 
@@ -266,13 +290,18 @@ def search_regex(context: ToolContext, arguments: BaseModel) -> dict[str, Any]:
     except re.error as exc:
         raise ValueError(f"Invalid regular expression: {exc}") from exc
     target = context.read_path(values.path)
-    command = ["rg", "--line-number", "--with-filename", "--color", "never"]
+    hard_limit = context.config.limits.max_search_results
+    command = _base_rg_command(context, target)
     if not values.case_sensitive:
         command.append("--ignore-case")
     command.extend(["--", values.query, str(target)])
-    matches = _run_rg(context, command, target, values.path)
+    matches, total_exact = _run_rg(context, command, target, values.path, hard_limit)
     return _paginate(
-        matches, values.page, values.page_size, context.config.limits.max_search_results
+        matches,
+        values.page,
+        values.page_size,
+        hard_limit,
+        total_exact=total_exact,
     )
 
 
@@ -311,12 +340,12 @@ def extract_strings(context: ToolContext, arguments: BaseModel) -> dict[str, Any
                 for match in pattern.finditer(data[: -values.minimum_length] or data):
                     target.write(match.group(0) + b"\n")
                 carry = data[-values.minimum_length :]
-    preview = output.read_text(encoding="utf-8", errors="replace")[:4000]
+    preview, truncated = read_text_prefix(output, 4000)
     return {
         "path": values.path,
         "output_file": output.relative_to(context.case.root).as_posix(),
         "preview": preview,
-        "truncated": output.stat().st_size > len(preview.encode()),
+        "truncated": truncated,
     }
 
 
@@ -324,7 +353,9 @@ def register_evidence(context: ToolContext, arguments: BaseModel) -> dict[str, A
     values = RegisterEvidenceInput.model_validate(arguments)
     source = context.read_path(values.path)
     manager = EvidenceManager(context.case_manager)
-    return manager.register(context.case, source, values.mode, values.calculate_hash).model_dump()
+    record = manager.register(context.case, source, values.mode, values.calculate_hash)
+    context.path_policy.evidence_sources[record.case_path] = record.source_resolved_path
+    return record.model_dump()
 
 
 def read_case_state(context: ToolContext, _: BaseModel) -> dict[str, Any]:
@@ -694,74 +725,169 @@ def _hash(path: Path, algorithm: str) -> str:
     return digest.hexdigest()
 
 
-def _run_rg(
-    context: ToolContext, command: list[str], target: Path, display: str
-) -> list[dict[str, Any]]:
-    completed = subprocess.run(
-        command,
-        capture_output=True,
-        text=True,
-        errors="replace",
-        timeout=context.config.limits.command_timeout_seconds,
-        cwd=context.case.root,
-        check=False,
-    )
-    if completed.returncode not in {0, 1}:
-        raise ValueError(completed.stderr[:2000] or f"ripgrep exited with {completed.returncode}")
-    matches: list[dict[str, Any]] = []
-    pattern = re.compile(r"^(.*?):(\d+):(.*)$")
-    for line in completed.stdout.splitlines():
-        match = pattern.match(line)
-        if not match:
+def _base_rg_command(context: ToolContext, target: Path) -> list[str]:
+    command = [
+        "rg",
+        "--line-number",
+        "--with-filename",
+        "--null",
+        "--color",
+        "never",
+        "--max-columns",
+        "2000",
+        "--max-columns-preview",
+    ]
+    try:
+        target_parts = target.relative_to(context.case.root.resolve()).parts
+    except ValueError:
+        target_parts = ()
+    for directory in sorted(DEFAULT_SCAN_IGNORED_DIRECTORIES):
+        if directory in target_parts:
             continue
-        found_path = Path(match.group(1))
-        matches.append(
-            {
-                "path": _case_display_path(context, target, display, found_path),
-                "line": int(match.group(2)),
-                "preview": match.group(3)[:1000],
-            }
+        command.extend(["--glob", f"!{directory}/**", "--glob", f"!**/{directory}/**"])
+    return command
+
+
+def _run_rg(
+    context: ToolContext,
+    command: list[str],
+    target: Path,
+    display: str,
+    hard_limit: int,
+) -> tuple[list[dict[str, Any]], bool]:
+    matches: list[dict[str, Any]] = []
+    stopped_early = False
+    timed_out = threading.Event()
+    with tempfile.TemporaryFile() as stderr:
+        process = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=stderr,
+            cwd=context.case.root,
         )
-    return matches
+
+        def stop_on_timeout() -> None:
+            if process.poll() is not None:
+                return
+            timed_out.set()
+            with suppress(OSError):
+                process.kill()
+
+        timer = threading.Timer(context.config.limits.command_timeout_seconds, stop_on_timeout)
+        timer.daemon = True
+        timer.start()
+        try:
+            assert process.stdout is not None
+            pending_path = b""
+            with process.stdout:
+                for raw_line in process.stdout:
+                    pending_path += raw_line
+                    raw_path, separator, remainder = pending_path.partition(b"\x00")
+                    if not separator:
+                        # POSIX filenames may contain newlines. Ripgrep's NUL separator is the
+                        # authoritative path boundary, so retain partial path records until it.
+                        continue
+                    pending_path = b""
+                    raw_number, colon, raw_preview = remainder.partition(b":")
+                    if not colon:
+                        continue
+                    try:
+                        line_number = int(raw_number)
+                    except ValueError:
+                        continue
+                    found_path = Path(raw_path.decode(errors="replace"))
+                    matches.append(
+                        {
+                            "path": _case_display_path(context, target, display, found_path),
+                            "line": line_number,
+                            "preview": raw_preview.decode("utf-8", errors="replace").rstrip("\r\n")[
+                                :1000
+                            ],
+                        }
+                    )
+                    if len(matches) > hard_limit:
+                        stopped_early = True
+                        timer.cancel()
+                        with suppress(OSError):
+                            process.terminate()
+                        break
+            try:
+                returncode = process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                returncode = process.wait()
+        finally:
+            timer.cancel()
+        stderr.seek(0)
+        error_text = stderr.read(2000).decode("utf-8", errors="replace")
+    if timed_out.is_set():
+        raise ValueError(
+            f"ripgrep exceeded the {context.config.limits.command_timeout_seconds}-second limit"
+        )
+    if not stopped_early and returncode not in {0, 1}:
+        raise ValueError(error_text or f"ripgrep exited with {returncode}")
+    return matches, not stopped_early
 
 
 def _python_exact_search(
-    target: Path, display: str, query: str, case_sensitive: bool
-) -> list[dict[str, Any]]:
-    files = [target] if target.is_file() else (path for path in target.rglob("*") if path.is_file())
+    context: ToolContext,
+    target: Path,
+    display: str,
+    query: str,
+    case_sensitive: bool,
+    hard_limit: int,
+) -> tuple[list[dict[str, Any]], bool]:
     needle = query if case_sensitive else query.lower()
     results: list[dict[str, Any]] = []
-    for path in files:
+    deadline = time.monotonic() + context.config.limits.command_timeout_seconds
+    for path in walk_regular_entries(target):
+        if time.monotonic() >= deadline:
+            return results, False
         try:
-            with path.open(encoding="utf-8", errors="replace") as handle:
-                for number, line in enumerate(handle, 1):
-                    candidate = line if case_sensitive else line.lower()
-                    if needle in candidate:
-                        relative = (
-                            display
-                            if target.is_file()
-                            else f"{display.rstrip('/')}/{path.relative_to(target).as_posix()}"
-                        )
-                        results.append(
-                            {"path": relative, "line": number, "preview": line.strip()[:1000]}
-                        )
+            _, file_matches, complete = search_text_file_lines(
+                path,
+                needle,
+                case_sensitive=case_sensitive,
+                max_results=hard_limit + 1 - len(results),
+                stop_after=hard_limit + 1 - len(results),
+                deadline=deadline,
+            )
+            relative = (
+                display
+                if target.is_file()
+                else f"{display.rstrip('/')}/{path.relative_to(target).as_posix()}"
+            )
+            results.extend(
+                {"path": relative, "line": number, "preview": preview}
+                for number, preview in file_matches
+            )
+            if not complete or len(results) > hard_limit:
+                return results, False
         except OSError:
             continue
-    return results
+    return results, True
 
 
 def _paginate(
-    matches: list[dict[str, Any]], page: int, page_size: int, hard_limit: int
+    matches: list[dict[str, Any]],
+    page: int,
+    page_size: int,
+    hard_limit: int,
+    *,
+    total_exact: bool = True,
 ) -> dict[str, Any]:
     limited = matches[:hard_limit]
     start = (page - 1) * page_size
     results = limited[start : start + page_size]
     return {
         "total_matches": len(matches),
+        "total_matches_exact": total_exact,
         "bounded_matches": len(limited),
         "returned_matches": len(results),
         "page": page,
-        "truncated": len(matches) > hard_limit or start + len(results) < len(limited),
+        "truncated": (
+            not total_exact or len(matches) > hard_limit or start + len(results) < len(limited)
+        ),
         "results": results,
     }
 

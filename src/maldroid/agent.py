@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import threading
 import time
@@ -65,6 +66,14 @@ EMPTY_RESPONSE_RECOVERY_INSTRUCTION = (
     "repeat an empty turn."
 )
 MAX_REPETITION_RECOVERIES_PER_TURN = 2
+IDENTICAL_TOOL_WARNING_THRESHOLD = 3
+IDENTICAL_TOOL_STOP_THRESHOLD = 5
+TOOL_LOOP_RECOVERY_INSTRUCTION = (
+    "The same tool call returned the same result repeatedly. Do not call it again with unchanged "
+    "arguments. Use the existing result, choose a materially different bounded research step, or "
+    "finish the answer if the objective is already satisfied."
+)
+SHUTDOWN_STATE_HEADING = "## Durable state at last shutdown"
 
 AgentEventHandler = Callable[[str, dict[str, Any]], None]
 
@@ -227,6 +236,8 @@ class MalDroidAgent:
         state_reminder_sent = False
         investigation_calls = 0
         repetition_recoveries = 0
+        last_tool_outcome = ""
+        identical_tool_outcomes = 0
         while True:
             self._check_cancelled()
             tools = self.available_tool_schemas()
@@ -266,10 +277,13 @@ class MalDroidAgent:
                         channel=exc.channel,
                         attempts=repetition_recoveries,
                     )
-                    return (
+                    fallback = (
                         "Generation was stopped after repeated output loops. Your investigation "
                         "state is safe; retry the message or use a stronger local model."
                     )
+                    self.messages.append({"role": "assistant", "content": fallback})
+                    self.sessions.record("message", role="assistant", content=fallback)
+                    return fallback
                 repetition_recoveries += 1
                 self._recover_from_repetition(text, exc, repetition_recoveries)
                 continue
@@ -335,6 +349,43 @@ class MalDroidAgent:
                 ):
                     self._profile_detection_complete = True
                     self._apply_profile_detection(result.data)
+                outcome = self._tool_outcome_signature(call.name, call.arguments, serialized)
+                if outcome == last_tool_outcome:
+                    identical_tool_outcomes += 1
+                else:
+                    last_tool_outcome = outcome
+                    identical_tool_outcomes = 1
+                if identical_tool_outcomes == IDENTICAL_TOOL_WARNING_THRESHOLD:
+                    self.messages.append(
+                        {"role": "system", "content": TOOL_LOOP_RECOVERY_INSTRUCTION}
+                    )
+                    self.sessions.record(
+                        "tool_loop_warning",
+                        content={"name": call.name, "repetitions": identical_tool_outcomes},
+                    )
+                    self._emit(
+                        "tool_loop_warning",
+                        name=call.name,
+                        repetitions=identical_tool_outcomes,
+                    )
+                if identical_tool_outcomes >= IDENTICAL_TOOL_STOP_THRESHOLD:
+                    fallback = (
+                        "The run was stopped because the model repeated the same unchanged tool "
+                        "result five times. Completed results and durable research state are safe. "
+                        "Retry with a more specific instruction or a stronger local model."
+                    )
+                    self.messages.append({"role": "assistant", "content": fallback})
+                    self.sessions.record(
+                        "tool_loop_stopped",
+                        content={"name": call.name, "repetitions": identical_tool_outcomes},
+                    )
+                    self.sessions.record("message", role="assistant", content=fallback)
+                    self._emit(
+                        "tool_loop_stopped",
+                        name=call.name,
+                        repetitions=identical_tool_outcomes,
+                    )
+                    return fallback
                 self._check_cancelled()
             self._prune_working_context()
             if investigation_calls and not structured_state_updated and not state_reminder_sent:
@@ -519,9 +570,10 @@ class MalDroidAgent:
         self.messages.append({"role": "system", "content": REPETITION_RECOVERY_INSTRUCTION})
         self.messages.append({"role": "user", "content": objective})
         self.sessions.record(
-            "recovered_message",
+            "message",
             role="user",
-            content={"text": objective, "from_session": previous_session.number},
+            content=objective,
+            recovered_from_session=previous_session.number,
         )
         self._emit(
             "repetition_recovery",
@@ -545,6 +597,20 @@ class MalDroidAgent:
             if remaining <= 0 or len(recent_results) >= self.config.limits.retained_tool_results:
                 break
         return "\n---\n".join(reversed(recent_results))
+
+    @staticmethod
+    def _tool_outcome_signature(name: str, arguments: Any, result: str) -> str:
+        normalized_arguments = arguments
+        if isinstance(arguments, str):
+            try:
+                normalized_arguments = json.loads(arguments)
+            except json.JSONDecodeError:
+                normalized_arguments = arguments.strip()
+        canonical = json.dumps(
+            normalized_arguments, ensure_ascii=False, sort_keys=True, default=str
+        )
+        digest = hashlib.sha256(result.encode("utf-8", errors="replace")).hexdigest()
+        return f"{name}\x00{canonical}\x00{digest}"
 
     def _save_phase_checkpoint(
         self,
@@ -733,11 +799,10 @@ class MalDroidAgent:
         )
 
     def _detect_and_switch_profile(self, force: bool = False) -> None:
-        if not self._auto_profile_enabled and not force:
+        if not self._auto_profile_enabled:
             return
         if self._profile_detection_complete and not force:
             return
-        self._profile_detection_complete = True
         result = self.dispatcher.execute(mcp_tool_name("detect_profile"), {"path": "."})
         if result.status != "completed" or not isinstance(result.data, dict):
             self.sessions.record(
@@ -748,6 +813,7 @@ class MalDroidAgent:
                 },
             )
             return
+        self._profile_detection_complete = True
         self._apply_profile_detection(result.data)
 
     def _apply_profile_detection(self, data: dict[str, Any]) -> None:
@@ -760,6 +826,8 @@ class MalDroidAgent:
             confidence=confidence,
             scores=data.get("scores", {}),
         )
+        if not self._auto_profile_enabled:
+            return
         if (
             selected != "generic"
             and confidence in {"medium", "high"}
@@ -873,7 +941,19 @@ class MalDroidAgent:
         self._emit("compaction_complete", summary_length=len(summary))
         return summary
 
-    def _durable_fallback_summary(self, warning: str = "") -> str:
+    def save_shutdown_summary(self) -> str:
+        """Persist durable continuity without asking the model for another generation."""
+        durable = self._durable_fallback_summary(include_previous=False)
+        previous = self.case.state.summary.strip()
+        prior_synthesis = previous.split(SHUTDOWN_STATE_HEADING, 1)[0].strip()
+        sections = [prior_synthesis[:16000]] if prior_synthesis else []
+        sections.extend((SHUTDOWN_STATE_HEADING, durable[:24000]))
+        summary = "\n\n".join(sections)
+        self.sessions.record("shutdown_summary", content={"summary_length": len(summary)})
+        self.sessions.save_summary(summary)
+        return summary
+
+    def _durable_fallback_summary(self, warning: str = "", *, include_previous: bool = True) -> str:
         sections = [f"Active profile: {self.case.state.active_profile}"]
         if warning:
             sections.append(warning)
@@ -908,7 +988,7 @@ class MalDroidAgent:
             sections.append(
                 "Open TODOs:\n" + "\n".join(f"- {item.id}: {item.text}" for item in open_todos)
             )
-        if self.case.state.summary:
+        if include_previous and self.case.state.summary:
             sections.append("Previous summary:\n" + self.case.state.summary)
         if len(sections) == 1:
             sections.append("No durable investigation progress has been recorded yet.")

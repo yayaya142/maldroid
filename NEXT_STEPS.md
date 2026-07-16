@@ -40,6 +40,13 @@ single-layer transient retries, cached profile detection, cross-turn thought cle
 final checkpoints, non-blocking Web answers, and bounded empty-response recovery. Physical GGUF
 throughput and quality acceptance remains in `PLATFORM-011`.
 
+Completed out of sequence by explicit owner reprioritization: `PLATFORM-013` is a full
+reliability/regression pass over the long-running runtime. It adds deterministic generation-free
+shutdown, repeated unchanged-tool protection, safe and bounded large-repository traversal/search,
+transactional evidence registration, manual-profile locking, authoritative Web reconnect/locking,
+bounded session views, and a Settings **Stop model** action. Physical GGUF, macOS, and Ghidra MCP
+acceptance remains in `PLATFORM-011`.
+
 1. `PLATFORM-011` — Install the long-investigation and Web-workspace upgrade on the owner's macOS
    host. Verify `maldroid` mode selection, `maldroid server`, exclusive CLI/Web locking, project
    creation/switching, Hebrew input/output RTL, settings, bounded file preview, latest-turn file
@@ -50,7 +57,9 @@ throughput and quality acceptance remains in `PLATFORM-011`.
    usage across phases, prompt-cache hit ratio, prompt evaluation and first-token timing, empty-
    response recovery, pruned-result receipts, checkpoint contents, Findings/TODO/report parity,
    direct CLI triage latency, Ghidra connector tool names, model/server versions, and any repeated
-   or low-value state. Acceptance: a fresh session resumes from MCP state without chat history and
+   or low-value state. Exercise three- and five-identical-tool outcomes, generation-free shutdown,
+   explicit generated-output search, Web reconnect during an idle/offline project, and **Stop model**
+   before changing Settings. Acceptance: a fresh session resumes from MCP state without chat history and
    `reports/RESEARCH_REPORT.md` is useful without manual cleanup. Confirm `/triage` uses ripgrep on
    the configured Mac when present and the streaming fallback when it is absent.
 2. `REL-010` — Retest the fixed `MalDroid_save_finding` path on the owner's macOS case. Record

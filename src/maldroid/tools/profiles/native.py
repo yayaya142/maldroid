@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -71,16 +72,27 @@ def inspect_native_dependencies(context: ToolContext, arguments: BaseModel) -> d
     path = context.read_path(values.path)
     result = run_allowlisted(context, "readelf", ["-W", "-d", str(path)], "elf-dynamic")
     output = context.case.root / result["output_file"]
-    text = output.read_text(encoding="utf-8", errors="replace")
-    needed = re.findall(r"\(NEEDED\).*?\[([^]]+)]", text)
-    soname = re.findall(r"\(SONAME\).*?\[([^]]+)]", text)
+    needed: list[str] = []
+    soname = None
+    has_runpath = False
+    has_bind_now = False
+    with output.open(encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            if match := re.search(r"\(NEEDED\).*?\[([^]]+)]", line):
+                needed.append(match.group(1))
+            if soname is None and (match := re.search(r"\(SONAME\).*?\[([^]]+)]", line)):
+                soname = match.group(1)
+            has_runpath = has_runpath or "(RUNPATH)" in line or "(RPATH)" in line
+            has_bind_now = (
+                has_bind_now or "BIND_NOW" in line or ("FLAGS_1" in line and "NOW" in line)
+            )
     result.update(
         {
             "path": values.path,
             "needed_libraries": needed,
-            "soname": soname[0] if soname else None,
-            "has_runpath": "(RUNPATH)" in text or "(RPATH)" in text,
-            "has_bind_now": "BIND_NOW" in text or "FLAGS_1" in text and "NOW" in text,
+            "soname": soname,
+            "has_runpath": has_runpath,
+            "has_bind_now": has_bind_now,
         }
     )
     return result
@@ -97,23 +109,30 @@ def inspect_jni_surface(context: ToolContext, arguments: BaseModel) -> dict[str,
     path = context.read_path(values.path)
     result = run_allowlisted(context, "readelf", ["-W", "-s", str(path)], "jni-symbols")
     output = context.case.root / result["output_file"]
-    lines = output.read_text(encoding="utf-8", errors="replace").splitlines()
-    exports = sorted(
-        {match.group(0) for line in lines if (match := re.search(r"Java_[A-Za-z0-9_]+", line))}
-    )
-    indicators = sorted(
-        {
-            indicator
-            for indicator in ("JNI_OnLoad", "RegisterNatives", "GetMethodID", "CallObjectMethod")
-            if any(indicator in line for line in lines)
-        }
-    )
+    exports: set[str] = set()
+    indicators: set[str] = set()
+    with output.open(encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            if match := re.search(r"Java_[A-Za-z0-9_]+", line):
+                exports.add(match.group(0))
+            indicators.update(
+                indicator
+                for indicator in (
+                    "JNI_OnLoad",
+                    "RegisterNatives",
+                    "GetMethodID",
+                    "CallObjectMethod",
+                )
+                if indicator in line
+            )
+    sorted_exports = sorted(exports)
+    sorted_indicators = sorted(indicators)
     result.update(
         {
             "path": values.path,
-            "static_jni_exports": exports[:500],
-            "static_jni_export_count": len(exports),
-            "dynamic_jni_indicators": indicators,
+            "static_jni_exports": sorted_exports[:500],
+            "static_jni_export_count": len(sorted_exports),
+            "dynamic_jni_indicators": sorted_indicators,
             "next_step": (
                 "Trace JNI_OnLoad/RegisterNatives in Ghidra to recover dynamic class and method mappings."
                 if "JNI_OnLoad" in indicators or "RegisterNatives" in indicators
@@ -129,17 +148,31 @@ def inspect_native_hardening(context: ToolContext, arguments: BaseModel) -> dict
     path = context.read_path(values.path)
     program = run_allowlisted(context, "readelf", ["-W", "-l", str(path)], "elf-program-headers")
     symbols = run_allowlisted(context, "readelf", ["-W", "-s", str(path)], "elf-hardening-symbols")
-    program_text = (context.case.root / program["output_file"]).read_text(errors="replace")
-    symbol_text = (context.case.root / symbols["output_file"]).read_text(errors="replace")
-    stack_line = next((line for line in program_text.splitlines() if "GNU_STACK" in line), "")
+    stack_line = ""
+    gnu_relro = False
+    with (context.case.root / program["output_file"]).open(
+        encoding="utf-8", errors="replace"
+    ) as handle:
+        for line in handle:
+            if not stack_line and "GNU_STACK" in line:
+                stack_line = line
+            gnu_relro = gnu_relro or "GNU_RELRO" in line
+    stack_canary = False
+    fortify = False
+    with (context.case.root / symbols["output_file"]).open(
+        encoding="utf-8", errors="replace"
+    ) as handle:
+        for line in handle:
+            stack_canary = stack_canary or "__stack_chk_fail" in line
+            fortify = fortify or "_chk@" in line or "_chk" in line
     return {
         "path": values.path,
         "nx_stack": not any("E" in token for token in stack_line.split()[-2:])
         if stack_line
         else None,
-        "gnu_relro": "GNU_RELRO" in program_text,
-        "stack_canary": "__stack_chk_fail" in symbol_text,
-        "fortify": "_chk@" in symbol_text or "_chk" in symbol_text,
+        "gnu_relro": gnu_relro,
+        "stack_canary": stack_canary,
+        "fortify": fortify,
         "program_headers_output": program["output_file"],
         "symbols_output": symbols["output_file"],
         "accuracy": "Hardening indicators are static heuristics and should be verified against ELF flags.",
@@ -156,14 +189,12 @@ def search_native_strings(context: ToolContext, arguments: BaseModel) -> dict[st
         "native-strings",
     )
     output = context.case.root / result["output_file"]
-    matches = [
-        line for line in output.read_text(errors="replace").splitlines() if values.query in line
-    ]
+    total, matches = _matching_lines(output, values.query, context.config.limits.max_search_results)
     result.update(
         {
             "query": values.query,
-            "total_matches": len(matches),
-            "matches": matches[: context.config.limits.max_search_results],
+            "total_matches": total,
+            "matches": matches,
         }
     )
     return result
@@ -189,17 +220,28 @@ def search_disassembly(context: ToolContext, arguments: BaseModel) -> dict[str, 
     path = context.read_path(values.path)
     result = run_allowlisted(context, "objdump", ["-d", str(path)], "disassembly")
     output = context.case.root / result["output_file"]
-    matches = [
-        line for line in output.read_text(errors="replace").splitlines() if values.query in line
-    ]
+    total, matches = _matching_lines(output, values.query, context.config.limits.max_search_results)
     result.update(
         {
             "query": values.query,
-            "total_matches": len(matches),
-            "matches": matches[: context.config.limits.max_search_results],
+            "total_matches": total,
+            "matches": matches,
         }
     )
     return result
+
+
+def _matching_lines(path: Path, query: str, limit: int) -> tuple[int, list[str]]:
+    total = 0
+    matches: list[str] = []
+    with path.open(encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            if query not in line:
+                continue
+            total += 1
+            if len(matches) < limit:
+                matches.append(line.rstrip("\r\n")[:2000])
+    return total, matches
 
 
 def register_native_tools(registry: ToolRegistry) -> None:

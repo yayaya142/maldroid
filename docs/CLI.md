@@ -156,6 +156,12 @@ These commands inspect durable/local state directly without consuming a model tu
 atomically rebuilds `reports/RESEARCH_REPORT.md` from Findings, TODOs, and the latest typed
 checkpoint.
 
+`/triage` and `/indicators` use global result/time budgets even on very large repositories. Broad
+scans do not follow nested symbolic links or recurse into routine internal/generated trees; an
+explicit registered evidence or generated-output path remains readable. Partial results state
+whether totals are exact and why the scan stopped. Search previews are centered on matches inside
+minified lines, while line-range tools retain only bounded prefixes and mark shortened lines.
+
 ### Reasoning control
 
 `llama.reasoning_level` defaults to `medium`. The terminal toolbar and `/status` show the active
@@ -178,6 +184,9 @@ and the overall `llama.max_response_tokens` limit applies to the complete genera
 
 Requests enable llama.cpp prompt caching, prompt-progress events, and SSE keepalive. The SDK retry
 layer is disabled so `limits.model_retry_attempts` remains the single visible retry policy.
+Three consecutive identical tool outcomes trigger a visible strategy-change instruction; five stop
+the turn safely without creating a low-value Note or checkpoint. Normal shutdown persists typed
+durable state deterministically and does not start a compaction generation after the user exits.
 `llama.stream_idle_timeout_seconds` defaults to 120 and bounds a stream that stops producing local
 network activity. If a generation ends with reasoning but no answer/tool call, MalDroid retries it
 once with reasoning off and keeps the empty attempt out of conversation history.

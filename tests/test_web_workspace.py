@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import importlib.util
 import threading
 from pathlib import Path
@@ -8,9 +9,11 @@ from types import SimpleNamespace
 import pytest
 from starlette.testclient import TestClient
 
+from maldroid import runtime_lock
 from maldroid.config import AppConfig
 from maldroid.exceptions import MalDroidError, TurnCancelledError
 from maldroid.runtime_lock import RuntimeLease
+from maldroid.session_manager import SessionManager
 from maldroid.web.server import WebWorkspace, create_app
 
 
@@ -60,6 +63,7 @@ def test_web_shell_exposes_chat_theme_sidebar_restore_and_file_controls(tmp_path
     assert "Message MalDroid" in page
     assert 'id="theme-toggle"' in page
     assert 'id="theme-setting"' in page
+    assert 'id="stop-workspace"' in page
     assert 'id="file-filter"' in page
     assert 'id="toggle-logs"' in page
     assert "Used in latest turn" in page
@@ -73,6 +77,7 @@ def test_web_shell_exposes_chat_theme_sidebar_restore_and_file_controls(tmp_path
     assert "@media(max-width:900px)" in styles
     assert ".inspector.open{transform:none}" in styles
     assert 'localStorage.setItem("maldroid-theme"' in script
+    assert 'api("/api/workspace/stop"' in script
     assert "collapsedDirectories" in script
     assert "touchedFiles" in script
     assert "markTouchedFiles" in script
@@ -107,6 +112,21 @@ def test_web_shell_exposes_live_operational_progress_without_private_reasoning(
     assert "prompt_progress" in script
     assert "generation_first_token" in script
     assert "empty_response_recovery" in script
+    assert "Local model offline. Check Settings" in script
+
+
+def test_web_socket_reconnect_resynchronizes_workspace_and_busy_state(tmp_path: Path) -> None:
+    workspace = WebWorkspace(web_config(tmp_path))
+    with authorized_client(workspace) as client:
+        script = client.get("/assets/app.js").text
+
+    assert 'message.type === "connected"' in script
+    assert "state.workspace = message.workspace" in script
+    assert "state.workspace.case?.case_id || null" in script
+    assert "else clearProjectData()" in script
+    assert "setBusy(false)" in script
+    assert "socketQueue: Promise.resolve()" in script
+    assert "state.socketQueue = state.socketQueue" in script
 
 
 def test_web_returns_answer_before_post_turn_compaction(tmp_path: Path) -> None:
@@ -166,6 +186,88 @@ def test_web_project_creation_listing_and_bounded_file_preview(tmp_path: Path) -
         assert preview["data"]["lines"][0]["text"] == "const greeting = 'שלום';"
 
 
+def test_invalid_web_profile_does_not_leave_a_ghost_project(tmp_path: Path) -> None:
+    workspace = WebWorkspace(web_config(tmp_path))
+    before = {item["case_id"] for item in workspace.projects()}
+
+    with pytest.raises(MalDroidError, match="Unknown profile"):
+        workspace.create_project({"name": "must roll back", "profile": "not-a-profile"})
+
+    assert {item["case_id"] for item in workspace.projects()} == before
+
+
+def test_web_commands_and_project_switches_reject_an_active_model_turn(tmp_path: Path) -> None:
+    workspace = WebWorkspace(web_config(tmp_path))
+    case = workspace.manager.create("busy")
+    workspace.runtime = SimpleNamespace(
+        case=case,
+        agent=SimpleNamespace(sessions=SessionManager(case, workspace.manager)),
+        dispatcher=SimpleNamespace(),
+    )
+    assert workspace._turn_lock.acquire(blocking=False)
+    try:
+        with pytest.raises(MalDroidError, match="model turn is already running"):
+            workspace.command("status", {})
+        with pytest.raises(MalDroidError, match="model turn is already running"):
+            workspace.activate(case.metadata.case_id)
+    finally:
+        workspace._turn_lock.release()
+
+
+def test_web_event_emission_tolerates_a_closed_reconnect_loop(tmp_path: Path) -> None:
+    workspace = WebWorkspace(web_config(tmp_path))
+    loop = asyncio.new_event_loop()
+    queue: asyncio.Queue[dict[str, object]] = asyncio.Queue()
+    workspace.bind_events(loop, queue)  # type: ignore[arg-type]
+    loop.close()
+
+    workspace.emit("tool_start", {"name": "MalDroid_read_file_range"})
+
+
+def test_web_history_streams_and_bounds_long_session_logs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workspace = WebWorkspace(web_config(tmp_path))
+    case = workspace.manager.create("long-session")
+    sessions = SessionManager(case, workspace.manager)
+    for number in range(510):
+        sessions.record("message", role="user", content=f"message-{number}")
+    original_read_text = Path.read_text
+
+    def reject_jsonl_read_text(path: Path, *args, **kwargs):
+        if path.suffix == ".jsonl":
+            raise AssertionError("session JSONL must be streamed, not loaded in full")
+        return original_read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", reject_jsonl_read_text)
+
+    messages = workspace.history(case.metadata.case_id)
+    events = workspace.session_events(case, limit=25)
+
+    assert len(messages) == 500
+    assert messages[0]["content"] == "message-10"
+    assert messages[-1]["content"] == "message-509"
+    assert len(events) == 25
+
+
+def test_web_history_command_reports_the_agent_current_session(tmp_path: Path) -> None:
+    workspace = WebWorkspace(web_config(tmp_path))
+    case = workspace.manager.create("recovered-session")
+    stale = SessionManager(case, workspace.manager)
+    current = SessionManager(case, workspace.manager)
+    agent = SimpleNamespace(sessions=current)
+    workspace.runtime = SimpleNamespace(
+        case=case,
+        agent=agent,
+        dispatcher=SimpleNamespace(),
+        sessions=stale,
+    )
+
+    result = workspace.command("history", {})
+
+    assert result["data"]["session"] == current.history_path.name
+
+
 def test_websocket_returns_workspace_snapshot(tmp_path: Path) -> None:
     workspace = WebWorkspace(web_config(tmp_path))
     with (
@@ -223,6 +325,24 @@ def test_runtime_lease_rejects_parallel_workspace(
             RuntimeLease("CLI").acquire()
     finally:
         first.release()
+
+
+def test_runtime_lease_releases_lock_when_metadata_write_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("maldroid.runtime_lock.data_directory", lambda: tmp_path)
+    real_write = runtime_lock.atomic_write_json
+
+    def fail_write(*_args, **_kwargs) -> None:
+        raise OSError("metadata is read-only")
+
+    monkeypatch.setattr("maldroid.runtime_lock.atomic_write_json", fail_write)
+    with pytest.raises(OSError, match="read-only"):
+        RuntimeLease("Web").acquire()
+
+    monkeypatch.setattr("maldroid.runtime_lock.atomic_write_json", real_write)
+    second = RuntimeLease("CLI").acquire()
+    second.release()
 
 
 def test_web_config_is_loopback_only() -> None:

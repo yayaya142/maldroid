@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from io import StringIO
+from types import SimpleNamespace
 from unittest.mock import Mock
 
 from prompt_toolkit.completion import CompleteEvent
@@ -173,3 +174,21 @@ def test_repetition_recovery_events_are_visible(app_config) -> None:
     rendered = output.getvalue()
     assert "Repeated model output detected" in rendered
     assert "clean session 2" in rendered
+
+
+def test_cli_returns_answer_without_post_turn_model_compaction(app_config, monkeypatch) -> None:
+    chat, output = make_chat(app_config)
+    checks = Mock(side_effect=[False, True])
+    compact = Mock()
+    chat.agent = SimpleNamespace(
+        should_auto_compact=checks,
+        compact=compact,
+        respond=Mock(return_value="Ready immediately."),
+    )
+    monkeypatch.setattr(chat, "_show_turn_footer", lambda _elapsed: None)
+
+    chat._run_turn("Investigate")
+
+    assert "Ready immediately." in output.getvalue()
+    assert checks.call_count == 1
+    compact.assert_not_called()

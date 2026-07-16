@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
 from pathlib import Path
 
 from maldroid.exceptions import SecurityError
+
+DEFAULT_SCAN_IGNORED_DIRECTORIES = frozenset(
+    {".git", ".maldroid", ".venv", "__pycache__", "tool-output"}
+)
 
 
 def expand_path(value: str | Path) -> Path:
@@ -31,6 +36,40 @@ def is_relative_to(path: Path, root: Path) -> bool:
         return True
     except ValueError:
         return False
+
+
+def walk_regular_entries(
+    root: Path,
+    *,
+    include_directories: bool = False,
+    ignored_directories: frozenset[str] = DEFAULT_SCAN_IGNORED_DIRECTORIES,
+) -> Iterator[Path]:
+    """Walk regular case entries without following nested symbolic links.
+
+    ``root`` has already passed ``PathPolicy`` and may itself resolve to a registered external
+    evidence source. Nested links are intentionally excluded so a broad scan cannot silently
+    expand beyond that explicitly registered root.
+    """
+    if root.is_file():
+        if not root.is_symlink():
+            yield root
+        return
+    if not root.is_dir():
+        return
+    for current, directories, files in os.walk(root, followlinks=False):
+        current_path = Path(current)
+        safe_directories = [
+            name
+            for name in sorted(directories)
+            if name not in ignored_directories and not (current_path / name).is_symlink()
+        ]
+        directories[:] = safe_directories
+        if include_directories:
+            yield from (current_path / name for name in safe_directories)
+        for name in sorted(files):
+            candidate = current_path / name
+            if not candidate.is_symlink():
+                yield candidate
 
 
 class PathPolicy:

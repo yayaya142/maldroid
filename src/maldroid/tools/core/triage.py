@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import ipaddress
 import json
-import os
 import re
 import shutil
 import subprocess
+import tempfile
+import threading
 import time
 from collections import Counter, defaultdict
+from contextlib import suppress
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -17,6 +19,7 @@ from typing import Any, Literal, cast
 from pydantic import BaseModel, ConfigDict, Field
 
 from maldroid.io_utils import atomic_write_json, atomic_write_text
+from maldroid.paths import DEFAULT_SCAN_IGNORED_DIRECTORIES, walk_regular_entries
 from maldroid.tools.models import ToolContext, ToolDefinition, ToolHandler
 from maldroid.tools.registry import ToolRegistry
 
@@ -120,7 +123,7 @@ def inventory_case(context: ToolContext, arguments: BaseModel) -> dict[str, Any]
     file_count = 0
     directory_count = 0
     truncated = False
-    for path in _walk_files(root):
+    for path in walk_regular_entries(root, include_directories=True):
         if path.is_dir():
             directory_count += 1
             continue
@@ -162,14 +165,32 @@ def extract_network_indicators(context: ToolContext, arguments: BaseModel) -> di
     found: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
     scanned = 0
     truncated_files = False
-    for path in _walk_files(root):
+    truncation_reason: str | None = None
+    unique_indicators = 0
+    deadline = time.monotonic() + context.config.limits.command_timeout_seconds
+    for path in walk_regular_entries(root):
         if not path.is_file() or _appears_binary_container(path):
             continue
         scanned += 1
         if scanned > values.max_files:
             truncated_files = True
+            truncation_reason = "file_budget"
             break
-        _scan_indicators(path, _display_path(root, values.path, path), found)
+        try:
+            unique_indicators, reason = _scan_indicators(
+                path,
+                _display_path(root, values.path, path),
+                found,
+                unique_indicators,
+                values.max_results + 1,
+                deadline,
+            )
+        except OSError:
+            continue
+        if reason is not None:
+            truncated_files = True
+            truncation_reason = reason
+            break
     records: list[dict[str, Any]] = []
     for kind in sorted(found):
         for value, paths in sorted(found[kind].items()):
@@ -183,7 +204,10 @@ def extract_network_indicators(context: ToolContext, arguments: BaseModel) -> di
     return {
         "path": values.path,
         "files_scanned": min(scanned, values.max_files),
-        "file_scan_truncated": truncated_files,
+        "file_scan_truncated": truncation_reason == "file_budget",
+        "total_indicators_exact": not truncated_files,
+        "scan_complete": not truncated_files,
+        "truncation_reason": truncation_reason,
         "counts": dict(counts),
         "total_indicators": len(records),
         "returned_indicators": min(len(records), values.max_results),
@@ -201,6 +225,17 @@ def search_behavior_patterns(context: ToolContext, arguments: BaseModel) -> dict
     output = context.output_directory() / _output_name("behavior-search", "jsonl")
     if not executable:
         return _python_behavior_search(context, target, values, categories, output)
+    return _ripgrep_behavior_search(context, target, values, categories, output, executable)
+
+
+def _ripgrep_behavior_search(
+    context: ToolContext,
+    target: Path,
+    values: BehaviorSearchInput,
+    categories: list[BehaviorCategory],
+    output: Path,
+    executable: str,
+) -> dict[str, Any]:
     combined = [pattern for category in categories for pattern in BEHAVIOR_PATTERNS[category]]
     command = [
         executable,
@@ -208,25 +243,14 @@ def search_behavior_patterns(context: ToolContext, arguments: BaseModel) -> dict
         "--line-number",
         "--color",
         "never",
-        "--glob",
-        "!.maldroid/**",
-        "--glob",
-        "!tool-output/**",
+        "--max-columns",
+        "2000",
+        "--max-columns-preview",
     ]
+    _append_scan_exclusions(command, context, target)
     for pattern in combined:
         command.extend(["-e", pattern])
     command.extend(["--", str(target)])
-    with output.open("wb") as handle:
-        completed = subprocess.run(
-            command,
-            cwd=context.case.root,
-            stdout=handle,
-            stderr=subprocess.PIPE,
-            timeout=context.config.limits.command_timeout_seconds,
-            check=False,
-        )
-    if completed.returncode not in {0, 1}:
-        raise ValueError(completed.stderr.decode("utf-8", errors="replace")[:2000])
     compiled = {
         category: re.compile("|".join(f"(?:{item})" for item in BEHAVIOR_PATTERNS[category]), re.I)
         for category in categories
@@ -235,26 +259,76 @@ def search_behavior_patterns(context: ToolContext, arguments: BaseModel) -> dict
         category: [] for category in categories
     }
     totals: Counter[str] = Counter()
-    with output.open(encoding="utf-8", errors="replace") as handle:
-        for raw in handle:
+    timed_out = threading.Event()
+    stopped_early = False
+    with tempfile.TemporaryFile() as stderr, output.open("w", encoding="utf-8") as output_handle:
+        process = subprocess.Popen(
+            command,
+            cwd=context.case.root,
+            stdout=subprocess.PIPE,
+            stderr=stderr,
+        )
+
+        def stop_on_timeout() -> None:
+            if process.poll() is not None:
+                return
+            timed_out.set()
+            with suppress(OSError):
+                process.kill()
+
+        timer = threading.Timer(context.config.limits.command_timeout_seconds, stop_on_timeout)
+        timer.daemon = True
+        timer.start()
+        try:
+            assert process.stdout is not None
+            with process.stdout:
+                for raw in process.stdout:
+                    try:
+                        event = json.loads(raw)
+                    except (json.JSONDecodeError, UnicodeDecodeError):
+                        continue
+                    if event.get("type") != "match":
+                        continue
+                    data = event.get("data", {})
+                    line = str(data.get("lines", {}).get("text", "")).rstrip("\r\n")
+                    raw_path = data.get("path", {}).get("text", "")
+                    record = {
+                        "path": _display_path(target, values.path, Path(str(raw_path))),
+                        "line": data.get("line_number"),
+                        "preview": line[:1000],
+                    }
+                    for category, compiled_pattern in compiled.items():
+                        if not compiled_pattern.search(line):
+                            continue
+                        totals[category] += 1
+                        if len(grouped[category]) < values.max_results_per_category:
+                            grouped[category].append(record)
+                            output_handle.write(
+                                json.dumps({"category": category, **record}, ensure_ascii=False)
+                                + "\n"
+                            )
+                    if _behavior_budget_reached(
+                        totals, categories, values.max_results_per_category
+                    ):
+                        stopped_early = True
+                        timer.cancel()
+                        with suppress(OSError):
+                            process.terminate()
+                        break
             try:
-                event = json.loads(raw)
-            except json.JSONDecodeError:
-                continue
-            if event.get("type") != "match":
-                continue
-            data = event["data"]
-            line = str(data.get("lines", {}).get("text", "")).rstrip("\r\n")
-            record = {
-                "path": str(data.get("path", {}).get("text", "")),
-                "line": data.get("line_number"),
-                "preview": line[:1000],
-            }
-            for category, compiled_pattern in compiled.items():
-                if compiled_pattern.search(line):
-                    totals[category] += 1
-                    if len(grouped[category]) < values.max_results_per_category:
-                        grouped[category].append(record)
+                returncode = process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                with suppress(OSError):
+                    process.kill()
+                returncode = process.wait()
+        finally:
+            timer.cancel()
+        stderr.seek(0)
+        error_text = stderr.read(2000).decode("utf-8", errors="replace")
+    if timed_out.is_set():
+        raise TimeoutError("Behavior pattern search exceeded the configured command timeout.")
+    if not stopped_early and returncode not in {0, 1}:
+        raise ValueError(error_text or f"ripgrep exited with {returncode}")
     return {
         "path": values.path,
         "categories": categories,
@@ -265,6 +339,9 @@ def search_behavior_patterns(context: ToolContext, arguments: BaseModel) -> dict
             for category in categories
             if totals[category] > values.max_results_per_category
         ],
+        "totals_exact": not stopped_early,
+        "scan_complete": not stopped_early,
+        "truncation_reason": "result_budget" if stopped_early else None,
         "output_file": output.relative_to(context.case.root).as_posix(),
         "backend": "ripgrep",
         "accuracy": "Pattern matches are triage leads, not evidence of reachable behavior.",
@@ -438,19 +515,6 @@ def register_triage_tools(registry: ToolRegistry) -> None:
         registry.register(ToolDefinition(name, "core", description, model, handler))
 
 
-def _walk_files(root: Path) -> Any:
-    if root.is_file():
-        yield root
-        return
-    ignored = {".git", ".venv", "__pycache__", "tool-output"}
-    for current, directories, files in os.walk(root, followlinks=False):
-        directories[:] = [
-            name for name in directories if name not in ignored and name != ".maldroid"
-        ]
-        current_path = Path(current)
-        yield from (current_path / name for name in sorted(files))
-
-
 def _display_path(root: Path, requested: str, path: Path) -> str:
     if root.is_file():
         return requested
@@ -479,33 +543,70 @@ def _appears_binary_container(path: Path) -> bool:
         return True
 
 
-def _scan_indicators(path: Path, display_path: str, found: dict[str, dict[str, set[str]]]) -> None:
+def _scan_indicators(
+    path: Path,
+    display_path: str,
+    found: dict[str, dict[str, set[str]]],
+    unique_count: int,
+    unique_limit: int,
+    deadline: float,
+) -> tuple[int, str | None]:
+    def add(kind: str, value: str) -> bool:
+        nonlocal unique_count
+        bucket = found[kind]
+        if value not in bucket:
+            unique_count += 1
+        bucket[value].add(display_path)
+        return unique_count >= unique_limit
+
     carry = b""
     with path.open("rb") as handle:
         for block in iter(lambda: handle.read(1024 * 1024), b""):
+            if time.monotonic() >= deadline:
+                return unique_count, "timeout"
             data = carry + block
             for match in URL_PATTERN.finditer(data):
                 value = match.group(0).decode("utf-8", errors="replace").rstrip(".,);]}")
                 kind = "websocket" if value.lower().startswith(("ws://", "wss://")) else "url"
-                found[kind][value].add(display_path)
+                if add(kind, value):
+                    return unique_count, "result_budget"
             for match in EMAIL_PATTERN.finditer(data):
-                found["email"][match.group(0).decode("ascii", errors="ignore")].add(display_path)
+                if add("email", match.group(0).decode("ascii", errors="ignore")):
+                    return unique_count, "result_budget"
             for match in IP_PATTERN.finditer(data):
                 value = match.group(0).decode("ascii")
                 try:
                     ipaddress.ip_address(value)
                 except ValueError:
                     continue
-                found["ip"][value].add(display_path)
+                if add("ip", value):
+                    return unique_count, "result_budget"
             for match in DOMAIN_PATTERN.finditer(data):
-                found["domain"][match.group(0).decode("ascii", errors="ignore").lower()].add(
-                    display_path
-                )
+                if add("domain", match.group(0).decode("ascii", errors="ignore").lower()):
+                    return unique_count, "result_budget"
             carry = data[-2048:]
+    return unique_count, None
 
 
 def _output_name(prefix: str, suffix: str) -> str:
     return f"{prefix}-{datetime.now().strftime('%Y%m%d-%H%M%S-%f')}.{suffix}"
+
+
+def _append_scan_exclusions(command: list[str], context: ToolContext, target: Path) -> None:
+    try:
+        target_parts = target.relative_to(context.case.root.resolve()).parts
+    except ValueError:
+        target_parts = ()
+    for directory in sorted(DEFAULT_SCAN_IGNORED_DIRECTORIES):
+        if directory in target_parts:
+            continue
+        command.extend(["--glob", f"!{directory}/**", "--glob", f"!**/{directory}/**"])
+
+
+def _behavior_budget_reached(
+    totals: Counter[str], categories: list[BehaviorCategory], limit: int
+) -> bool:
+    return all(totals[category] > limit for category in categories)
 
 
 def _python_behavior_search(
@@ -524,15 +625,16 @@ def _python_behavior_search(
     }
     totals: Counter[str] = Counter()
     scanned_files = 0
-    scan_truncated = False
+    file_budget_reached = False
+    result_budget_reached = False
     deadline = time.monotonic() + context.config.limits.command_timeout_seconds
     with output.open("w", encoding="utf-8") as output_handle:
-        for path in _walk_files(target):
+        for path in walk_regular_entries(target):
             if not path.is_file() or _appears_binary_container(path):
                 continue
             scanned_files += 1
             if scanned_files > 20000:
-                scan_truncated = True
+                file_budget_reached = True
                 break
             display_path = _display_path(target, values.path, path)
             carry = b""
@@ -561,6 +663,13 @@ def _python_behavior_search(
                     )
                     consumed += len(block)
                     carry = data[safe_length:]
+                    if _behavior_budget_reached(
+                        totals, categories, values.max_results_per_category
+                    ):
+                        result_budget_reached = True
+                        break
+            if result_budget_reached:
+                break
             _collect_behavior_matches(
                 carry,
                 consumed - len(carry),
@@ -572,6 +681,10 @@ def _python_behavior_search(
                 values.max_results_per_category,
                 output_handle,
             )
+            if _behavior_budget_reached(totals, categories, values.max_results_per_category):
+                result_budget_reached = True
+                break
+    scan_truncated = file_budget_reached or result_budget_reached
     return {
         "path": values.path,
         "categories": categories,
@@ -582,8 +695,17 @@ def _python_behavior_search(
             for category in categories
             if totals[category] > values.max_results_per_category
         ],
+        "totals_exact": not scan_truncated,
+        "scan_complete": not scan_truncated,
+        "truncation_reason": (
+            "result_budget"
+            if result_budget_reached
+            else "file_budget"
+            if file_budget_reached
+            else None
+        ),
         "files_scanned": min(scanned_files, 20000),
-        "file_scan_truncated": scan_truncated,
+        "file_scan_truncated": file_budget_reached,
         "output_file": output.relative_to(context.case.root).as_posix(),
         "backend": "python-streaming",
         "accuracy": "Pattern matches are triage leads, not evidence of reachable behavior.",
@@ -605,6 +727,8 @@ def _collect_behavior_matches(
         for pattern in patterns:
             for match in pattern.finditer(data):
                 totals[category] += 1
+                if len(grouped[category]) >= result_limit:
+                    continue
                 preview_start = max(0, match.start() - 300)
                 preview_end = min(len(data), match.end() + 300)
                 record = {
@@ -618,6 +742,5 @@ def _collect_behavior_matches(
                 output_handle.write(
                     json.dumps({"category": category, **record}, ensure_ascii=False) + "\n"
                 )
-                if len(grouped[category]) < result_limit:
-                    grouped[category].append(record)
+                grouped[category].append(record)
     return start_line + data.count(b"\n")

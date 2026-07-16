@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -108,17 +109,26 @@ class WorkspaceRuntime:
         self._emit("runtime_ready", mcp_endpoint=self.mcp_endpoint)
         return self
 
-    def stop(self, compact: bool = True) -> None:
-        if compact and self.agent is not None and self.sessions is not None:
+    def stop(self, save_summary: bool = True) -> None:
+        if self.agent is not None:
+            self.sessions = self.agent.sessions
+        if save_summary and self.agent is not None:
             try:
-                self.agent.compact()
+                self.agent.save_shutdown_summary()
             except Exception as exc:
-                self.sessions.save_summary(
-                    self.case.state.summary or f"Session ended. Summary failed: {exc}"
-                )
+                self.logger.exception("Could not persist the deterministic shutdown summary")
+                if self.sessions is not None:
+                    with suppress(Exception):
+                        self.sessions.record("shutdown_summary_error", content={"error": str(exc)})
         if self.mcp_server is not None:
-            self.mcp_server.stop()
-        self.server.stop()
+            try:
+                self.mcp_server.stop()
+            except Exception:
+                self.logger.exception("Could not stop the case MCP server cleanly")
+        try:
+            self.server.stop()
+        except Exception:
+            self.logger.exception("Could not stop llama-server cleanly")
         self.logger.info("Shared local workspace runtime stopped")
         self.agent = None
 

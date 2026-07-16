@@ -77,6 +77,7 @@ def build_server_command(
     port: int | None = None,
     explicit_port: bool = False,
 ) -> ServerCommand:
+    selected_context_size = validate_context_size(config, context_size)
     binary = resolve_binary(config.llama.binary)
     model = expand_path(config.llama.model)
     if not model.is_file():
@@ -96,7 +97,7 @@ def build_server_command(
         "--port",
         str(selected_port),
         "-c",
-        str(context_size or config.general.default_context_size),
+        str(selected_context_size),
         "--parallel",
         str(config.llama.parallel),
         "--keep",
@@ -122,3 +123,15 @@ def build_server_command(
         arguments.extend(["--chat-template-file", str(template)])
     arguments.extend(config.llama.extra_args)
     return ServerCommand(arguments=arguments, port=selected_port, api_key=api_key)
+
+
+def validate_context_size(config: AppConfig, context_size: int | None = None) -> int:
+    """Validate per-run context overrides against the same bounds as persistent config."""
+    selected = config.general.default_context_size if context_size is None else context_size
+    if not 2048 <= selected <= 1048576:
+        raise ConfigurationError("The context size must be between 2048 and 1048576 tokens.")
+    if config.llama.keep >= selected:
+        raise ConfigurationError("The context size must be greater than llama.keep.")
+    if config.llama.max_response_tokens >= selected:
+        raise ConfigurationError("The context size must be greater than max_response_tokens.")
+    return selected

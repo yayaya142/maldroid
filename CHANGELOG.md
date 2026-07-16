@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Hardened hour-scale investigations with a three-result strategy warning and five-result stop for
+  identical tool outcomes, deterministic generation-free shutdown summaries, authoritative recovery
+  sessions, strict manual-profile locking, and retryable failed profile detection.
+- Made broad repository work safe and bounded: nested symlinks and routine generated/internal trees
+  are skipped, explicit generated outputs remain searchable, minified lines and range previews
+  stream in chunks, unusual newline-bearing paths remain parseable, and
+  search/behavior/indicator/native/framework artifacts stop at global time/result budgets with
+  exact-versus-lower-bound metadata.
+- Made evidence registration transactional and refreshed live path mappings; namespaced colliding
+  knowledge roots; streamed bounded histories/logs; and fixed React Native overlap, sampling, and
+  multi-megabyte line handling.
+- Serialized Web activation, commands, stop, and model turns; restored authoritative state after
+  reconnect/errors; consumed socket state transitions in order; cleared stale project data; labeled
+  offline startup failures; added a Settings **Stop model** control; and made runtime-lock/shutdown
+  cleanup failure-safe without abandoning a still-ending turn.
 - Made local model turns substantially more responsive and diagnosable with prompt caching,
   streamed context/first-token telemetry, one retry authority, reduced default thinking budgets,
   cached profile detection, cross-turn thought cleanup, and throttled Web progress events.

@@ -1,129 +1,149 @@
 # Current Handoff
 
-Task: `PLATFORM-012`
+Task: `PLATFORM-013`
 Next task: `PLATFORM-011`
 
-Implementation commit: `f09cebb`
+Implementation commit: the atomic `PLATFORM-013` commit containing this handoff (see `git log -1`)
 
 ## Outcome
 
-The owner reprioritized two problems: the Web workspace still felt cramped/off-center at 100% zoom,
-and local-model turns were too slow, opaque, and prone to an empty final response. This task measured
-the packaged Web page, audited the complete model/profile/tool/checkpoint/compaction path, checked
-current upstream guidance, and implemented a single coherent response-latency/reliability change.
+The owner requested another complete regression and reliability run. The repository started clean on
+`main` at `d93de9e`; the baseline doctor, 147-test suite, and consolidated release gate passed before
+edits. The audit then exercised long model turns, shutdown, profile selection, repetition recovery,
+large/minified files, filesystem traversal, evidence registration, Web concurrency/reconnect, and
+bounded history/log surfaces.
 
-Physical Gemma 4/macOS acceptance is not claimed. This Linux workspace does not have the configured
-llama-server binary or GGUF, so `PLATFORM-011` remains the active real-model gate.
+This task fixes the discovered failures and expands deterministic coverage to 186 tests. It does not
+claim physical Gemma 4, macOS, or Ghidra MCP acceptance because this Linux workspace has neither the
+configured llama-server binary nor the owner's GGUF. That remains `PLATFORM-011`.
 
-## Web fit and centering
+## Model/runtime reliability
 
-- Desktop side panes now share `clamp(224px, 19vw, 276px)` instead of the denser
-  `clamp(240px, 23vw, 320px)`. At the normal 1280×720 browser viewport, Chat grew from about 691px
-  to 793.6px without hiding Files or Projects.
-- Welcome, messages, Live Work, and composer use a bounded viewport-balancing offset. When only one
-  desktop pane is collapsed, content remains centered on the physical viewport instead of the
-  asymmetric remaining grid area. Mobile drawers reset the offset.
-- Packaged-browser measurement at 1280×720 and 100% zoom reported sidebar/workspace/inspector widths
-  of 243.19/793.63/243.19px, exact content center 640px, and no horizontal or vertical overflow.
-  With Projects collapsed and Files open, the welcome center was 640.006px with zero overflow.
-- The sidebar was restored after the collapsed-state check. No viewport override was retained.
+- Three consecutive identical tool name/argument/result outcomes now emit a strategy-change system
+  instruction and visible CLI/Web event. Five stop the turn with a persisted assistant message.
+  Completed state remains safe and the loop does not create a junk Note or synthetic Checkpoint.
+- Shutdown uses a deterministic summary built from typed case state and never starts a model
+  compaction. One marked durable section is replaced on later shutdowns, preserving prior synthesis
+  without recursive growth. MCP and llama cleanup continue when summary, session, or one listener
+  cleanup step fails.
+- Manual profiles cannot be overwritten by forced/model detection. Failed automatic detection is
+  retried rather than incorrectly cached as complete. Evidence registration refreshes detection only
+  in automatic mode.
+- Repetition recovery records the restored user objective as the normal message in the new session,
+  runtime/session pointers follow that new session, and exhausted recovery fallbacks are visible in
+  chat history.
+- Per-run context overrides are validated before case creation/mutation against schema bounds,
+  `llama.keep`, and the response-token budget.
 
-## Local-model response pipeline
+## Large repositories and tools
 
-- `LocalLlamaClient` now disables the OpenAI SDK's internal retry layer. The agent is the sole retry
-  authority and retries only connection, timeout, 408/409/429, and server failures. Invalid requests
-  such as a broken chat template fail once with their real error.
-- `llama.stream_idle_timeout_seconds` defaults to 120 seconds, is validated, reaches the runtime
-  client, and appears in English Web Model Settings. llama.cpp requests enable prompt caching,
-  prompt-progress events, and five-second SSE keepalive.
-- The stream accumulator preserves finish reason, prompt/cache/completion usage, first-token latency,
-  and llama.cpp timings. High-frequency generation progress is throttled to four UI updates/second.
-  Structured tool arguments are normalized safely when llama.cpp emits an object instead of text.
-- Web Live Work distinguishes context loading, cached tokens, first token, generation, empty-response
-  recovery, tools, and compaction. Completion activity can show token count and prediction speed;
-  private reasoning remains outside the DOM.
-- Default dynamic thought budgets are now 256/768/1536 tokens for low/medium/high. Off remains zero
-  and unlimited remains `-1`. Completed-turn reasoning is stripped before the next user message but
-  remains available within the current tool-calling turn and append-only session history.
-- A reasoning-only or otherwise empty response is not appended to conversation history. The agent
-  makes one immediate recovery attempt with reasoning temporarily off and in the user's language.
-  If that also returns empty, the error includes both finish reasons and directs the owner to the
-  chat template/response-token settings.
+- Broad traversal shares a non-following walker that excludes nested symlinks plus routine `.git`,
+  `.maldroid`, `.venv`, `__pycache__`, and `tool-output` trees. Explicit registered evidence roots
+  and explicitly requested generated outputs remain available through `PathPolicy`.
+- Exact search streams ripgrep output, applies one global result/time budget, handles null-delimited
+  paths including embedded newlines safely, and labels early totals as non-exact. The Python
+  fallback searches multi-megabyte minified lines in fixed chunks and centers its preview on the
+  match. Line-range reads retain bounded prefixes rather than materializing oversized logical lines.
+- Behavior triage and network indicator extraction now stop at global budgets and bound the saved
+  JSONL/indicator artifact as well as the inline MCP response. Framework, Native, React Native,
+  knowledge, external MCP history, CLI timeline/history, and Web session reads avoid whole-file
+  materialization where it was unnecessary.
+- React Native metrics stream multi-megabyte single lines, head/tail samples no longer overlap, and
+  bundle-block overlap cannot duplicate a match. Native subprocess parsing and generated previews
+  stream or read bounded prefixes.
+- Evidence registration rolls back both the destination and in-memory record when persistence fails,
+  immediately refreshes the live evidence mapping on success, and directory sizing ignores nested
+  symlinks. Knowledge document keys are explicitly namespaced `builtin/user/case`.
 
-## Removed redundant work
+## Web/CLI behavior
 
-- Automatic profile detection runs once per active evidence set rather than recursively scanning up
-  to 20,000 files before every user turn. New evidence and explicit/auto-profile refreshes invalidate
-  the cache. A model-initiated `MalDroid_detect_profile` result is applied directly without rescanning.
-- An accepted investigation final now gets an automatic semantic MCP checkpoint immediately when
-  needed. The old checkpoint reminder could force another entire model generation after the answer
-  was already ready; that path is removed.
-- Web returns the accepted answer immediately. It no longer performs a synchronous post-answer
-  compaction; compaction occurs during an active context rollover or before the next turn.
-- React Native and Native prompts use the already injected bounded methodology. They no longer force
-  a redundant initial knowledge search unless version-specific or missing detail is needed.
+- Web activation, direct commands, runtime stop, and model turns are mutually exclusive. Final
+  server shutdown requests cancellation and waits for the actual turn boundary instead of
+  abandoning a live runtime after an arbitrary timeout; event emission tolerates a closed reconnect
+  loop.
+- Reconnect/error handling reloads authoritative workspace and bounded history, clears stale
+  chat/Files state, serially restores the active case, and labels a failed start **Model offline**.
+  WebSocket messages are consumed in arrival order, and reconnect storms from obsolete sockets are
+  suppressed.
+- Settings now includes **Stop model**, allowing persistent settings to change without closing the
+  Web server. The existing Live Work **Stop** continues to cancel only the active turn.
+- Conversation history is capped at the latest 500 visible messages and session activity at 5,000
+  events while streaming JSONL. Numeric session ordering remains correct after session 9,999.
+- The Files explorer keeps latest-turn markers and hidden logs; list/preview paths remain routed
+  through the shared dispatcher. CLI/Web display the new tool-loop warning/stop events.
+- Runtime-lease acquisition rolls back the lock if metadata persistence fails, preventing a false
+  permanent “already running” state.
 
-## Research basis
+## Browser verification
 
-- llama.cpp server documentation: prompt caching, `return_progress`, `sse_ping_interval`, usage,
-  timings, and structured tool calling.
-- llama.cpp function-calling documentation: correct `--jinja` tool template and `/props` verification.
-- Google Gemma 4 prompt/function-calling documentation: remove generated thoughts between completed
-  turns while retaining the single tool turn, and summarize durable long-run state.
-- Official openai-python documentation: SDK defaults to two retries and a ten-minute timeout unless
-  configured. MalDroid now explicitly owns both policies.
-- ADR 0017 records the single-pass/observable-turn decision and its physical-acceptance boundary.
+- The packaged in-app browser at its real default 1280×720 viewport reported body/root dimensions of
+  exactly 1280×720, sidebar/workspace/inspector widths of 243/794/243px, and no horizontal or vertical
+  document overflow at 100% zoom.
+- The browser-control backend repeatedly timed out on screenshots and ignored its documented
+  viewport override; a final post-edit reload also timed out. No unrelated browser backend was used.
+  Responsive contracts, Settings markup, Light/RTL controls, reconnect behavior, Files controls, and
+  JavaScript syntax are therefore also covered by the static/Web integration suite. The temporary
+  loopback server and browser viewport override were stopped/reset; no test runtime remains.
 
-## Files changed
+## Architecture and documentation
 
-- Runtime: `src/maldroid/agent.py`, `cli.py`, `config.py`, `llama_client.py`, `profiles.py`,
-  `prompts.py`, `runtime.py`, `ui.py`, and `web/server.py`.
-- Web: `src/maldroid/web/static/app.js`, `index.html`, and `styles.css`.
-- Tests: `tests/test_config.py`, `test_llama_client.py`, `test_tools_agent.py`, and
-  `test_web_workspace.py`.
-- Documentation: `ARCHITECTURE.md`, `CHANGELOG.md`, `DECISIONS.md`, `NEXT_AGENT_MASTER_PLAN.md`,
-  `NEXT_STEPS.md`, `PROJECT_STATUS.md`, `README.md`, `SYSTEM_PROMPT.md`, `docs/CLI.md`,
-  `docs/WEB.md`, and ADR 0017.
+- ADR 0018 records deterministic shutdown, identical-tool protection, safe traversal, bounded
+  artifacts, and authoritative Web/session recovery.
+- Updated `ARCHITECTURE.md`, `DECISIONS.md`, `NEXT_AGENT_MASTER_PLAN.md`, `NEXT_STEPS.md`,
+  `PROJECT_STATUS.md`, `CHANGELOG.md`, `README.md`, `docs/CLI.md`, and `docs/WEB.md`.
+- `Tasks.MD` remains unchanged as required.
 
 ## Verification
 
-Startup baseline before edits:
+Startup baseline:
 
-- `git status --short --branch` — clean `main...origin/main`.
+- `git status --short --branch` — clean `main...origin/main` at `d93de9e`.
 - `git fetch origin && git pull --ff-only origin main` — already up to date.
-- `./scripts/dev doctor` — Python/platform/ripgrep/config boundaries passed; expected local Linux
-  absence of the owner's macOS llama-server and GGUF was reported.
-- `./scripts/dev test` — 140 passed, one known Starlette/httpx2 deprecation warning.
+- `./scripts/dev doctor` — Python/platform/ripgrep and all configured boundaries passed; expected
+  errors reported the absent local llama-server and GGUF.
+- `./scripts/dev test` — 147 passed, one upstream Starlette/httpx2 deprecation warning.
+- `./scripts/dev release-check` — passed with 147 tests and 72% coverage.
 
-Implementation checks:
+Implementation checks before the final consolidated gate:
 
-- `./scripts/dev test tests/test_config.py tests/test_llama_client.py tests/test_tools_agent.py tests/test_web_workspace.py`
-  — 74 passed, one known warning.
-- `./scripts/dev lint` — Ruff passed; mypy passed for 43 source files.
-- `./scripts/dev format-check` — 56 files formatted.
-- Packaged in-app browser at 1280×720 — exact default and collapsed-pane centering, no overflow.
-- `./scripts/dev release-check` after this handoff update — formatting, lint, type checking, 147
-  tests, 72% coverage, wheel/archive verification, and installer dry-run passed.
-- `./.venv/bin/python scripts/check_project_hygiene.py` — passed.
-- `git diff --check` and `node --check src/maldroid/web/static/app.js` — passed.
+- Targeted backend/Web/large-file suites — passed throughout, including an 81-test combined run.
+- `./scripts/dev lint` — Ruff passed.
+- `./scripts/dev python -m mypy src` — 43 source files passed.
+- `./scripts/dev test` — 186 passed in 4.52 seconds; one unchanged Starlette/httpx2 warning.
+- `node --check src/maldroid/web/static/app.js` — passed.
+- `git diff --check` — passed.
 
-## Known limitations and next task
+Final gate results are recorded below after the documentation-inclusive run:
 
-- No real GGUF generation ran in this Linux workspace. `PLATFORM-011` must measure real prompt-cache
-  hits, prompt-evaluation time, first-token latency, generation speed, tool-call correctness,
-  checkpoint quality, Hebrew output, empty-response recovery, and cancellation on the owner's macOS
-  installation.
-- This task fixes transport/generation duplication and empty finals. It does not implement
-  `AGENT-013` repeated identical tool/result strategy-loop detection.
-- The existing Starlette `TestClient` warning about future httpx2 migration remains unchanged.
-- The implementation tree was clean after commit `f09cebb`; this exact-commit handoff update is the
-  only expected follow-up change before the final handoff commit.
+- `./scripts/dev release-check` — passed: 57 files formatted, Ruff and mypy clean, 186 tests
+  passed with 76% coverage, installer dry-run changed no files, wheel build/archive verification
+  passed, and `dist/maldroid-0.1.0-py3-none-any.whl` was produced (SHA-256
+  `87d7fe6ed4ff20afef2a3ea9e37a631f96d1337c3d1a9294a976ce30f13d62e1`).
+- Remote macOS/Kali verification follows the atomic push because CI cannot run against an unpushed
+  commit; the GitHub run is reported in the final delivery for this task.
 
-Exact next command:
+## Known limitations
+
+- No real GGUF generation, prompt-cache timing, Hebrew answer, Ghidra connector, or physical macOS
+  browser acceptance ran here. `PLATFORM-011` must perform those tests for at least one hour per
+  React Native and Native/Ghidra case.
+- Starlette 1.3 emits one development-only warning that its `TestClient` will migrate from `httpx`
+  to `httpx2`; production Web dependencies and behavior are unaffected.
+- The in-app browser-control screenshot/viewport service was unreliable during this run. Default
+  geometry was measured successfully; non-default breakpoints retain automated CSS/DOM coverage but
+  still require the physical browser pass in `PLATFORM-011`.
+
+## Dirty-tree and next command
+
+Before the atomic commit, only the `PLATFORM-013` implementation, regression tests, ADR, and required
+handoff documentation are modified. After commit/push the required state is a clean
+`main...origin/main`.
+
+Exact next command after the local gate and handoff commit:
 
 ```bash
-git status --short --branch && git log -5 --oneline && ./scripts/dev test
+git status --short --branch && git log -5 --oneline && ./scripts/dev doctor
 ```
 
-After commit/push/CI, begin `PLATFORM-011` on the owner's configured host. Do not mark this task as
-physical-model accepted based only on synthetic stream fixtures.
+Then begin `PLATFORM-011` on the owner's configured macOS host. Do not mark physical-model acceptance
+from synthetic fixtures alone.

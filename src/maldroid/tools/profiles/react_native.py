@@ -91,18 +91,11 @@ def inspect_javascript_bundle(context: ToolContext, arguments: BaseModel) -> dic
     size = path.stat().st_size
     with path.open("rb") as handle:
         first = handle.read(min(size, 256 * 1024))
-        if size > 256 * 1024:
-            handle.seek(max(0, size - 256 * 1024))
+        tail_start = max(len(first), size - 256 * 1024)
+        handle.seek(tail_start)
         last = handle.read(256 * 1024)
     sample = (first + b"\n" + last).decode("utf-8", errors="replace")
-    line_count = 0
-    longest_line = 0
-    total_line_bytes = 0
-    with path.open("rb") as handle:
-        for line in handle:
-            line_count += 1
-            total_line_bytes += len(line)
-            longest_line = max(longest_line, len(line))
+    line_count, longest_line, total_line_bytes = _stream_line_metrics(path)
     average = total_line_bytes / max(line_count, 1)
     metro_count_sample = len(METRO_MARKER.findall(first)) + len(METRO_MARKER.findall(last))
     return {
@@ -492,6 +485,7 @@ def _search_bundle(context: ToolContext, values: SearchBundleInput) -> dict[str,
     carry = b""
     consumed = 0
     line = 1
+    last_emitted_offset = -1
     with path.open("rb") as handle:
         for block in iter(lambda: handle.read(1024 * 1024), b""):
             data = carry + block
@@ -502,6 +496,9 @@ def _search_bundle(context: ToolContext, values: SearchBundleInput) -> dict[str,
                 if local < 0:
                     break
                 absolute = base + local
+                if absolute <= last_emitted_offset:
+                    search_from = local + max(1, len(needle))
+                    continue
                 module_index = max(0, bisect.bisect_right(starts, absolute) - 1)
                 start = max(0, local - values.context_characters)
                 end = min(len(data), local + len(needle) + values.context_characters)
@@ -514,6 +511,7 @@ def _search_bundle(context: ToolContext, values: SearchBundleInput) -> dict[str,
                         "preview": data[start:end].decode("utf-8", errors="replace"),
                     }
                 )
+                last_emitted_offset = absolute
                 search_from = local + max(1, len(needle))
             consumed += len(block)
             safe = max(0, len(data) - max(len(needle), values.context_characters) - 1)
@@ -537,3 +535,30 @@ def _sha256(path: Path) -> str:
         for block in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def _stream_line_metrics(path: Path) -> tuple[int, int, int]:
+    """Count line lengths in fixed-size blocks, including newline bytes like file iteration."""
+    line_count = 0
+    longest_line = 0
+    current_line_bytes = 0
+    total_bytes = 0
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            total_bytes += len(block)
+            segments = block.split(b"\n")
+            if len(segments) == 1:
+                current_line_bytes += len(block)
+                continue
+            first_length = current_line_bytes + len(segments[0]) + 1
+            line_count += 1
+            longest_line = max(longest_line, first_length)
+            for segment in segments[1:-1]:
+                length = len(segment) + 1
+                line_count += 1
+                longest_line = max(longest_line, length)
+            current_line_bytes = len(segments[-1])
+    if current_line_bytes:
+        line_count += 1
+        longest_line = max(longest_line, current_line_bytes)
+    return line_count, longest_line, total_bytes

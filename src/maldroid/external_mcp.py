@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections import deque
 from collections.abc import AsyncIterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
@@ -108,13 +109,14 @@ class ExternalMcpRegistryManager:
     def history(self, limit: int = 50) -> list[dict[str, Any]]:
         if not self.history_path.exists():
             return []
-        entries = []
-        for line in self.history_path.read_text(encoding="utf-8", errors="replace").splitlines():
-            try:
-                entries.append(json.loads(line))
-            except json.JSONDecodeError:
-                continue
-        return entries[-limit:]
+        entries: deque[dict[str, Any]] = deque(maxlen=max(1, limit))
+        with self.history_path.open(encoding="utf-8", errors="replace") as handle:
+            for line in handle:
+                try:
+                    entries.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+        return list(entries)
 
     def _save(self, registry: ExternalMcpRegistry) -> None:
         atomic_write_json(self.path, registry.model_dump(mode="json"))

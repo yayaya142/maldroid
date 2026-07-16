@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -10,6 +11,7 @@ import pytest
 from maldroid.agent import STATE_DISCIPLINE_REMINDER, MalDroidAgent
 from maldroid.case_manager import CaseManager
 from maldroid.config import AppConfig
+from maldroid.evidence_manager import EvidenceManager
 from maldroid.exceptions import TurnCancelledError
 from maldroid.investigation import InvestigationManager
 from maldroid.knowledge_manager import KnowledgeManager
@@ -228,6 +230,176 @@ def test_dispatcher_saves_oversized_output(app_config: AppConfig) -> None:
     assert (case.root / result.output_file).is_file()
 
 
+def test_python_search_fallback_skips_nested_symlinks(
+    app_config: AppConfig, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _, case, _, dispatcher = make_dispatcher(app_config)
+    outside = tmp_path / "outside-secret.txt"
+    outside.write_text("DO_NOT_SCAN_OUTSIDE_CASE", encoding="utf-8")
+    (case.root / "nested-link.txt").symlink_to(outside)
+    monkeypatch.setattr("maldroid.tools.core.builtin.shutil.which", lambda _: None)
+
+    result = dispatcher.execute(
+        mcp_tool_name("search_text"),
+        {"path": ".", "query": "DO_NOT_SCAN_OUTSIDE_CASE"},
+    )
+
+    assert result.status == "completed"
+    assert result.data["total_matches"] == 0
+
+
+def test_python_search_fallback_handles_a_multi_megabyte_minified_line(
+    app_config: AppConfig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, case, _, dispatcher = make_dispatcher(app_config)
+    sample = case.root / "minified.js"
+    sample.write_text("x" * (2 * 1024 * 1024) + "BOUNDARY_TOKEN", encoding="utf-8")
+    monkeypatch.setattr("maldroid.tools.core.builtin.shutil.which", lambda _: None)
+
+    result = dispatcher.execute(
+        mcp_tool_name("search_text"),
+        {"path": sample.name, "query": "BOUNDARY_TOKEN"},
+    )
+
+    assert result.status == "completed"
+    assert result.data["total_matches"] == 1
+    assert result.data["results"][0]["line"] == 1
+    assert "BOUNDARY_TOKEN" in result.data["results"][0]["preview"]
+    assert len(result.data["results"][0]["preview"]) <= 1000
+
+
+def test_text_range_bounds_a_multi_megabyte_logical_line(app_config: AppConfig) -> None:
+    _, case, _, dispatcher = make_dispatcher(app_config)
+    sample = case.root / "huge-minified.js"
+    sample.write_text("A" * (2 * 1024 * 1024), encoding="utf-8")
+
+    result = dispatcher.execute(
+        mcp_tool_name("read_file_range"),
+        {"path": sample.name, "start_line": 1, "end_line": 1},
+    )
+
+    assert result.status == "completed"
+    assert result.data["returned_lines"] == 1
+    assert result.data["lines"][0]["truncated"] is True
+    assert len(result.data["lines"][0]["text"]) == 4000
+    assert result.data["content_truncated"] is True
+
+
+def test_ripgrep_search_stops_after_the_global_result_budget(app_config: AppConfig) -> None:
+    data = app_config.model_dump()
+    data["limits"]["max_search_results"] = 3
+    limited = AppConfig.model_validate(data)
+    _, case, _, dispatcher = make_dispatcher(limited)
+    (case.root / "many.txt").write_text(
+        "".join(f"needle {number}\n" for number in range(20)), encoding="utf-8"
+    )
+
+    result = dispatcher.execute(
+        mcp_tool_name("search_text"),
+        {"path": ".", "query": "needle", "page_size": 3},
+    )
+
+    assert result.status == "completed"
+    assert result.data["bounded_matches"] == 3
+    assert result.data["total_matches"] == 4
+    assert result.data["total_matches_exact"] is False
+    assert result.data["truncated"] is True
+
+
+@pytest.mark.skipif(not shutil.which("rg"), reason="ripgrep is not installed")
+def test_ripgrep_search_preserves_a_filename_containing_a_newline(app_config: AppConfig) -> None:
+    _, case, _, dispatcher = make_dispatcher(app_config)
+    unusual = case.root / "line\nbreak.txt"
+    unusual.write_text("UNUSUAL_PATH_MATCH\n", encoding="utf-8")
+
+    result = dispatcher.execute(
+        mcp_tool_name("search_text"),
+        {"path": ".", "query": "UNUSUAL_PATH_MATCH"},
+    )
+
+    assert result.status == "completed"
+    assert result.data["total_matches"] == 1
+    assert result.data["results"][0]["path"] == unusual.name
+
+
+def test_search_skips_generated_outputs_broadly_but_allows_an_explicit_output(
+    app_config: AppConfig,
+) -> None:
+    _, case, _, dispatcher = make_dispatcher(app_config)
+    output = case.root / "tool-output" / "explicit-search.txt"
+    output.write_text("EXPLICIT_GENERATED_RESULT\n", encoding="utf-8")
+
+    broad = dispatcher.execute(
+        mcp_tool_name("search_text"),
+        {"path": ".", "query": "EXPLICIT_GENERATED_RESULT"},
+    )
+    explicit = dispatcher.execute(
+        mcp_tool_name("search_text"),
+        {"path": "tool-output/explicit-search.txt", "query": "EXPLICIT_GENERATED_RESULT"},
+    )
+
+    assert broad.status == "completed"
+    assert broad.data["total_matches"] == 0
+    assert explicit.status == "completed"
+    assert explicit.data["total_matches"] == 1
+
+
+def test_register_evidence_refreshes_the_live_path_policy(
+    app_config: AppConfig, tmp_path: Path
+) -> None:
+    manager = CaseManager(app_config)
+    case = manager.create()
+    source = tmp_path / "registered.txt"
+    source.write_text("registered evidence", encoding="utf-8")
+    first = EvidenceManager(manager).register(case, source)
+    investigation = InvestigationManager(manager)
+    registry = build_registry()
+    context = ToolContext(
+        config=app_config,
+        case=case,
+        case_manager=manager,
+        investigation=investigation,
+        path_policy=PathPolicy(
+            case.root,
+            {first.case_path: first.source_resolved_path},
+        ),
+    )
+    dispatcher = ToolDispatcher(registry, context)
+
+    registered = dispatcher.execute(
+        mcp_tool_name("register_evidence"),
+        {"path": first.case_path, "mode": "symlink"},
+    )
+    second_path = registered.data["case_path"]
+    readback = dispatcher.execute(
+        mcp_tool_name("read_file_range"),
+        {"path": second_path, "start_line": 1, "end_line": 1},
+    )
+
+    assert registered.status == "completed"
+    assert readback.status == "completed"
+    assert readback.data["lines"][0]["text"] == "registered evidence"
+
+
+def test_evidence_registration_rolls_back_when_case_save_fails(
+    app_config: AppConfig, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    manager = CaseManager(app_config)
+    case = manager.create()
+    source = tmp_path / "rollback.txt"
+    source.write_text("must not be orphaned", encoding="utf-8")
+
+    def fail_save(_case: object) -> None:
+        raise OSError("simulated persistence failure")
+
+    monkeypatch.setattr(manager, "save", fail_save)
+    with pytest.raises(OSError, match="persistence failure"):
+        EvidenceManager(manager).register(case, source, "copy")
+
+    assert case.state.evidence == []
+    assert list((case.root / "evidence").iterdir()) == []
+
+
 def test_builtin_knowledge_reindex_search_and_bounded_read(app_config: AppConfig) -> None:
     manager, case, _, _ = make_dispatcher(app_config)
     knowledge = KnowledgeManager(case)
@@ -237,6 +409,29 @@ def test_builtin_knowledge_reindex_search_and_bounded_read(app_config: AppConfig
     assert matches
     excerpt = knowledge.read_range(matches[0]["document_key"], 1, 8)
     assert excerpt["lines"]
+
+
+def test_knowledge_reindex_namespaces_colliding_root_paths(
+    app_config: AppConfig, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manager, case, _, _ = make_dispatcher(app_config)
+    roots = [tmp_path / name / "knowledge" for name in ("builtin", "user", "case")]
+    for index, root in enumerate(roots, 1):
+        document = root / "generic" / "shared.md"
+        document.parent.mkdir(parents=True)
+        document.write_text(f"# Shared {index}\n\nunique-{index}\n", encoding="utf-8")
+    knowledge = KnowledgeManager(case)
+    monkeypatch.setattr(knowledge, "roots", lambda: roots)
+
+    indexed = knowledge.reindex()
+    keys = {item["document_key"] for item in knowledge.list_documents()}
+
+    assert indexed == {"documents": 3}
+    assert keys == {
+        "builtin/generic/shared.md",
+        "user/generic/shared.md",
+        "case/generic/shared.md",
+    }
 
 
 class FakeClient:
@@ -422,6 +617,93 @@ def test_manual_profile_override_stays_locked_until_auto_is_enabled(
     assert agent.profile_mode == "auto"
 
 
+def test_manual_profile_lock_survives_model_requested_detection(
+    app_config: AppConfig,
+) -> None:
+    manager, case, registry, dispatcher = make_dispatcher(app_config)
+    (case.root / "index.android.bundle").write_text("__d(function(){},1,[]);", encoding="utf-8")
+    sessions = SessionManager(case, manager)
+
+    class DetectingClient:
+        calls = 0
+
+        def complete(self, messages, tools):
+            self.calls += 1
+            if self.calls == 1:
+                return AssistantMessage(
+                    content=None,
+                    tool_calls=[
+                        ToolCall(
+                            id="detect-profile",
+                            name=mcp_tool_name("detect_profile"),
+                            arguments='{"path":"."}',
+                        )
+                    ],
+                )
+            names = {item["function"]["name"] for item in tools}
+            assert mcp_tool_name("inspect_elf_file") in names
+            assert mcp_tool_name("inspect_javascript_bundle") not in names
+            return AssistantMessage(content="Manual Native profile remained locked.")
+
+    agent = MalDroidAgent(
+        app_config,
+        case,
+        DetectingClient(),
+        registry,
+        dispatcher,
+        sessions,
+    )
+    agent.switch_profile("native", automatic=False)
+
+    assert agent.respond("Keep Native locked while checking the evidence") == (
+        "Manual Native profile remained locked."
+    )
+    assert case.state.active_profile == "native"
+    assert agent.profile_mode == "manual"
+
+
+def test_failed_automatic_profile_detection_is_retried(
+    app_config: AppConfig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manager, case, registry, dispatcher = make_dispatcher(app_config)
+    sessions = SessionManager(case, manager)
+    original_execute = dispatcher.execute
+    detections = 0
+
+    def intermittently_failing_execute(name, arguments):
+        nonlocal detections
+        if name == mcp_tool_name("detect_profile"):
+            detections += 1
+            if detections == 1:
+                from maldroid.models import ToolError, ToolResult
+
+                return ToolResult(
+                    status="error",
+                    error=ToolError(code="temporary_failure", message="temporary detector error"),
+                )
+        return original_execute(name, arguments)
+
+    monkeypatch.setattr(dispatcher, "execute", intermittently_failing_execute)
+
+    class AnswerClient:
+        @staticmethod
+        def complete(messages, tools):
+            return AssistantMessage(content="Done.")
+
+    agent = MalDroidAgent(
+        app_config,
+        case,
+        AnswerClient(),
+        registry,
+        dispatcher,
+        sessions,
+    )
+
+    assert agent.respond("First") == "Done."
+    assert agent.respond("Second") == "Done."
+    assert detections == 2
+
+
 def test_model_can_select_profile_from_evidence_when_auto_detection_is_ambiguous(
     app_config: AppConfig,
 ) -> None:
@@ -489,6 +771,137 @@ def test_agent_reports_live_model_and_tool_events(app_config: AppConfig) -> None
     result = next(data for event, data in reported if event == "tool_result")
     assert result["name"] == "MalDroid_read_case_state"
     assert result["status"] == "completed"
+
+
+def test_agent_redirects_an_identical_tool_result_loop(app_config: AppConfig) -> None:
+    manager, case, registry, dispatcher = make_dispatcher(app_config)
+    sessions = SessionManager(case, manager)
+
+    class LoopThenAnswerClient:
+        calls = 0
+
+        def complete(self, messages, tools):
+            self.calls += 1
+            if self.calls <= 3:
+                return AssistantMessage(
+                    content=None,
+                    tool_calls=[
+                        ToolCall(
+                            id=f"same-{self.calls}",
+                            name=mcp_tool_name("read_case_state"),
+                            arguments="{}",
+                        )
+                    ],
+                )
+            assert any(
+                "same tool call returned the same result" in str(item.get("content", ""))
+                for item in messages
+            )
+            return AssistantMessage(content="Changed strategy and completed.")
+
+    client = LoopThenAnswerClient()
+    agent = MalDroidAgent(app_config, case, client, registry, dispatcher, sessions)
+
+    assert agent.respond("Inspect without looping") == "Changed strategy and completed."
+    assert client.calls == 4
+
+
+def test_agent_stops_a_persistent_identical_tool_result_loop(app_config: AppConfig) -> None:
+    manager, case, registry, dispatcher = make_dispatcher(app_config)
+    (case.root / "sample.txt").write_text("stable", encoding="utf-8")
+    sessions = SessionManager(case, manager)
+    reported: list[tuple[str, dict]] = []
+
+    class LoopingClient:
+        calls = 0
+
+        def complete(self, messages, tools):
+            self.calls += 1
+            return AssistantMessage(
+                content=None,
+                tool_calls=[
+                    ToolCall(
+                        id=f"same-{self.calls}",
+                        name=mcp_tool_name("get_file_info"),
+                        arguments='{"path":"sample.txt"}',
+                    )
+                ],
+            )
+
+    client = LoopingClient()
+    agent = MalDroidAgent(
+        app_config,
+        case,
+        client,
+        registry,
+        dispatcher,
+        sessions,
+        event_handler=lambda event, data: reported.append((event, data)),
+    )
+
+    response = agent.respond("Inspect without looping forever")
+
+    assert "repeated the same unchanged tool result" in response
+    assert client.calls == 5
+    assert any(event == "tool_loop_stopped" for event, _ in reported)
+    assert case.state.checkpoints == []
+
+
+def test_shutdown_summary_preserves_prior_synthesis_without_recursive_growth(
+    app_config: AppConfig,
+) -> None:
+    manager, case, registry, dispatcher = make_dispatcher(app_config)
+    case.state.summary = "Valuable prior synthesis."
+    manager.save(case)
+    agent = MalDroidAgent(
+        app_config,
+        case,
+        FakeClient(),
+        registry,
+        dispatcher,
+        SessionManager(case, manager),
+    )
+
+    first = agent.save_shutdown_summary()
+    second = agent.save_shutdown_summary()
+
+    assert "Valuable prior synthesis." in second
+    assert second.count("## Durable state at last shutdown") == 1
+    assert len(second) == len(first)
+
+
+def test_shutdown_summary_without_prior_synthesis_does_not_duplicate_durable_state(
+    app_config: AppConfig,
+) -> None:
+    manager, case, registry, dispatcher = make_dispatcher(app_config)
+    agent = MalDroidAgent(
+        app_config,
+        case,
+        FakeClient(),
+        registry,
+        dispatcher,
+        SessionManager(case, manager),
+    )
+
+    first = agent.save_shutdown_summary()
+    second = agent.save_shutdown_summary()
+
+    assert first == second
+    assert second.count("Active profile:") == 1
+    assert second.count("## Durable state at last shutdown") == 1
+
+
+def test_latest_summary_uses_numeric_session_order(app_config: AppConfig) -> None:
+    manager, case, _, _ = make_dispatcher(app_config)
+    directory = case.internal / "sessions"
+    (directory / "session-9999-summary.md").write_text(
+        "# Session Summary\n\nolder\n", encoding="utf-8"
+    )
+    (directory / "session-10000-summary.md").write_text(
+        "# Session Summary\n\nnewer\n", encoding="utf-8"
+    )
+
+    assert SessionManager.load_latest_summary(case) == "newer"
 
 
 class CheckpointingClient:
@@ -1069,6 +1482,17 @@ def test_agent_recovers_repetition_in_fresh_session(app_config: AppConfig) -> No
     assert "RECENT-EVIDENCE" in str(client.messages)
     assert "RECENT-EVIDENCE" not in original.summary_path.read_text(encoding="utf-8")
     assert "שלום" not in original.history_path.read_text(encoding="utf-8")
+    recovered_events = [
+        json.loads(line)
+        for line in agent.sessions.history_path.read_text(encoding="utf-8").splitlines()
+    ]
+    recovered_user = [
+        event
+        for event in recovered_events
+        if event.get("type") == "message" and event.get("role") == "user"
+    ]
+    assert recovered_user[-1]["content"] == "בדוק את הקובץ"
+    assert recovered_user[-1]["recovered_from_session"] == original.number
 
 
 def test_agent_bounds_repetition_recovery_attempts(app_config: AppConfig) -> None:
