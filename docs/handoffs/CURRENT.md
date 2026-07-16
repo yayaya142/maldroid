@@ -3,7 +3,7 @@
 Task: `PLATFORM-012`
 Next task: `PLATFORM-011`
 
-Implementation commit: pending verified `PLATFORM-012` commit
+Implementation commit: `f09cebb`
 
 ## Outcome
 
@@ -116,13 +116,13 @@ Implementation checks:
 - This task fixes transport/generation duplication and empty finals. It does not implement
   `AGENT-013` repeated identical tool/result strategy-loop detection.
 - The existing Starlette `TestClient` warning about future httpx2 migration remains unchanged.
-- The current tree is intentionally dirty with the uncommitted `PLATFORM-012` implementation at the
-  time this handoff text is written.
+- The implementation tree was clean after commit `f09cebb`; this exact-commit handoff update is the
+  only expected follow-up change before the final handoff commit.
 
 Exact next command:
 
 ```bash
-git diff --check && git status --short --branch && git diff --stat
+git status --short --branch && git log -5 --oneline && ./scripts/dev test
 ```
 
 After commit/push/CI, begin `PLATFORM-011` on the owner's configured host. Do not mark this task as
