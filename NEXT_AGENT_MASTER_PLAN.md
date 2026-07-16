@@ -5,7 +5,7 @@ Owner priority: make MalDroid a trustworthy daily research CLI before expanding 
 Execution model: one agent and one task ID at a time  
 Canonical original requirements: `Tasks.MD` (read-only)
 
-## 0. Owner reprioritization implemented on 2026-07-15
+## 0. Owner reprioritization implemented on 2026-07-15 and 2026-07-16
 
 The owner explicitly reprioritized broad long-investigation usability ahead of the original
 one-item reliability chain. `PLATFORM-010` implemented a coherent first slice across the existing
@@ -18,6 +18,14 @@ This does not close the remaining transaction/revision/idempotency work in `REL-
 does not claim physical-host acceptance. `PLATFORM-011` is the next real-model acceptance gate.
 Internal subagent orchestration was considered and deliberately deferred until typed state and
 long-run context behavior are verified on the owner's cases.
+
+On 2026-07-16 the owner reprioritized Web 100%-zoom fit and real local-model responsiveness.
+`PLATFORM-012` narrowed and balanced desktop content, then removed compounded turn latency from
+repeated profile scans, nested retries, forced checkpoint generations, post-answer Web compaction,
+and retained completed-turn thoughts. It also added llama.cpp prompt/cache/first-token telemetry and
+one history-safe empty-response recovery. This is locally tested but does not replace the physical
+Gemma 4/macOS acceptance in `PLATFORM-011`. Repeated identical tool/result strategy loops remain in
+`AGENT-013`; they were not conflated with transport/generation recovery.
 
 ## 1. Instructions for the next agent
 

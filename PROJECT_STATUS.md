@@ -1,8 +1,22 @@
 # Project Status
 
-Last updated: 2026-07-15
+Last updated: 2026-07-16
 
 ## Completed
+
+- Local model turns now avoid the largest compounded latency sources: profile detection is cached
+  until evidence changes, SDK retries are disabled under one transient-only controller policy,
+  completed-turn reasoning is stripped, prompt caching/SSE progress are enabled, and default
+  reasoning budgets are smaller. Finish reason, prompt/cache usage, first-token latency, and timing
+  metadata feed the operational event stream.
+- Investigation finals save an automatic semantic checkpoint from the accepted answer without a
+  second generation. Web answers are returned before any later compaction. A reasoning-only empty
+  response is kept out of history and retried once with reasoning disabled, with precise diagnostics
+  if recovery also returns empty.
+- The 100%-zoom Web workspace uses narrower shared desktop panes and keeps inner chat content
+  viewport-centered even when only Projects or the inspector is collapsed. Browser measurement at
+  1280×720 reported a 793.6px center workspace, exact 640px content center, and zero overflow; the
+  collapsed-sidebar content center remained within 0.01px of the viewport center.
 
 - The desktop Web shell now gives Projects and the inspector one shared responsive width, placing
   the Chat column at the exact viewport center at 100% zoom. Browser measurements from 1024px
@@ -108,9 +122,9 @@ Last updated: 2026-07-15
   llama-server process group; normal interpreter exit has an additional cleanup hook.
 - Every exposed managed MCP tool is namespaced with the `MalDroid_` prefix across discovery,
   execution, prompts, audit records, CLI inventory, and documentation.
-- Meaningful investigation turns now require a durable note/finding checkpoint. The agent prompts
-  once, then saves the ignored draft automatically through MCP so continuity does not depend on
-  local-model discipline.
+- Meaningful investigation turns now require a durable typed checkpoint. If the model does not save
+  one during its normal tool loop, the controller saves the accepted semantic draft directly through
+  MCP so continuity does not depend on another model generation.
 - Context automatically compacts at configurable 72% usage, with deterministic recovery from
   findings, recent notes, open TODOs, profile, and prior summary if model summarization fails.
 - Interactive chat now provides persistent case-local history, completion, multiline editing,

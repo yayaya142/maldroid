@@ -1,5 +1,8 @@
 # Architecture Decisions
 
+- ADR 0017: Local model turns use one retry authority, cached and observable streaming, cross-turn
+  thought stripping, cached profile detection, non-blocking final delivery, and one bounded empty
+  response recovery.
 - ADR 0016: Web turns run asynchronously and use cooperative cancellation; Stop closes the active
   model stream, preserves durable/completed work, and exits synchronous tools at a safe boundary.
 - ADR 0015: Bounded streaming repetition detection aborts runaway local generations and resumes the

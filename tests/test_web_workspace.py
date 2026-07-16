@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import threading
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from starlette.testclient import TestClient
@@ -43,7 +44,9 @@ def test_web_settings_expose_enabled_repetition_recovery(tmp_path: Path) -> None
         page = client.get("/").text
 
     assert bootstrap["settings"]["llama"]["repetition_recovery_enabled"] is True
+    assert bootstrap["settings"]["llama"]["stream_idle_timeout_seconds"] == 120
     assert 'data-key="llama.repetition_recovery_enabled"' in page
+    assert 'data-key="llama.stream_idle_timeout_seconds"' in page
 
 
 def test_web_shell_exposes_chat_theme_sidebar_restore_and_file_controls(tmp_path: Path) -> None:
@@ -62,8 +65,10 @@ def test_web_shell_exposes_chat_theme_sidebar_restore_and_file_controls(tmp_path
     assert "Used in latest turn" in page
     assert ".composer-disabled.hidden+.composer{display:block}" in styles
     assert "body.sidebar-collapsed .mobile-menu{display:grid}" in styles
-    assert "--side-pane:clamp(240px,23vw,320px)" in styles
+    assert "--side-pane:clamp(224px,19vw,276px)" in styles
     assert "--sidebar:var(--side-pane);--inspector:var(--side-pane)" in styles
+    assert "--workspace-shift" in styles
+    assert "--balanced-content-width" in styles
     assert "minmax(0,1fr)" in styles
     assert "@media(max-width:900px)" in styles
     assert ".inspector.open{transform:none}" in styles
@@ -99,6 +104,40 @@ def test_web_shell_exposes_live_operational_progress_without_private_reasoning(
     assert "completion_tokens_estimate" in script
     assert 'type:"stop"' in script
     assert 'message.type === "turn_stopped"' in script
+    assert "prompt_progress" in script
+    assert "generation_first_token" in script
+    assert "empty_response_recovery" in script
+
+
+def test_web_returns_answer_before_post_turn_compaction(tmp_path: Path) -> None:
+    workspace = WebWorkspace(web_config(tmp_path))
+
+    class FakeAgent:
+        compact_calls = 0
+        compact_checks = 0
+
+        def should_auto_compact(self) -> bool:
+            self.compact_checks += 1
+            return False
+
+        @staticmethod
+        def respond(text: str) -> str:
+            assert text == "Investigate"
+            return "Ready now."
+
+        def compact(self) -> None:
+            self.compact_calls += 1
+
+        @staticmethod
+        def finish_turn() -> None:
+            pass
+
+    agent = FakeAgent()
+    workspace.runtime = SimpleNamespace(agent=agent)
+
+    assert workspace.respond("Investigate") == "Ready now."
+    assert agent.compact_checks == 1
+    assert agent.compact_calls == 0
 
 
 def test_web_project_creation_listing_and_bounded_file_preview(tmp_path: Path) -> None:

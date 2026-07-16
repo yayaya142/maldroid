@@ -165,9 +165,9 @@ immediately, while `maldroid config set llama.reasoning_level LEVEL` changes the
 | Level | Per-request thinking budget |
 | --- | ---: |
 | `off` | 0 tokens |
-| `low` | 512 tokens |
-| `medium` | 1,536 tokens |
-| `high` | 3,072 tokens |
+| `low` | 256 tokens |
+| `medium` | 768 tokens |
+| `high` | 1,536 tokens |
 | `unlimited` | no explicit limit |
 
 MalDroid sends the native llama.cpp `thinking_budget_tokens` request property. It intentionally
@@ -175,6 +175,12 @@ does not set a command-line `--reasoning-budget`, because a command-line value w
 per-request adjustment. Reasoning support still depends on the selected model and chat template,
 and the overall `llama.max_response_tokens` limit applies to the complete generation. See the
 [official llama-server reasoning options](https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md#usage).
+
+Requests enable llama.cpp prompt caching, prompt-progress events, and SSE keepalive. The SDK retry
+layer is disabled so `limits.model_retry_attempts` remains the single visible retry policy.
+`llama.stream_idle_timeout_seconds` defaults to 120 and bounds a stream that stops producing local
+network activity. If a generation ends with reasoning but no answer/tool call, MalDroid retries it
+once with reasoning off and keeps the empty attempt out of conversation history.
 
 ## Discovery and completion
 

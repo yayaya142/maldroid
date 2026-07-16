@@ -19,17 +19,20 @@ the next turn or case switch. Log-path suppression and its persisted reveal togg
 browser presentation: the dispatcher inventory, audit data, and model/tool authority are unchanged.
 Composer visibility follows explicit runtime state; CSS cannot infer or override model readiness.
 
-The desktop grid uses one shared clamped width for both project and inspector panes plus a
+The desktop grid uses one shared compact clamped width for both project and inspector panes plus a
 zero-minimum flexible chat column. Equal side columns keep Chat mathematically centered on the
-viewport at 100% zoom without sacrificing the Files inspector or causing document overflow. At
+viewport at 100% zoom. If only one pane is collapsed, a bounded inner-content offset keeps welcome,
+messages, Live Work, and the composer centered on the viewport while the remaining pane stays
+usable. At
 900 CSS pixels and below the chat becomes the sole layout column; Projects and the full
 Files/Research/Activity inspector become independent keyboard-accessible drawers. Height
 breakpoints compact nonessential welcome content without shrinking the chat composer or model
 controls.
 
 During startup and active turns, the center pane consumes the same bounded WebSocket activity
-events as the Activity inspector to render Live Work telemetry. Elapsed time is browser-local;
-phase, tool count, and token estimates are presentation metrics rather than durable case state.
+events as the Activity inspector to render Live Work telemetry. It distinguishes prompt loading,
+cached prompt tokens, first-token latency, generation, tools, recovery, and compaction. Elapsed time
+is browser-local; phase, tool count, and token estimates are presentation metrics rather than durable case state.
 The surface describes operations and outcomes only. Hidden reasoning and raw evidence payloads
 remain outside the DOM.
 
@@ -125,15 +128,18 @@ Eight investigation tool rounds form one autonomous work window rather than a te
 limit. At a window boundary the controller saves a meaningful MCP checkpoint and continues without
 discarding conversation context. Compaction occurs only when the configured context-usage threshold
 is actually crossed. Phases are unlimited; the legacy ceiling key is accepted only for configuration
-compatibility and is not enforced. Transient model calls use bounded retries.
+compatibility and is not enforced. Transient model calls use bounded controller retries; SDK
+retries are disabled so attempts cannot multiply invisibly. Non-transient request errors fail
+immediately.
 
 After the first substantive evidence operation, an empty state triggers an internal reminder to
 create and maintain TODOs and Findings. A final response is not accepted until a typed semantic
 checkpoint follows the latest investigation activity. Checkpoints contain research progress,
 evidence learned, changed durable IDs, uncertainty, unresolved questions, and an exact next action;
-they never contain tool arguments, result dumps, or failures. Low-value fallback content is skipped
-and operational detail remains in session/audit streams. Prose that resembles a tool call is never
-executed.
+they never contain tool arguments, result dumps, or failures. If the model has not saved one, the
+controller derives it from the accepted semantic draft without another generation. Low-value
+fallback content is skipped and operational detail remains in session/audit streams. Prose that
+resembles a tool call is never executed.
 
 ## Profile selection
 
@@ -143,7 +149,8 @@ directory entries, ELF magic, and small candidate content samples. It returns th
 confidence, all scores, concrete indicators, scan totals, and truncation state. Framework evidence
 outranks capped incidental Native evidence.
 
-Detection runs before a turn and after evidence registration. An actionable change is persisted,
+Detection runs once for the active evidence set and refreshes after evidence registration,
+explicit detection, or re-enabling automatic mode. An actionable change is persisted,
 recorded as a session event, announced to the terminal, and followed by rebuilding the tool schema
 set for the next model request. The core MCP detector is also model-callable. For ambiguous evidence,
 the model can submit a schema-validated selection and reason; this capability is removed from model
@@ -154,10 +161,13 @@ It renders model waits, tool start/result, checkpoint, and compaction activity w
 MCP dispatcher remain the source of execution truth. Prompt history and completion are local-only;
 the terminal UI has no additional network or filesystem authority.
 
-The local model client streams content, reasoning, tool-call fragments, and final usage. Tool calls
-are reconstructed only from structured API deltas. The terminal uses streaming events for live
-token/context telemetry; the complete reconstructed assistant message remains the sole history and
-tool-loop input.
+The local model client streams prompt progress, content, reasoning, tool-call fragments, finish
+reason, final usage, and llama.cpp timings. Requests enable prompt caching and SSE keepalive; token
+events are throttled before reaching Web/CLI presentation queues. Tool calls are reconstructed only
+from structured API deltas. Completed-turn reasoning is stripped before the next user turn while
+remaining available inside the current tool loop and append-only session record. A reasoning-only
+empty finish receives one history-safe recovery with reasoning disabled. The complete reconstructed
+assistant message remains the sole history and tool-loop input. See ADR 0017.
 
 An enabled-by-default repetition guard examines a bounded suffix of answer and reasoning streams.
 When a word, phrase, or character enters a strong mechanical loop, the client closes the stream
@@ -187,7 +197,8 @@ is recorded as a session event. No command-line reasoning budget is set, preserv
 ## Context and retrieval
 
 Conversation size is conservatively estimated. At 72% usage by default, the UI automatically saves
-a structured summary and starts a compact context before or after the next turn. If model-based
+a structured summary and starts a compact context during an active rollover or before the next turn;
+the Web never hides an already-finished answer behind post-turn compaction. If model-based
 summarization fails, findings, recent notes, open TODOs, profile, and the prior summary form a
 deterministic fallback. Compaction never deletes full session history, findings, notes, or TODOs.
 Large evidence enters context only through search results, bounded ranges, indexed chunks, or

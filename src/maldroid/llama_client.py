@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import re
 import threading
+import time
 from collections.abc import Callable, Iterable
 from contextlib import suppress
 from dataclasses import dataclass, field
@@ -17,12 +19,13 @@ ReasoningLevel = Literal["off", "low", "medium", "high", "unlimited"]
 ModelEventHandler = Callable[[str, dict[str, Any]], None]
 REASONING_BUDGETS: dict[ReasoningLevel, int] = {
     "off": 0,
-    "low": 512,
-    "medium": 1536,
-    "high": 3072,
+    "low": 256,
+    "medium": 768,
+    "high": 1536,
     "unlimited": -1,
 }
 REPETITION_TAIL_CHARACTERS = 8192
+PROGRESS_EMIT_INTERVAL_SECONDS = 0.25
 
 
 @dataclass(frozen=True)
@@ -88,6 +91,11 @@ class AssistantMessage:
     content: str | None
     tool_calls: list[ToolCall] = field(default_factory=list)
     reasoning_content: str | None = None
+    finish_reason: str | None = None
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    cached_prompt_tokens: int | None = None
+    timings: dict[str, Any] | None = None
 
     def as_history_message(self) -> dict[str, Any]:
         message: dict[str, Any] = {"role": "assistant", "content": self.content}
@@ -122,8 +130,14 @@ class LocalLlamaClient:
         reasoning_level: ReasoningLevel = "medium",
         event_handler: ModelEventHandler | None = None,
         repetition_recovery_enabled: bool = True,
+        stream_idle_timeout_seconds: int = 120,
     ):
-        self.client = OpenAI(base_url=base_url, api_key=api_key or "local-no-auth")
+        self.client = OpenAI(
+            base_url=base_url,
+            api_key=api_key or "local-no-auth",
+            max_retries=0,
+            timeout=float(stream_idle_timeout_seconds),
+        )
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens
@@ -172,6 +186,9 @@ class LocalLlamaClient:
             "max_tokens": self.max_tokens,
             "extra_body": {
                 "thinking_budget_tokens": REASONING_BUDGETS[self.reasoning_level],
+                "cache_prompt": True,
+                "return_progress": True,
+                "sse_ping_interval": 5,
             },
             "stream": True,
             "stream_options": {"include_usage": True},
@@ -179,13 +196,19 @@ class LocalLlamaClient:
         if tools:
             request["tools"] = tools
             request["parallel_tool_calls"] = False
+        self._emit(
+            "generation_start",
+            reasoning_level=self.reasoning_level,
+            reasoning_budget_tokens=REASONING_BUDGETS[self.reasoning_level],
+        )
+        request_started_at = time.monotonic()
         response = self.client.chat.completions.create(**request)
         with self._response_lock:
             self._active_response = response
         try:
             if self._cancel_event.is_set():
                 raise TurnCancelledError("Turn stopped by user.")
-            return self._consume_stream(response)
+            return self._consume_stream(response, request_started_at)
         except Exception:
             if self._cancel_event.is_set():
                 raise TurnCancelledError("Turn stopped by user.") from None
@@ -199,31 +222,72 @@ class LocalLlamaClient:
                 with suppress(Exception):
                     close()
 
-    def _consume_stream(self, response: Iterable[Any]) -> AssistantMessage:
+    def _consume_stream(
+        self, response: Iterable[Any], request_started_at: float
+    ) -> AssistantMessage:
         content_parts: list[str] = []
         reasoning_parts: list[str] = []
         call_parts: dict[int, dict[str, str]] = {}
         actual_completion_tokens: int | None = None
+        actual_prompt_tokens: int | None = None
+        cached_prompt_tokens: int | None = None
+        finish_reason: str | None = None
+        timings: dict[str, Any] | None = None
         content_characters = 0
         reasoning_characters = 0
         content_tail = ""
         reasoning_tail = ""
-        self._emit("generation_start")
+        first_token_emitted = False
+        last_progress_emit = 0.0
         for chunk in response:
             if self._cancel_event.is_set():
                 raise TurnCancelledError("Turn stopped by user.")
             usage = getattr(chunk, "usage", None)
-            if usage is not None and getattr(usage, "completion_tokens", None) is not None:
-                actual_completion_tokens = int(usage.completion_tokens)
+            if usage is not None:
+                if getattr(usage, "completion_tokens", None) is not None:
+                    actual_completion_tokens = int(usage.completion_tokens)
+                if getattr(usage, "prompt_tokens", None) is not None:
+                    actual_prompt_tokens = int(usage.prompt_tokens)
+                prompt_details = getattr(usage, "prompt_tokens_details", None)
+                cached_value = (
+                    prompt_details.get("cached_tokens")
+                    if isinstance(prompt_details, dict)
+                    else getattr(prompt_details, "cached_tokens", None)
+                )
+                if cached_value is not None:
+                    cached_prompt_tokens = int(cached_value)
+            chunk_extra = self._extra_mapping(chunk)
+            progress = chunk_extra.get("prompt_progress") or getattr(chunk, "prompt_progress", None)
+            if isinstance(progress, dict):
+                self._emit(
+                    "prompt_progress",
+                    processed=int(progress.get("processed") or 0),
+                    total=int(progress.get("total") or 0),
+                    cached=int(progress.get("cache") or 0),
+                    time_ms=float(progress.get("time_ms") or 0),
+                )
+            chunk_timings = chunk_extra.get("timings") or getattr(chunk, "timings", None)
+            if isinstance(chunk_timings, dict):
+                timings = chunk_timings
             choices = getattr(chunk, "choices", None) or []
             if not choices:
                 continue
-            delta = choices[0].delta
+            choice = choices[0]
+            if getattr(choice, "finish_reason", None):
+                finish_reason = str(choice.finish_reason)
+            delta = choice.delta
             content = getattr(delta, "content", None) or ""
             extra = getattr(delta, "model_extra", None) or {}
             reasoning = (
                 extra.get("reasoning_content") or getattr(delta, "reasoning_content", None) or ""
             )
+            tool_fragments = getattr(delta, "tool_calls", None) or []
+            if not first_token_emitted and (content or reasoning or tool_fragments):
+                first_token_emitted = True
+                self._emit(
+                    "generation_first_token",
+                    seconds=round(time.monotonic() - request_started_at, 3),
+                )
             if content:
                 content_parts.append(content)
                 content_characters += len(content)
@@ -246,22 +310,22 @@ class LocalLlamaClient:
                     self._emit("generation_repetition_detected", **metadata)
                     self._emit("generation_aborted", reason="repetition", **metadata)
                     raise RepetitiveGenerationError(match, channel)
-            for item in getattr(delta, "tool_calls", None) or []:
+            for item in tool_fragments:
                 index = int(getattr(item, "index", 0) or 0)
                 aggregate = call_parts.setdefault(index, {"id": "", "name": "", "arguments": ""})
                 if getattr(item, "id", None):
                     aggregate["id"] = item.id
                 function = getattr(item, "function", None)
                 if function is not None:
-                    aggregate["name"] += getattr(function, "name", None) or ""
-                    aggregate["arguments"] += getattr(function, "arguments", None) or ""
+                    aggregate["name"] += self._stream_fragment(getattr(function, "name", None))
+                    aggregate["arguments"] += self._stream_fragment(
+                        getattr(function, "arguments", None)
+                    )
             characters = content_characters + reasoning_characters
-            self._emit(
-                "generation_progress",
-                completion_tokens_estimate=max(1, characters // 4),
-                content_characters=content_characters,
-                reasoning_characters=reasoning_characters,
-            )
+            now = time.monotonic()
+            if now - last_progress_emit >= PROGRESS_EMIT_INTERVAL_SECONDS:
+                self._emit_generation_progress(content_characters, reasoning_characters, characters)
+                last_progress_emit = now
         if self._cancel_event.is_set():
             raise TurnCancelledError("Turn stopped by user.")
         estimated_tokens = max(
@@ -269,10 +333,19 @@ class LocalLlamaClient:
             (content_characters + reasoning_characters) // 4,
         )
         completion_tokens = actual_completion_tokens or estimated_tokens
+        self._emit_generation_progress(
+            content_characters,
+            reasoning_characters,
+            content_characters + reasoning_characters,
+        )
         self._emit(
             "generation_complete",
             completion_tokens=completion_tokens,
             exact=actual_completion_tokens is not None,
+            prompt_tokens=actual_prompt_tokens,
+            cached_prompt_tokens=cached_prompt_tokens,
+            finish_reason=finish_reason,
+            timings=timings,
         )
         calls = [
             ToolCall(
@@ -287,4 +360,39 @@ class LocalLlamaClient:
             content="".join(content_parts) or None,
             tool_calls=calls,
             reasoning_content="".join(reasoning_parts) or None,
+            finish_reason=finish_reason,
+            prompt_tokens=actual_prompt_tokens,
+            completion_tokens=completion_tokens,
+            cached_prompt_tokens=cached_prompt_tokens,
+            timings=timings,
         )
+
+    def _emit_generation_progress(
+        self,
+        content_characters: int,
+        reasoning_characters: int,
+        characters: int,
+    ) -> None:
+        self._emit(
+            "generation_progress",
+            completion_tokens_estimate=max(1, characters // 4),
+            content_characters=content_characters,
+            reasoning_characters=reasoning_characters,
+        )
+
+    @staticmethod
+    def _extra_mapping(value: Any) -> dict[str, Any]:
+        extra = getattr(value, "model_extra", None)
+        if isinstance(extra, dict):
+            return extra
+        return {}
+
+    @staticmethod
+    def _stream_fragment(value: Any) -> str:
+        if value is None:
+            return ""
+        if isinstance(value, str):
+            return value
+        if isinstance(value, (dict, list)):
+            return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+        return str(value)

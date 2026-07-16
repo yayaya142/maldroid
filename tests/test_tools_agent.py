@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from maldroid.agent import CHECKPOINT_REMINDER, STATE_DISCIPLINE_REMINDER, MalDroidAgent
+from maldroid.agent import STATE_DISCIPLINE_REMINDER, MalDroidAgent
 from maldroid.case_manager import CaseManager
 from maldroid.config import AppConfig
 from maldroid.exceptions import TurnCancelledError
@@ -351,6 +351,42 @@ def test_agent_auto_selects_profile_and_refreshes_available_tools(app_config: Ap
     assert change["content"]["mode"] == "auto"
 
 
+def test_agent_reuses_profile_detection_until_evidence_changes(
+    app_config: AppConfig,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manager, case, registry, dispatcher = make_dispatcher(app_config)
+    sessions = SessionManager(case, manager)
+    original_execute = dispatcher.execute
+    detections = 0
+
+    def counting_execute(name, arguments):
+        nonlocal detections
+        if name == mcp_tool_name("detect_profile"):
+            detections += 1
+        return original_execute(name, arguments)
+
+    monkeypatch.setattr(dispatcher, "execute", counting_execute)
+
+    class TwoAnswerClient:
+        @staticmethod
+        def complete(messages, tools):
+            return AssistantMessage(content="Done.")
+
+    agent = MalDroidAgent(
+        app_config,
+        case,
+        TwoAnswerClient(),
+        registry,
+        dispatcher,
+        sessions,
+    )
+
+    assert agent.respond("First question") == "Done."
+    assert agent.respond("Second question") == "Done."
+    assert detections == 1
+
+
 def test_manual_profile_override_stays_locked_until_auto_is_enabled(
     app_config: AppConfig,
 ) -> None:
@@ -476,26 +512,10 @@ class CheckpointingClient:
             )
         if self.calls == 2:
             return AssistantMessage(content="The sample is a small text artifact.")
-        if self.calls == 3:
-            assert any(message.get("content") == CHECKPOINT_REMINDER for message in messages)
-            return AssistantMessage(
-                content=None,
-                tool_calls=[
-                    ToolCall(
-                        id="checkpoint-1",
-                        name=mcp_tool_name("save_checkpoint"),
-                        arguments=(
-                            '{"objective":"Inspect the sample",'
-                            '"completed_work":["Inspected sample.txt metadata"],'
-                            '"next_action":"Read relevant lines"}'
-                        ),
-                    )
-                ],
-            )
-        return AssistantMessage(content="Checkpoint saved; inspect relevant lines next.")
+        raise AssertionError("The final answer must not trigger another model generation")
 
 
-def test_agent_requires_durable_checkpoint_after_investigation(app_config: AppConfig) -> None:
+def test_agent_saves_checkpoint_without_delaying_final_answer(app_config: AppConfig) -> None:
     manager, case, registry, dispatcher = make_dispatcher(app_config)
     (case.root / "sample.txt").write_text("evidence\n", encoding="utf-8")
     sessions = SessionManager(case, manager)
@@ -504,11 +524,12 @@ def test_agent_requires_durable_checkpoint_after_investigation(app_config: AppCo
 
     response = agent.respond("Inspect the sample")
 
-    assert response == "Checkpoint saved; inspect relevant lines next."
-    assert client.calls == 4
-    assert case.state.checkpoints[-1].completed_work == ["Inspected sample.txt metadata"]
+    assert response == "The sample is a small text artifact."
+    assert client.calls == 2
+    assert case.state.checkpoints[-1].automatic is True
+    assert "small text artifact" in case.state.checkpoints[-1].completed_work[0]
     events = [json.loads(line) for line in sessions.history_path.read_text().splitlines()]
-    assert "checkpoint_required" in {event["type"] for event in events}
+    assert "automatic_checkpoint" in {event["type"] for event in events}
 
 
 class CheckpointIgnoringClient:
@@ -556,6 +577,90 @@ def test_agent_saves_automatic_checkpoint_when_model_ignores_reminder(
     assert "MalDroid_get_file_info" not in rendered
     assert '"path":"sample.txt"' not in rendered
     assert case.state.notes == []
+
+
+def test_agent_recovers_reasoning_only_empty_response_without_polluting_history(
+    app_config: AppConfig,
+) -> None:
+    manager, case, registry, dispatcher = make_dispatcher(app_config)
+    sessions = SessionManager(case, manager)
+
+    class EmptyThenHealthyClient:
+        reasoning_level = "medium"
+
+        def __init__(self) -> None:
+            self.calls = 0
+            self.levels = []
+
+        def set_reasoning_level(self, level) -> None:
+            self.reasoning_level = level
+            self.levels.append(level)
+
+        def complete(self, messages, tools):
+            self.calls += 1
+            if self.calls == 1:
+                return AssistantMessage(
+                    content=None,
+                    reasoning_content="budget exhausted before an answer",
+                    finish_reason="length",
+                )
+            assert any("without visible content" in item.get("content", "") for item in messages)
+            return AssistantMessage(content="Recovered answer.", finish_reason="stop")
+
+    client = EmptyThenHealthyClient()
+    events = []
+    agent = MalDroidAgent(
+        app_config,
+        case,
+        client,
+        registry,
+        dispatcher,
+        sessions,
+        event_handler=lambda event, data: events.append((event, data)),
+    )
+
+    assert agent.respond("Answer this") == "Recovered answer."
+    assert client.calls == 2
+    assert client.levels == ["off", "medium"]
+    assert not any(
+        message.get("role") == "assistant" and not message.get("content")
+        for message in agent.messages
+    )
+    assert {event for event, _ in events} >= {
+        "empty_response_recovery",
+        "empty_response_recovered",
+    }
+
+
+def test_agent_strips_completed_turn_reasoning_before_next_user_turn(
+    app_config: AppConfig,
+) -> None:
+    manager, case, registry, dispatcher = make_dispatcher(app_config)
+    sessions = SessionManager(case, manager)
+
+    class TwoTurnClient:
+        calls = 0
+
+        def complete(self, messages, tools):
+            self.calls += 1
+            if self.calls == 1:
+                return AssistantMessage(content="First answer.", reasoning_content="old thought")
+            assert not any(message.get("reasoning_content") for message in messages)
+            return AssistantMessage(content="Second answer.")
+
+    agent = MalDroidAgent(
+        app_config,
+        case,
+        TwoTurnClient(),
+        registry,
+        dispatcher,
+        sessions,
+    )
+
+    assert agent.respond("First") == "First answer."
+    assert agent.respond("Second") == "Second answer."
+    events = [json.loads(line) for line in sessions.history_path.read_text().splitlines()]
+    assert "reasoning_history_pruned" in {event["type"] for event in events}
 
 
 class StructuredStateClient:
@@ -738,7 +843,7 @@ def test_agent_changes_reasoning_level_and_records_session(app_config: AppConfig
     assert agent.reasoning_level == "high"
     events = [json.loads(line) for line in sessions.history_path.read_text().splitlines()]
     change = next(event for event in events if event["type"] == "reasoning_change")
-    assert change["content"] == {"level": "high", "thinking_budget_tokens": 3072}
+    assert change["content"] == {"level": "high", "thinking_budget_tokens": 1536}
 
 
 class LongTaskClient:
@@ -891,6 +996,34 @@ def test_agent_retries_transient_model_failure(
     assert client.calls == 2
     assert delays == [1.0]
     assert any(event == "model_retry" for event, _ in reported)
+
+
+def test_agent_does_not_retry_non_transient_model_request_error(
+    app_config: AppConfig,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manager, case, registry, dispatcher = make_dispatcher(app_config)
+    sessions = SessionManager(case, manager)
+    delays = []
+    monkeypatch.setattr("maldroid.agent.time.sleep", delays.append)
+
+    class BadRequestError(RuntimeError):
+        status_code = 400
+
+    class BadRequestClient:
+        calls = 0
+
+        def complete(self, messages, tools):
+            self.calls += 1
+            raise BadRequestError("invalid chat template request")
+
+    client = BadRequestClient()
+    agent = MalDroidAgent(app_config, case, client, registry, dispatcher, sessions)
+
+    with pytest.raises(RuntimeError, match="invalid chat template"):
+        agent.respond("Try once")
+    assert client.calls == 1
+    assert delays == []
 
 
 class RepeatingThenHealthyClient:

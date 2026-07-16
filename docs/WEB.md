@@ -36,8 +36,9 @@ pages. There is no non-loopback option.
 - The right inspector provides bounded case files and previews, structured research state, direct
   triage/report actions, and a live activity stream without exposing hidden model reasoning.
 - While the runtime starts or the model works, Chat shows a Live Work panel with elapsed time,
-  research phase, tool-call count, approximate generated/context tokens, the current operation,
-  and the latest three operational steps. It never renders private reasoning.
+  research phase, tool-call count, approximate generated/context tokens, prompt-cache progress,
+  first-token latency, the current operation, and the latest three operational steps. It never
+  renders private reasoning.
 - During an active model turn, **Stop** closes the current generation stream and returns control to
   Chat without unloading llama-server. Partial generation is discarded; completed tools and durable
   research records remain available. If a synchronous tool is already running, the panel shows
@@ -57,8 +58,8 @@ knowledge search, compaction, clear-with-state-preservation, model/MCP status, a
 connectors. The action menu provides non-chat operations; Files and Research provide persistent
 state views.
 
-Settings cover model paths and performance, context and research limits, cases, ports, and MCP
-connectors. Persistent settings can only be changed while the model runtime is stopped. External
+Settings cover model paths and performance, the stream-idle timeout, context and research limits,
+cases, ports, and MCP connectors. Persistent settings can only be changed while the model runtime is stopped. External
 MCP URLs retain the same loopback and credential restrictions as the CLI.
 
 Appearance can be switched between Dark and Light from either the header icon or Workspace
@@ -69,8 +70,9 @@ and mobile widths.
 ## Responsive layout
 
 Use the browser at normal 100% zoom. On wide and standard laptop windows, Projects and the inspector
-use the same clamped fluid width. This places Chat at the exact viewport center while keeping the
-Files controls usable and preventing overflow. At 900 CSS pixels and below, Chat occupies the full
+use the same compact clamped width. This places Chat at the exact viewport center while keeping the
+Files controls usable and preventing overflow. If only one pane is collapsed, the bounded chat
+content remains centered on the physical viewport. At 900 CSS pixels and below, Chat occupies the full
 screen while the ☰ and inspector buttons open Projects and Files/Research/Activity as separate
 drawers with their own close controls.
 Small-height and phone layouts reduce decorative welcome content while retaining the composer,
@@ -81,6 +83,11 @@ The Model settings panel also controls automatic repeated-output recovery. It is
 default. When triggered, Activity shows the stopped generation and new session; the same request
 continues with durable and bounded recent context, without placing the repeated partial response in
 the conversation or research records.
+
+Reasoning-only empty generations use a separate one-shot recovery: the empty attempt is excluded
+from chat history, reasoning is temporarily disabled, and the same turn continues in the user's
+language. A second empty finish reports the finish reasons and points to model-template/token
+settings instead of returning the former generic empty-message notice.
 
 File listing and preview never read the filesystem directly. They call the shared dispatcher and
 central `PathPolicy`, so case roots, evidence mappings, line limits, output limits, static-only

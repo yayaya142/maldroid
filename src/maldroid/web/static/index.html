@@ -157,6 +157,7 @@
             <label>GGUF model path<input data-key="llama.model"></label>
             <div class="field-row"><label>Context size<input type="number" data-key="general.default_context_size"></label><label>Response tokens<input type="number" data-key="llama.max_response_tokens"></label></div>
             <div class="field-row"><label>GPU layers<input type="number" data-key="llama.gpu_layers"></label><label>Batch size<input type="number" data-key="llama.batch_size"></label></div>
+            <label>Stream idle timeout (seconds)<input type="number" min="5" data-key="llama.stream_idle_timeout_seconds"><span>Abort and visibly retry a model request that stops producing local stream activity.</span></label>
             <label>Default reasoning<select data-key="llama.reasoning_level"><option>off</option><option>low</option><option>medium</option><option>high</option><option>unlimited</option></select></label>
             <label class="check-label"><input type="checkbox" data-key="llama.repetition_recovery_enabled"> Automatically recover runaway repeated output in a fresh session</label>
           </section>

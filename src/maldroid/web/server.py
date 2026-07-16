@@ -190,8 +190,6 @@ class WebWorkspace:
             if runtime.agent.should_auto_compact():
                 runtime.agent.compact()
             response = runtime.agent.respond(text)
-            if runtime.agent.should_auto_compact():
-                runtime.agent.compact()
             return response
         finally:
             self._turn_cancel_requested.clear()

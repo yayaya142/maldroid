@@ -56,6 +56,7 @@ class LlamaConfig(BaseModel):
     host: str = "127.0.0.1"
     preferred_port: int = Field(default=DEFAULT_PORT, ge=1, le=65535)
     startup_timeout_seconds: int = Field(default=180, ge=1, le=3600)
+    stream_idle_timeout_seconds: int = Field(default=120, ge=5, le=3600)
     parallel: int = Field(default=1, ge=1, le=16)
     keep: int = Field(default=4096, ge=0)
     gpu_layers: int = Field(default=99, ge=0)

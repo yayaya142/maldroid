@@ -164,7 +164,12 @@ function setBusy(busy, title = "Thinking", detail = "Working on the investigatio
 function updateProgress(event, data) {
   const labels = {
     model_start: ["Thinking", `Research phase ${data.phase || 1} · tool round ${(data.total_tool_rounds || 0) + 1}`],
-    generation_progress: ["Reasoning", `Generating locally · approximately ${data.completion_tokens_estimate || 0} tokens`],
+    generation_start: ["Loading model context", "Preparing a cached local generation…"],
+    prompt_progress: ["Loading context", `${data.processed || 0} / ${data.total || 0} tokens · ${data.cached || 0} cached`],
+    generation_first_token: ["Model responding", `First token after ${Number(data.seconds || 0).toFixed(1)} seconds`],
+    generation_progress: ["Generating response", `Working locally · approximately ${data.completion_tokens_estimate || 0} tokens`],
+    empty_response_recovery: ["Recovering empty response", "Retrying once with reasoning disabled…"],
+    empty_response_recovered: ["Response recovered", "The local model resumed normally."],
     generation_repetition_detected: ["Stopping repeated output", "A local generation loop was detected…"],
     repetition_recovery: ["Recovering automatically", `Continuing safely in session ${data.new_session || "new"}…`],
     repetition_recovery_exhausted: ["Generation stopped safely", "Investigation state was preserved."],
@@ -174,11 +179,13 @@ function updateProgress(event, data) {
   };
   if (labels[event]) { $("#progress-title").textContent = labels[event][0]; $("#progress-detail").textContent = labels[event][1]; }
   if (event === "model_start") { state.work.phase = data.phase || state.work.phase; state.work.context = data.input_tokens_estimate || state.work.context; }
+  if (event === "prompt_progress") state.work.context = data.total || state.work.context;
   if (event === "generation_progress") state.work.tokens = data.completion_tokens_estimate || state.work.tokens;
+  if (event === "generation_complete") state.work.tokens = data.completion_tokens || state.work.tokens;
   if (event === "tool_start") state.work.tools += 1;
   if (event === "tool_start" || event === "tool_result") markTouchedFiles(data);
   renderLiveWorkMetrics();
-  if (event !== "generation_progress" && event !== "generation_start" && event !== "generation_complete") appendLiveWorkStep(event, data);
+  if (event !== "generation_progress" && event !== "prompt_progress" && event !== "generation_start" && event !== "generation_complete") appendLiveWorkStep(event, data);
 }
 
 function startLiveWork(title, detail, cancellable = false) {
@@ -196,6 +203,7 @@ function appendLiveWorkStep(event, data = {}) {
   const descriptions = {
     work_started: [data.title || "Work started", data.detail || "Preparing the investigation", "running"],
     model_start: [`Research phase ${data.phase || 1}`, `Preparing model context for tool round ${(data.total_tool_rounds || 0) + 1}`, "running"],
+    generation_first_token: ["Model response started", `First token after ${Number(data.seconds || 0).toFixed(1)} seconds`, "success"],
     tool_start: [`Using ${shortTool(data.name)}`, liveToolDetail(data), "running"],
     tool_result: [data.status === "completed" ? `${shortTool(data.name)} completed` : `${shortTool(data.name)} needs attention`, data.error || (data.output_file ? "Full output saved in the case" : "Result returned to the model"), data.status === "completed" ? "success" : "warning"],
     checkpoint_required: ["Preserving research progress", "Saving findings, TODOs, and the exact next action", "running"],
@@ -206,6 +214,9 @@ function appendLiveWorkStep(event, data = {}) {
     compaction_complete: ["Context compacted", "Continuing with the preserved research state", "success"],
     phase_rollover: [`Continuing with phase ${(data.completed_phase || 1) + 1}`, "The investigation remains active", "success"],
     model_retry: ["Retrying the local model", `Attempt ${data.attempt || 1} after a temporary error`, "warning"],
+    empty_response_recovery: ["Recovering an empty response", `First attempt ended with ${data.finish_reason || "no finish reason"}`, "warning"],
+    empty_response_recovered: ["Empty response recovered", "Continuing the same turn without losing context", "success"],
+    empty_response_recovery_failed: ["Empty response recovery failed", "Check the model template and response-token setting", "warning"],
     generation_repetition_detected: ["Repeated output stopped", "Protecting the context before automatic recovery", "warning"],
     repetition_recovery: ["Continued in a clean session", `Recovery attempt ${data.attempt || 1}`, "success"],
     repetition_recovery_exhausted: ["Recovery stopped safely", "Investigation state was preserved for the next message", "warning"],
@@ -219,8 +230,8 @@ function appendLiveWorkStep(event, data = {}) {
 }
 
 function addActivity(event, data = {}) {
-  const titleMap = { model_start:"Model reasoning started", generation_complete:"Generation completed", generation_repetition_detected:"Repeated output stopped", repetition_recovery:"Continued in a fresh session", repetition_recovery_exhausted:"Repeated generation stopped safely", turn_cancelled:"Model turn stopped", tool_start:`Running ${shortTool(data.name)}`, tool_result:`${shortTool(data.name)} ${data.status || "completed"}`, checkpoint_required:"Durable checkpoint requested", automatic_checkpoint:"Checkpoint saved", phase_rollover:"Autonomous phase continued", compaction_complete:"Context compacted", external_mcp_connection:`MCP ${data.nickname || "connector"}` };
-  if (!titleMap[event] && event === "generation_progress") return;
+  const titleMap = { model_start:"Model turn started", generation_first_token:"First model token received", generation_complete:"Generation completed", empty_response_recovery:"Recovering empty model response", empty_response_recovered:"Empty response recovered", empty_response_recovery_failed:"Empty response recovery failed", generation_repetition_detected:"Repeated output stopped", repetition_recovery:"Continued in a fresh session", repetition_recovery_exhausted:"Repeated generation stopped safely", turn_cancelled:"Model turn stopped", tool_start:`Running ${shortTool(data.name)}`, tool_result:`${shortTool(data.name)} ${data.status || "completed"}`, checkpoint_required:"Durable checkpoint requested", automatic_checkpoint:"Checkpoint saved", phase_rollover:"Autonomous phase continued", compaction_complete:"Context compacted", external_mcp_connection:`MCP ${data.nickname || "connector"}` };
+  if (event === "generation_progress" || event === "prompt_progress" || event === "generation_start") return;
   state.activities.unshift({ event, title: titleMap[event] || event.replaceAll("_", " "), detail: activityDetail(data), time: new Date() }); state.activities = state.activities.slice(0, 100);
   if (!$("[data-tab='activity']").classList.contains("active")) state.unread++;
   renderActivity();
@@ -342,7 +353,7 @@ function el(tag,className="",text=""){const node=document.createElement(tag);if(
 function getPath(object,path){return path.split(".").reduce((value,key)=>value?.[key],object)}
 function shortProfile(value){return ({"react-native":"RN",native:"Native",generic:"Auto"})[value]||value}
 function shortTool(value=""){return value.replace(/^MalDroid_/,"").replace(/^MCP_[^_]+_/,"").replaceAll("_"," ")}
-function activityDetail(data){if(data.arguments){const args=parsedToolArguments(data.arguments),detail=Object.entries(args).slice(0,2).map(([k,v])=>`${k}: ${String(v).slice(0,60)}`).join(" · ");if(detail)return detail}if(data.error)return String(data.error).slice(0,120);if(data.action)return data.action;return data.status||"Local workspace"}
+function activityDetail(data){if(data.arguments){const args=parsedToolArguments(data.arguments),detail=Object.entries(args).slice(0,2).map(([k,v])=>`${k}: ${String(v).slice(0,60)}`).join(" · ");if(detail)return detail}if(data.error)return String(data.error).slice(0,120);if(data.seconds!=null)return `${Number(data.seconds).toFixed(1)} seconds`;if(data.completion_tokens!=null){const speed=Number(data.timings?.predicted_per_second||0),rate=speed?` · ${speed.toFixed(1)} tok/s`:"",finish=data.finish_reason?` · ${data.finish_reason}`:"";return `${data.completion_tokens} tokens${rate}${finish}`}if(data.finish_reason)return `Finish reason: ${data.finish_reason}`;if(data.action)return data.action;return data.status||"Local workspace"}
 function parsedToolArguments(value){if(value&&typeof value==="object")return value;if(typeof value==="string"){try{const parsed=JSON.parse(value);return parsed&&typeof parsed==="object"?parsed:{}}catch{return {}}}return {}}
 function liveToolDetail(data){const args=parsedToolArguments(data.arguments),safeKeys=["path","query","pattern","start_line","end_line","offset","length","nickname"],details=safeKeys.filter(key=>args[key]!==undefined).slice(0,2).map(key=>`${key}: ${String(args[key]).slice(0,60)}`);return details.join(" · ")||"Running a bounded local tool"}
 function normalizeCasePath(value=""){let path=String(value).replaceAll("\\","/");const root=String(state.workspace.case?.path||"").replaceAll("\\","/").replace(/\/$/,"");if(root&&path.startsWith(`${root}/`))path=path.slice(root.length+1);return path.replace(/^\.\//,"").replace(/\/{2,}/g,"/")}

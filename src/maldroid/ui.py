@@ -638,9 +638,9 @@ class InteractiveChat:
     def _reasoning(self, level: str) -> None:
         levels = {
             "off": "No thinking budget; answer immediately",
-            "low": "Up to 512 reasoning tokens for quick tasks",
-            "medium": "Up to 1,536 reasoning tokens for normal analysis",
-            "high": "Up to 3,072 reasoning tokens for difficult analysis",
+            "low": "Up to 256 reasoning tokens for quick tasks",
+            "medium": "Up to 768 reasoning tokens for normal analysis",
+            "high": "Up to 1,536 reasoning tokens for difficult analysis",
             "unlimited": "No explicit reasoning-token limit",
         }
         if not level:

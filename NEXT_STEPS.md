@@ -34,6 +34,12 @@ panes one shared responsive width so Chat is exactly viewport-centered at 100% z
 controls and compact-screen drawers remain usable. Physical active-model acceptance remains in
 `PLATFORM-011`.
 
+Completed out of sequence by explicit owner reprioritization: `PLATFORM-012` improves 100%-zoom fit
+and the full local-model turn pipeline: balanced collapsed-pane centering, prompt caching/progress,
+single-layer transient retries, cached profile detection, cross-turn thought cleanup, single-pass
+final checkpoints, non-blocking Web answers, and bounded empty-response recovery. Physical GGUF
+throughput and quality acceptance remains in `PLATFORM-011`.
+
 1. `PLATFORM-011` — Install the long-investigation and Web-workspace upgrade on the owner's macOS
    host. Verify `maldroid` mode selection, `maldroid server`, exclusive CLI/Web locking, project
    creation/switching, Hebrew input/output RTL, settings, bounded file preview, latest-turn file
@@ -41,7 +47,8 @@ controls and compact-screen drawers remain usable. Physical active-model accepta
    live activity, reports, external Ghidra MCP, and shutdown. From the installed version, run `maldroid update`,
    verify the reported commit and absence of a retained clone, then continue the long-run tests. Run a minimum
    one-hour React Native investigation and one Native/Ghidra MCP investigation. Record context
-   usage across phases, pruned-result receipts, checkpoint contents, Findings/TODO/report parity,
+   usage across phases, prompt-cache hit ratio, prompt evaluation and first-token timing, empty-
+   response recovery, pruned-result receipts, checkpoint contents, Findings/TODO/report parity,
    direct CLI triage latency, Ghidra connector tool names, model/server versions, and any repeated
    or low-value state. Acceptance: a fresh session resumes from MCP state without chat history and
    `reports/RESEARCH_REPORT.md` is useful without manual cleanup. Confirm `/triage` uses ripgrep on

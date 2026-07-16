@@ -147,9 +147,10 @@ creates a typed semantic checkpoint and continues the same objective without ret
 throwing away usable context. Compaction is independent and runs only when the actual context ratio
 crosses its configured threshold. Older tool payloads become small active-context receipts while
 their full session/output records remain on disk. The next completion budget is reserved before
-the threshold is calculated. Phases are unlimited, with three automatic retries for transient
-model-server failures. During streaming generation, the active status line shows elapsed time,
-generated tokens, context consumption, and estimated tokens remaining.
+the threshold is calculated. Phases are unlimited, with three controller-owned retries for
+transient model-server failures; the SDK does not multiply those attempts. During streaming
+generation, the active status line shows elapsed time, generated tokens, context consumption, and
+estimated tokens remaining. Prompt caching and SSE keepalive are enabled for the local server.
 
 Runaway repeated output is detected while it streams. By default MalDroid stops the bad generation,
 starts a clean append-only session, carries forward durable state and bounded recent tool results,
@@ -168,10 +169,11 @@ manual session override; `/profile auto` restores adaptation.
 MalDroid does not rely on the local model to remember progress voluntarily. It directs the model to
 create and complete TODOs, turn supported facts and labeled hypotheses into evidence-backed
 Findings, and save typed semantic checkpoints. Before accepting a final answer it requires fresh
-continuity after the latest evidence work. If the model ignores that instruction, MalDroid keeps
-only a semantic synthesis and durable IDs; tool arguments, results, and failures remain in audit
-streams. Low-value fallback content is skipped rather than promoted to research. Context is
-compacted automatically at 72% usage by default, with
+continuity after the latest evidence work. If the model has not saved a checkpoint during its
+normal tool loop, MalDroid saves the accepted semantic synthesis and durable IDs directly without
+another model generation; tool arguments, results, and failures remain in audit streams. Low-value
+fallback content is skipped rather than promoted to research. Context is compacted automatically
+at 72% usage by default, with
 durable case state used as a fallback if model summarization fails.
 
 ## MCP tools
@@ -256,6 +258,7 @@ maldroid config show --json
 maldroid config get mcp.preferred_port
 maldroid config set llama.temperature 0.1
 maldroid config set llama.reasoning_level high
+maldroid config set llama.stream_idle_timeout_seconds 180
 maldroid config set llama.api_key_enabled true
 maldroid config set limits.auto_compact_ratio 0.72
 maldroid config validate

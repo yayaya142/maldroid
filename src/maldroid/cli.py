@@ -94,6 +94,7 @@ CONFIG_DESCRIPTIONS = {
     "llama.host": "Validated loopback host for llama-server.",
     "llama.preferred_port": "Preferred llama-server port; may fall back when occupied.",
     "llama.startup_timeout_seconds": "Maximum time to wait for model-server readiness.",
+    "llama.stream_idle_timeout_seconds": "Maximum inactivity between local stream events.",
     "llama.parallel": "Number of llama-server request slots.",
     "llama.keep": "Prompt tokens retained across context shifts.",
     "llama.gpu_layers": "Model layers requested for GPU offload.",

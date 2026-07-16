@@ -40,13 +40,6 @@ NON_INVESTIGATION_TOOLS = {
     mcp_tool_name("detect_profile"),
     mcp_tool_name("select_profile"),
 }
-CHECKPOINT_REMINDER = (
-    "Durable investigation state is required before the final answer. Update or complete relevant "
-    "TODOs, save each evidence-backed conclusion with MalDroid_save_finding, then call "
-    "MalDroid_save_checkpoint with completed work, evidence learned, changed Finding/TODO IDs, "
-    "uncertainty, unresolved questions, and the exact next action. Never put tool names, tool "
-    "arguments, status messages, or errors into research notes or checkpoints."
-)
 STATE_DISCIPLINE_REMINDER = (
     "Maintain the case files while you investigate. Create concrete TODOs for the remaining plan "
     "with MalDroid_update_todo, complete them as work finishes, and call MalDroid_save_finding as "
@@ -64,6 +57,12 @@ REPETITION_RECOVERY_INSTRUCTION = (
     "The preceding local generation was stopped because it entered a mechanical repetition loop. "
     "Continue the same objective from the durable and recent context below. Produce a fresh, "
     "concise response; do not reconstruct or repeat the aborted text."
+)
+EMPTY_RESPONSE_RECOVERY_INSTRUCTION = (
+    "The previous local generation ended without visible content or a valid tool call "
+    "(finish reason: {finish_reason}). Respond now with a concise answer or exactly one valid tool "
+    "call in the user's language. Do not spend the response budget on hidden reasoning and do not "
+    "repeat an empty turn."
 )
 MAX_REPETITION_RECOVERIES_PER_TURN = 2
 
@@ -97,6 +96,7 @@ class MalDroidAgent:
         self._active_objective = ""
         self._cancel_event = threading.Event()
         self._cancel_recorded = False
+        self._profile_detection_complete = False
         model_event_setter = getattr(self.client, "set_event_handler", None)
         if model_event_setter is not None:
             model_event_setter(self._handle_model_event)
@@ -149,6 +149,8 @@ class MalDroidAgent:
             self.event_handler(event, data)
 
     def _handle_model_event(self, event: str, data: dict[str, Any]) -> None:
+        if event in {"generation_first_token", "generation_complete"}:
+            self.sessions.record(event, content=data)
         self._emit(event, **data)
 
     def _reset_messages(self, summary: str = "", active_objective: str = "") -> None:
@@ -211,6 +213,7 @@ class MalDroidAgent:
     def respond(self, text: str) -> str:
         self._prepare_turn()
         self._active_objective = text
+        self._strip_completed_turn_reasoning()
         self._detect_and_switch_profile()
         self._check_cancelled()
         self.messages.append({"role": "user", "content": text})
@@ -220,7 +223,6 @@ class MalDroidAgent:
         total_tool_rounds = 0
         investigation_performed = False
         checkpoint_saved = False
-        checkpoint_requested = False
         structured_state_updated = False
         state_reminder_sent = False
         investigation_calls = 0
@@ -248,6 +250,9 @@ class MalDroidAgent:
             try:
                 assistant = self._complete_with_retries(self.messages, tools)
                 self._check_cancelled()
+                if not self._assistant_has_output(assistant):
+                    assistant = self._recover_empty_response(assistant, tools)
+                    self._check_cancelled()
             except RepetitiveGenerationError as exc:
                 if not self.config.llama.repetition_recovery_enabled:
                     raise
@@ -272,15 +277,8 @@ class MalDroidAgent:
             self.messages.append(history)
             self.sessions.record("message", role="assistant", content=history)
             if not assistant.tool_calls:
-                if not assistant.content:
-                    return "The model returned an empty response. Run maldroid doctor --model-tool-test."
+                assert assistant.content is not None
                 if investigation_performed and not checkpoint_saved:
-                    if not checkpoint_requested:
-                        self._emit("checkpoint_required")
-                        self.messages.append({"role": "system", "content": CHECKPOINT_REMINDER})
-                        self.sessions.record("checkpoint_required", content={})
-                        checkpoint_requested = True
-                        continue
                     self._save_automatic_checkpoint(assistant.content)
                 return assistant.content
             phase_tool_rounds += 1
@@ -328,11 +326,15 @@ class MalDroidAgent:
                     selected = str(result.data.get("selected_profile", "generic"))
                     if selected != self.case.state.active_profile:
                         self.switch_profile(selected, automatic=True, reason=result.data)
-                if call.name in {
-                    mcp_tool_name("register_evidence"),
-                    mcp_tool_name("detect_profile"),
-                }:
-                    self._detect_and_switch_profile()
+                if call.name == mcp_tool_name("register_evidence"):
+                    self._detect_and_switch_profile(force=True)
+                elif (
+                    call.name == mcp_tool_name("detect_profile")
+                    and result.status == "completed"
+                    and isinstance(result.data, dict)
+                ):
+                    self._profile_detection_complete = True
+                    self._apply_profile_detection(result.data)
                 self._check_cancelled()
             self._prune_working_context()
             if investigation_calls and not structured_state_updated and not state_reminder_sent:
@@ -357,7 +359,6 @@ class MalDroidAgent:
                 phase_tool_rounds = 0
                 investigation_performed = False
                 checkpoint_saved = False
-                checkpoint_requested = False
                 structured_state_updated = False
                 state_reminder_sent = False
                 investigation_calls = 0
@@ -387,7 +388,7 @@ class MalDroidAgent:
                 raise
             except Exception as exc:
                 self._check_cancelled()
-                if attempt >= attempts:
+                if attempt >= attempts or not self._is_retryable_model_error(exc):
                     raise
                 delay = min(4.0, float(2 ** (attempt - 1)))
                 self._emit(
@@ -403,6 +404,83 @@ class MalDroidAgent:
                 )
                 time.sleep(delay)
         raise RuntimeError("Model retry loop exited unexpectedly")
+
+    @staticmethod
+    def _is_retryable_model_error(error: Exception) -> bool:
+        if isinstance(error, (ConnectionError, TimeoutError)):
+            return True
+        status_code = getattr(error, "status_code", None)
+        if isinstance(status_code, int):
+            return status_code in {408, 409, 429} or status_code >= 500
+        name = type(error).__name__.lower()
+        return any(marker in name for marker in ("connection", "timeout", "ratelimit"))
+
+    @staticmethod
+    def _assistant_has_output(assistant: AssistantMessage) -> bool:
+        return bool((assistant.content or "").strip() or assistant.tool_calls)
+
+    def _recover_empty_response(
+        self,
+        empty: AssistantMessage,
+        tools: list[dict[str, Any]],
+    ) -> AssistantMessage:
+        finish_reason = empty.finish_reason or "missing"
+        metadata = {
+            "finish_reason": finish_reason,
+            "reasoning_tokens_estimate": len(empty.reasoning_content or "") // 4,
+        }
+        self.sessions.record("empty_response_recovery", content=metadata)
+        self._emit("empty_response_recovery", **metadata)
+        setter = getattr(self.client, "set_reasoning_level", None)
+        previous_level = self.reasoning_level
+        if callable(setter):
+            setter("off")
+        try:
+            recovery_messages = self.messages + [
+                {
+                    "role": "system",
+                    "content": EMPTY_RESPONSE_RECOVERY_INSTRUCTION.format(
+                        finish_reason=finish_reason
+                    ),
+                }
+            ]
+            recovered = self._complete_with_retries(recovery_messages, tools)
+        finally:
+            if callable(setter):
+                setter(previous_level)
+        if self._assistant_has_output(recovered):
+            self.sessions.record(
+                "empty_response_recovered",
+                content={"finish_reason": recovered.finish_reason},
+            )
+            self._emit("empty_response_recovered", finish_reason=recovered.finish_reason)
+            return recovered
+        second_reason = recovered.finish_reason or "missing"
+        self.sessions.record(
+            "empty_response_recovery_failed",
+            content={"first_finish_reason": finish_reason, "second_finish_reason": second_reason},
+        )
+        self._emit(
+            "empty_response_recovery_failed",
+            first_finish_reason=finish_reason,
+            second_finish_reason=second_reason,
+        )
+        raise RuntimeError(
+            "The local model produced no answer or valid tool call twice "
+            f"(finish reasons: {finish_reason}, {second_reason}). "
+            "Check the model chat template and response-token setting."
+        )
+
+    def _strip_completed_turn_reasoning(self) -> None:
+        stripped = 0
+        for message in self.messages:
+            if message.get("role") == "assistant" and message.pop("reasoning_content", None):
+                stripped += 1
+        if stripped:
+            self.sessions.record(
+                "reasoning_history_pruned", content={"assistant_messages": stripped}
+            )
+            self._emit("reasoning_history_pruned", assistant_messages=stripped)
 
     def _recover_from_repetition(
         self,
@@ -657,6 +735,9 @@ class MalDroidAgent:
     def _detect_and_switch_profile(self, force: bool = False) -> None:
         if not self._auto_profile_enabled and not force:
             return
+        if self._profile_detection_complete and not force:
+            return
+        self._profile_detection_complete = True
         result = self.dispatcher.execute(mcp_tool_name("detect_profile"), {"path": "."})
         if result.status != "completed" or not isinstance(result.data, dict):
             self.sessions.record(
@@ -667,21 +748,24 @@ class MalDroidAgent:
                 },
             )
             return
-        selected = str(result.data.get("selected_profile", "generic"))
-        confidence = str(result.data.get("confidence", "none"))
-        self.sessions.record("profile_detection", content=result.data)
+        self._apply_profile_detection(result.data)
+
+    def _apply_profile_detection(self, data: dict[str, Any]) -> None:
+        selected = str(data.get("selected_profile", "generic"))
+        confidence = str(data.get("confidence", "none"))
+        self.sessions.record("profile_detection", content=data)
         self._emit(
             "profile_detection",
             selected_profile=selected,
             confidence=confidence,
-            scores=result.data.get("scores", {}),
+            scores=data.get("scores", {}),
         )
         if (
             selected != "generic"
             and confidence in {"medium", "high"}
             and selected != self.case.state.active_profile
         ):
-            self.switch_profile(selected, automatic=True, reason=result.data)
+            self.switch_profile(selected, automatic=True, reason=data)
 
     @property
     def reasoning_level(self) -> ReasoningLevel:

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Made local model turns substantially more responsive and diagnosable with prompt caching,
+  streamed context/first-token telemetry, one retry authority, reduced default thinking budgets,
+  cached profile detection, cross-turn thought cleanup, and throttled Web progress events.
+- Recovered reasoning-only empty responses once without polluting conversation history, and now
+  report finish reasons plus template/token guidance if the local model remains empty.
+- Returned Web answers before later context compaction and saved final semantic checkpoints without
+  an extra model generation.
+- Improved 100%-zoom fit with narrower shared desktop panes and viewport-centered chat content even
+  when only one side pane is collapsed.
+
 - Centered the desktop Web chat exactly at 100% zoom by giving Projects and the inspector a shared
   responsive width, while preserving the compact drawer layout and Files usability.
 - Added latest-turn green file/directory markers to the Web Files explorer and hid routine log
