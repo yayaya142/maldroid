@@ -96,12 +96,15 @@ maldroid config set cli.speed_mode fast
 llama-server. `/reasoning LEVEL` can still fine-tune reasoning separately. These are per-model-round
 controls: phases, total tool calls, and task duration remain unlimited.
 
-The complete generic registry contains 46 tools after the current expansion, so sending every
+The complete generic registry contains 53 tools after the current expansion, so sending every
 schema would erase much of the speed gain. Eight state/navigation schemas and a small research set
 are always loaded; the current objective fills remaining slots. If a capability is absent, the
 model calls `MalDroid_search_tool_catalog` with a precise query. Matching internal or connected
 external MCP schemas become available on the next round and displace lower-priority defaults.
 `/tools` shows the full catalog and marks the schemas currently loaded into the model request.
+The full generic schema set is about 8,496 tokens by the project's conservative character estimate.
+A representative obfuscation/decoder objective selects about 2,606/3,901/5,937 schema tokens in
+`fast`/`balanced`/`deep`, without changing the 14/20/32 schema ceilings.
 
 The catalog includes twelve new bounded static-research operations:
 
@@ -125,6 +128,33 @@ All remain behind `PathPolicy`, dispatcher validation, command deadlines, output
 static-only rule. Lexical source classifications and manifest security observations are triage
 leads, not proof of runtime reachability. Compiled binary AXML still requires a trusted static
 decoder; no archive entry or decoded value is executed.
+
+Seven additional code-analysis/script tools are available through the same catalog:
+
+- `MalDroid_build_code_index` and `MalDroid_query_code_index`: build/query a contentless SQLite
+  snapshot of source paths, declarations, imports, and high-signal primitives. Result files are
+  checked for staleness before use; source content is not copied into the index. Lexical language
+  coverage includes Android Java/Kotlin/Smali, C/C++/Objective-C, JavaScript/TypeScript/Vue,
+  Python/Ruby/PHP, Go/Rust/Swift/Dart/C#/Scala/Groovy/Lua/Solidity, and assembly.
+- `MalDroid_read_code_context`: resolve one symbol occurrence or line and return bounded adjacent
+  lines plus a match-centered preview for minified logical lines.
+- `MalDroid_analyze_obfuscation`: locate bounded Base64/hex/URL/Unicode-escape candidates and
+  lexical Base64, character-code, XOR, compression, and crypto pipelines.
+- `MalDroid_decode_static_chain`: apply up to twelve provenance-recorded transforms, including
+  Base64/Base32/hex/URL/Unicode/ROT13, XOR/byte rotation/arithmetic, and gzip/zlib/bzip2/LZMA.
+  Decompressed output is capped at 2 MiB and is never executed.
+- `MalDroid_write_python_script` and `MalDroid_list_python_scripts`: prepare append-only private
+  decoder source plus a provenance/risk manifest under `workspace/scripts/`, or list those
+  manifests. There is no run tool; every new script starts and remains `not_executed` by MalDroid.
+
+Fenced code blocks of at least 8,192 characters are captured exactly under
+`workspace/snippets/` before the model request. Session/model history receives a short untrusted
+path, size, language, and SHA-256 reference instead of the full code. Capture accepts at most eight
+blocks and 64 MiB per block and rejects symlinked destinations. The controller immediately reports
+the saved path. Prepared Python scripts receive the same visible path event and a deterministic
+“not executed” final-answer disclosure. `/scripts` lists their execution status without a model
+turn. Static Python risk scanning is defense in depth, not a sandbox; manual execution is outside
+MalDroid policy.
 
 ### Automatic profile selection
 
@@ -202,6 +232,7 @@ Direct research commands:
 /findings [FIND-ID]
 /timeline [5-100]
 /report
+/scripts
 ```
 
 These commands inspect durable/local state directly without consuming a model turn. `/report`

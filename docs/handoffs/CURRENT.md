@@ -1,132 +1,165 @@
 # Current Handoff
 
-Task: `PLATFORM-014`
+Task: `PLATFORM-015`
 Next task: `PLATFORM-011`
 
-Implementation commit: the atomic `PLATFORM-014` commit containing this handoff (see `git log -1`)
+Implementation commit: the atomic `PLATFORM-015` commit containing this handoff (see `git log -1`)
 
 ## Outcome
 
-The owner put Web feature work on hold and requested a substantially faster daily CLI plus many
-more static-research tools. The repository started clean and synchronized on `main` at `df75fe5`.
-The baseline doctor completed with only the expected absent local llama-server/GGUF errors, and all
-186 existing tests passed before edits.
+The owner explicitly reprioritized efficient whole-code analysis, obfuscation/encoding research,
+and Python decoder authoring without execution. The repository started clean and synchronized on
+`main` at `cbb965d`. Baseline doctor completed with only the expected absent local llama-server/GGUF
+errors, and all 197 existing tests passed before edits.
 
-This task makes the terminal the recommended surface, labels Web BETA, introduces three live CLI
-speed modes, and expands the generic registry from 33 to 46 tools. It avoids the obvious regression
-of sending every new schema on every model round by adding an authoritative dynamic catalog. A
-representative balanced generic request now carries about 3,249 estimated schema tokens instead of
-about 6,765 for the expanded full registry. It does not claim physical Gemma 4, Apple Silicon, or
-Ghidra throughput acceptance because this Linux workspace has neither the configured model nor
-llama-server. That remains the first work in `PLATFORM-011`.
+This task adds exact large-code intake, reusable contentless source indexing, focused symbol
+context, encoded-literal/pipeline triage, bounded multi-stage transforms, and append-only
+risk-scanned Python decoder artifacts. MalDroid does not execute those scripts, exposes no run
+schema, and makes no sandbox claim. It guarantees a visible prepared/not-executed disclosure even
+when a weak local model omits one. Physical Gemma 4, Apple Silicon, large proprietary source, and
+owner workflow acceptance remain in `PLATFORM-011` because this Linux workspace has no configured
+model or llama-server.
 
-## CLI speed and model-request composition
+## Large source and context behavior
 
-- `fast`, `balanced`, and `deep` are available on `maldroid cli`, `new`, `open`, and `resume` through
-  `--speed`; `/speed` changes the live session and `cli.speed_mode` persists the default.
-- The presets select reasoning, maximum generated tokens, and model-visible schema budgets of
-  14/20/32. They never cap total phases, tool calls, or wall-clock task duration.
-- Eight state/navigation schemas remain loaded. Catalog activations then take priority over a small
-  default research set, and objective relevance fills remaining capacity.
-- `MalDroid_search_tool_catalog` searches only the authoritative core plus active-profile registry.
-  Matching internal and connected external MCP schemas are loaded for the next round. The complete
-  MCP registry, dispatcher validation, path policy, audit, and output controls are unchanged.
-- Measured after expansion: the complete generic/React Native/Native registries contain 46/56/56
-  schemas and about 6,765/7,959/7,682 estimated tokens. For one representative generic source task,
-  `fast`, `balanced`, and `deep` carried 14/20/32 schemas and about 2,282/3,249/4,801 tokens.
-- `/tools` shows the complete catalog and marks what is loaded into the current model request.
-  `/status`, the welcome panel, and the toolbar show the active speed.
+- Fenced code blocks of at least 8,192 characters are written exactly to private
+  `workspace/snippets/SNIPPET-xxxx.<ext>` files before the model request. At most eight blocks and
+  64 MiB per block are accepted. The active message/session receives only the surrounding request
+  plus an untrusted path, language, size, and SHA-256 reference; raw code is not duplicated in
+  session JSONL.
+- Snippet/script/index destinations pass central case path policy and reject symlinked output
+  directories. Shared artifact locks live under `.maldroid/locks`, not in the user-facing Files
+  tree. Nested source symlinks are not followed.
+- `MalDroid_build_code_index` atomically replaces a case-local SQLite snapshot containing source
+  paths, metadata, declarations, imports, and named high-signal primitives—never source content or
+  previews. `MalDroid_query_code_index` supports type/path filtering and marks returned files stale
+  from indexed size/mtime. `MalDroid_read_code_context` combines exact symbol location with bounded
+  adjacent lines and a match-centered minified-line preview.
+- Lexical coverage now includes Java/Kotlin/Smali, C/C++/Objective-C, JavaScript/TypeScript/Vue,
+  Python/Ruby/PHP, Go/Rust/Swift/Dart/C#/Scala/Groovy/Lua/Solidity, and assembly. Results remain
+  triage leads, not parsed control flow or reachability proof.
 
-## New bounded static-research tools
+## Obfuscation and transforms
 
-- `inspect_file`: streaming magic/type confidence, extension conflict, encoding, hashes, entropy,
-  byte diversity, and head/tail characteristics in one pass.
-- `inspect_archive` and `read_archive_entry`: ZIP/APK/JAR/AAB/APKS central-directory inventory,
-  duplicate/encrypted/unsafe-name reporting, compression metrics, and bounded in-memory entry reads.
-  Nothing is extracted or executed.
-- `inspect_structured_data`: size-bounded JSON, XML, plist, INI, and YAML querying. XML uses
-  defusedxml and YAML aliases are rejected for untrusted evidence.
-- `inspect_sqlite`: immutable read-only schema, sample, and bounded cross-column text search. It
-  exposes no arbitrary SQL or mutation path.
-- `summarize_source_file`, `map_source_dependencies`, and `trace_symbol`: bounded large-source
-  lexical summaries, imports/includes, definitions, high-signal calls, dependency edges, and
-  symbol definition/call/assignment/reference leads.
-- `compare_files` and `decode_static_value`: streamed SHA-256/first-offset comparison, bounded text
-  diff, and bounded hex/Base64/URL/ROT13/single-byte-XOR decoding as data only.
-- `inspect_android_manifest` and `inspect_source_map`: decoded manifest permissions/components/
-  intent filters/risky declarations and bounded source-map metadata/original-source previews.
-- All use the existing `PathPolicy`, Pydantic input validation, command deadlines, dispatcher
-  output overflow, static-only rule, and execution audit. Lexical/static observations explicitly
-  state their uncertainty.
+- `MalDroid_analyze_obfuscation` scans bounded source chunks for Base64, hex, URL, and Unicode
+  escape candidates plus Base64/character-code/URL/XOR/compression/crypto pipeline leads. It returns
+  hashes, bounded decoded previews, printable ratio, entropy, confidence, and explicit heuristic
+  limitations.
+- `MalDroid_decode_static_chain` applies up to twelve ordered Base64/Base32/hex/URL/Unicode/ROT13,
+  reverse, XOR, byte add/subtract/rotation, gzip/zlib/bzip2/LZMA stages. Every stage records
+  input/output sizes and SHA-256. Final output is bounded to 2 MiB; LZMA memory is capped at 64 MiB;
+  incomplete, concatenated/trailing, and expanding streams fail. Decoded bytes are never executed.
+- The Android knowledge base now contains a focused obfuscation/decoder workflow that separates
+  encoding, compression, transformation, and encryption; traces decoder callers/consumers; and
+  defines evidence required before a Finding.
 
-## CLI/Web behavior and bug fix
+## Review-only Python decoder artifacts
 
-- Bare `maldroid` now shows `1 CLI workspace (recommended)` and `2 Web workspace (BETA)`; the server
-  help and Web documentation repeat the BETA status. No Web feature was added.
-- CLI speed selection is intentionally not mirrored into the held Web UI. Web keeps its existing
-  full active-profile request behavior; case state, MCP publication, and execution remain shared.
-- `maldroid new` previously supplied its default `generic` value as though the user had explicitly
-  locked the profile, disabling later automatic detection. An omitted `--profile` now remains in
-  automatic mode; an actual option still creates a manual lock.
+- `MalDroid_write_python_script` accepts a short name, objective, source, case-relative inputs/
+  expected outputs, and related state IDs. It parses source without importing it, creates a new
+  private `workspace/scripts/SCRIPT-xxxx-*.py`, and writes a sibling provenance manifest.
+- Manifests record creator, timestamps, model/persisted source hashes, Python/virtual-environment
+  state, imported package/distribution versions where resolvable, inputs, outputs, related IDs,
+  risk findings, review-only approval, null exit code, and permanent initial `not_executed` status.
+  The write result separately returns a bounded unified creation diff. Overwrite is unavailable;
+  every call creates a new revision.
+- The best-effort AST scan refuses known process, network, native-loading, dynamic-execution,
+  unsafe-deserialization, destructive, host-environment, absolute-path, and parent-traversal
+  capabilities. Relative filesystem output is allowed with a review warning. This scan is not an
+  isolation boundary and manual execution remains outside MalDroid policy.
+- `MalDroid_list_python_scripts` and terminal `/scripts` show manifests/status without source or
+  execution authority. Tool activity prints **Python decoder prepared (not executed)** immediately.
+  The controller appends path, purpose, and **not executed by MalDroid** to the final answer if the
+  model forgets. `MalDroid_run_python_script` is intentionally absent.
+
+## Model/tool request composition
+
+- The generic/React Native/Native registries now contain 53/63/63 schemas and approximately
+  8,496/9,691/9,414 estimated schema tokens. The complete MCP registry, dispatcher, audit, path,
+  static-only, and output policies are unchanged.
+- Fast mode previously consumed all 14 positions with essential/default schemas. The default set
+  is reduced from six to four, leaving objective-ranked capacity without increasing the 14/20/32
+  budgets. A representative “obfuscated encrypted source + Python decoder” objective selects
+  14/20/32 schemas at approximately 2,606/3,901/5,937 tokens in fast/balanced/deep; fast includes
+  both obfuscation analysis and script authoring immediately.
+- Catalog search synonyms now cover encrypted/decrypt/decoder/function/snippet language. Navigation
+  tools do not consume objective-ranked slots but remain in the complete registry/catalog.
 
 ## Architecture and documentation
 
-- ADR 0019 records per-round CLI speed presets, dynamic catalog loading, external MCP selection,
-  the unchanged complete MCP registry, and the temporary BETA Web difference.
-- Updated `ARCHITECTURE.md`, `DECISIONS.md`, `NEXT_AGENT_MASTER_PLAN.md`, `NEXT_STEPS.md`,
-  `PROJECT_STATUS.md`, `CHANGELOG.md`, `README.md`, `SYSTEM_PROMPT.md`, `docs/CLI.md`, `docs/WEB.md`,
-  and tool compatibility documentation.
-- `Tasks.MD` remains unchanged as required.
+- ADR 0020 selects restricted deterministic transforms as the only autonomous decoding path and
+  records write-only `PY-011`/`PY-012` behavior. Arbitrary execution, OS isolation, and escape
+  acceptance remain explicitly unimplemented.
+- Updated `ARCHITECTURE.md`, `SECURITY.md`, `DECISIONS.md`, `NEXT_AGENT_MASTER_PLAN.md`,
+  `NEXT_STEPS.md`, `PROJECT_STATUS.md`, `CHANGELOG.md`, `README.md`, `SYSTEM_PROMPT.md`, `TOOLS.md`,
+  `docs/CLI.md`, `docs/WEB.md`, and the packaged Android playbook. `Tasks.MD` remains unchanged.
 
 ## Verification
 
 Startup baseline:
 
-- `git status --short --branch` — clean `main...origin/main` at `df75fe5`.
-- `git fetch origin && git pull --ff-only origin main` — already up to date.
-- `./scripts/dev doctor` — Python/platform/ripgrep and configured boundaries passed; expected errors
-  reported the absent local llama-server and configured GGUF.
-- `./scripts/dev test` — 186 passed in 4.80 seconds with one upstream Starlette/httpx2 warning.
+- `git status --short --branch` — clean `main...origin/main` at `cbb965d`.
+- `git fetch origin` and `git pull --ff-only origin main` — already up to date.
+- `./scripts/dev doctor` — Python/platform/ripgrep and configured boundaries passed; expected
+  errors reported the absent local llama-server and configured GGUF.
+- `./scripts/dev test` — 197 passed in 4.89 seconds with one upstream Starlette/httpx2 warning.
 
-Implementation checks:
+Implementation checks completed before the final release gate:
 
-- Targeted research/config tests — passed, including file signatures, archive traversal and
-  duplicate handling, bounded entry reads, YAML alias rejection, immutable SQLite, large source,
-  dependencies, symbols, comparison, decoding, manifest, source map, and next-round catalog load.
-- CLI help/config/tool inventory smoke checks — `--speed [fast|balanced|deep]`, Web BETA help,
-  default `balanced` JSON configuration, and all 46 generic tools were present.
-- Schema benchmark — full and preset counts/token estimates matched the values recorded above.
-- `./scripts/dev lint` — Ruff passed; mypy passed for 45 source files.
-- `./scripts/dev format-check` — all 60 files formatted.
-- `./scripts/dev test` — 197 passed with one unchanged Starlette/httpx2 warning.
-- `git diff --check` — passed.
-- `./scripts/dev release-check` — passed: 60 files formatted, Ruff and mypy clean, 197 tests passed
-  with 77% coverage, installer dry-run changed no files, wheel build/archive verification passed,
-  and `dist/maldroid-0.1.0-py3-none-any.whl` was produced (188,829 bytes; SHA-256
-  `f20f10dc1697f337a21921872ed91db3d24a67d7cf70fefe0e0de32c8b302fd6` on the final run).
+- Initial seven-tool behavior specification — seven expected unknown-tool failures before the
+  implementation.
+- Focused code/research/agent/UI/MCP/Web regression set — 126 passed in 4.60 seconds.
+- Transform matrix — Base32, hex, URL, Unicode escape, ROT13, reverse, XOR, byte arithmetic/
+  rotation, gzip, zlib, bzip2, and LZMA all passed with provenance.
+- Adversarial coverage — decompression expansion, LZMA memory policy, syntax errors, subprocess,
+  network variants, `eval`, host environment, absolute/parent paths, nested/output symlinks,
+  session-source leakage, script overwrite, user-facing lock clutter, and absent run schema.
+- MCP protocol — generic discovery published authoring but no run tool; write executed through
+  loopback MCP and produced only a `not_executed` artifact.
+- `./scripts/dev lint` — Ruff passed; mypy passed for 47 source files.
+- `./scripts/dev format-check` — all 63 files formatted.
+- `./scripts/dev test --cov=maldroid` — 233 passed in 10.35 seconds with 78% aggregate coverage and
+  one unchanged Starlette/httpx2 warning.
+- Focused post-audit code/Web/UI/MCP regressions — 70 passed in 2.86 seconds. These additionally
+  verify UTF-8 byte-limit enforcement, manifest-symlink refusal, and safe Web capture activity.
+
+Final local release gate:
+
+- `./scripts/dev python scripts/check_project_hygiene.py` — passed with no findings.
+- `./scripts/dev release-check` — passed: 63 files formatted, Ruff clean, mypy clean across 47
+  source files, 233 tests passed with 78% aggregate coverage, project hygiene passed, installer
+  dry-run made no changes, and the wheel archive verified.
+- Built `dist/maldroid-0.1.0-py3-none-any.whl`: 210,575 bytes, SHA-256
+  `28dd906093238b44baa513dca1f0f49a63145ab4c7ceb1a7d97eb7b6986a910b`.
+- Remote CI for this exact tree necessarily starts only after the atomic commit/push. Do not begin
+  `PLATFORM-011` until the macOS 26 and Kali jobs pass; the watched run and result belong in the
+  final delivery status.
 
 ## Known limitations
 
-- No real GGUF generation ran, so the measured schema reduction is deterministic request-size
-  evidence, not a claim that physical response time is now below a specific number of seconds.
-  `PLATFORM-011` must compare all three modes on identical prompts and record prompt evaluation,
-  first-token time, final time, answer quality, cache use, and Ghidra MCP selections.
-- Dynamic selection is lexical. A specialized task may spend one model round searching the catalog;
-  a weak model can still choose a poor tool. The system prompt gives an explicit recovery route and
-  repeated unchanged catalog calls remain covered by the existing loop guard.
-- Source declarations/calls/dependencies and manifest observations are lexical/static triage leads,
-  not parsed reachability or control-flow proof. Binary AXML, decoded source mappings, protobuf,
-  certificates/signatures, YARA, directory diff, archive extraction, and decompression remain
-  incomplete or intentionally unsupported as listed in the master plan.
-- Web remains BETA and on hold. Its model request still receives the complete active registry and
-  therefore does not receive the CLI schema-size improvement yet.
-- Starlette 1.3 emits one development-only warning that `TestClient` will migrate from `httpx` to
-  `httpx2`; production behavior is unaffected.
+- No real GGUF generation ran. Schema selection is deterministic request evidence, not physical
+  latency/quality acceptance. `PLATFORM-011` must verify Gemma chooses the code tools, writes valid
+  source, preserves Hebrew conversation, and gives useful conclusions on the owner's real cases.
+- The source index is a lexical snapshot. It does not parse scopes/types, resolve overloads,
+  reconstruct control/data flow, discover files added after the snapshot, or detect same-size
+  content whose mtime was deliberately restored. Rebuild after evidence changes and verify every
+  lead with bounded source/tool evidence.
+- Encoded-literal confidence is heuristic. High entropy does not prove encryption, and no AES/RSA/
+  custom cryptographic plaintext is guessed without the required key/nonce/tag and supported data.
+- Python source risk scanning can be evaded and is not a sandbox. MalDroid does not install script
+  dependencies, run tests against generated source, execute scripts, or validate runtime outputs.
+  A researcher who later runs a reviewed file does so with host authority outside this policy.
+- Automatic paste capture applies to fenced blocks at least 8,192 characters. Unfenced large code
+  should first be saved as a case file or wrapped in a Markdown fence; smaller code remains inline.
+- Web shares backend capture/tools but remains BETA/held and has no dedicated script-manifest view;
+  use Files/Activity or the recommended CLI `/scripts` view.
+- The unchanged Starlette 1.3 warning says `TestClient` will migrate from `httpx` to `httpx2`.
 
 ## Dirty-tree and next command
 
-Before the atomic commit, only the `PLATFORM-014` implementation, tests, ADR, and required technical
-documentation are modified. After commit/push the required state is clean `main...origin/main`.
+Before the atomic commit, only the `PLATFORM-015` implementation, tests, knowledge, ADR, and
+required technical/handoff documentation are modified. After commit/push the required state is
+clean `main...origin/main`.
 
 Exact next command after the local gate, atomic push, and successful macOS/Kali CI:
 
@@ -135,4 +168,6 @@ git status --short --branch && git log -5 --oneline && ./scripts/dev doctor
 ```
 
 Then install/update this commit on the owner's configured macOS host and begin the CLI-focused
-`PLATFORM-011` physical acceptance in `NEXT_STEPS.md`. Keep Web feature work on hold.
+`PLATFORM-011` physical acceptance in `NEXT_STEPS.md`. Exercise large fenced code, the code index,
+obfuscation transforms, one harmless prepared decoder, `/scripts`, and the absence of execution.
+Keep Web feature work on hold.

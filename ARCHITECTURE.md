@@ -84,9 +84,13 @@ logging. External static utilities are temporary allowlisted subprocesses with `
 - `mcp_server`: MCP protocol discovery/calls, loopback port lifecycle, and the internal MCP client.
 - `agent`, `session_manager`, and `ui`: long-running tool controller, semantic checkpoints,
   bounded working context, append-only sessions, compaction, and interactive research workspace.
+- `code_intake`: exact case-local capture of large fenced source before model/session persistence,
+  replacing source bytes with a short untrusted-evidence reference.
 - `speed`: CLI request presets for reasoning, response budget, and dynamic schema selection.
 - `tools.registry` and `tools.dispatcher`: schema discovery, profile filtering, execution, and
   truncation.
+- `tools.core.code_analysis`: contentless source indexing, focused symbol context, obfuscation
+  triage, bounded deterministic transforms, and review-only Python script artifacts.
 - `large_files`: contentless FTS5 token index plus source offsets.
 - `knowledge_manager`: Markdown discovery, metadata, FTS5 retrieval, and bounded reads.
 - `investigation`: stable findings, evidence references, notes, and TODOs.
@@ -136,6 +140,12 @@ a small default research set, catalog-activated tools, and objective-ranked sche
 preset budget. `MalDroid_search_tool_catalog` searches the authoritative registry and makes its
 matches available on the next round; external MCP schemas use the same selection path. Parallel
 calls are off.
+Before a request enters that lifecycle, fenced code blocks of at least 8,192 characters are
+atomically captured under `workspace/snippets/` with a source hash and private permissions. The
+model message and session retain only the surrounding request plus a bounded path/size/hash
+reference, preventing pasted source from being copied into later rounds. Smaller blocks remain
+inline. Capture is count/size bounded, labels content as untrusted, and rejects symlinked output
+directories.
 Each returned call is sent through the official MCP client, validated by both MCP input schemas and
 the dispatcher, executed serially, serialized as a `tool` role message, persisted, and sent back.
 Eight investigation tool rounds form one autonomous work window rather than a terminal or context
@@ -159,6 +169,11 @@ they never contain tool arguments, result dumps, or failures. If the model has n
 controller derives it from the accepted semantic draft without another generation. Low-value
 fallback content is skipped and operational detail remains in session/audit streams. Prose that
 resembles a tool call is never executed.
+
+When a Python decoder is prepared, the normal tool result includes its append-only path and
+`not_executed` status. The terminal renders that boundary immediately. If the model omits it, the
+controller appends the path, purpose, and non-execution disclosure to the accepted answer without a
+second generation.
 
 ## Profile selection
 
@@ -238,6 +253,19 @@ framework search, line-range preview, and large-bundle metrics stream bounded ch
 previews center on the match even inside a minified logical line. When a global result, file, or time
 budget stops a scan, the result distinguishes exact totals from lower bounds and records the
 truncation reason; saved match artifacts are bounded as well as the inline MCP response.
+
+The code index is a derived SQLite snapshot containing only file metadata, declaration/import
+names, and named high-signal primitives. Queries mark changed/missing result files as stale and
+lead into a bounded source-context read; the index is not a readable duplicate, parser, call graph,
+or reachability proof. Encoded data is handled through deterministic transform stages with
+per-stage hashes and a 2 MiB decompression ceiling.
+
+Custom Python decoders are write-only review artifacts under `workspace/scripts/`. Each new
+`SCRIPT-xxxx` file has a provenance/risk manifest, private permissions, and `not_executed` status.
+There is no managed execution tool or sandbox claim. A best-effort AST scan rejects known process,
+network, dynamic execution, native loading, unsafe deserialization, host-environment, destructive,
+and literal case-boundary capabilities; a human must still review every file before any execution
+outside MalDroid. See ADR 0020.
 
 The controller reserves the next completion budget when calculating context pressure. Only the six
 most recent tool results and reasoning blocks are retained in full by default; older payloads become

@@ -145,6 +145,49 @@ def test_live_tool_event_is_human_readable(app_config) -> None:
     assert "completed" not in rendered
 
 
+def test_prepared_python_script_is_explicitly_labeled_not_executed(app_config) -> None:
+    chat, output = make_chat(app_config)
+
+    chat._handle_agent_event(
+        "tool_result",
+        {
+            "name": "MalDroid_write_python_script",
+            "status": "completed",
+            "prepared_path": "workspace/scripts/SCRIPT-0001-decode.py",
+            "execution_status": "not_executed",
+        },
+    )
+
+    rendered = output.getvalue()
+    assert "Python decoder prepared" in rendered
+    assert "not executed" in rendered
+    assert "workspace/scripts/SCRIPT-0001-decode.py" in rendered
+
+
+def test_large_code_capture_is_visible_in_terminal_activity(app_config) -> None:
+    chat, output = make_chat(app_config)
+
+    chat._handle_agent_event(
+        "code_snippet_captured",
+        {"path": "workspace/snippets/SNIPPET-0001.js", "characters": 9000},
+    )
+
+    rendered = output.getvalue()
+    assert "Large code block captured" in rendered
+    assert "workspace/snippets/SNIPPET-0001.js" in rendered
+
+
+def test_scripts_command_explains_review_only_execution_boundary(app_config) -> None:
+    chat, output = make_chat(app_config)
+
+    assert chat._slash("/scripts") is True
+
+    rendered = output.getvalue()
+    assert "Python decoders · review only" in rendered
+    assert "No prepared scripts" in rendered
+    assert "has no Python execution" in rendered
+
+
 def test_live_generation_status_shows_token_consumption(app_config) -> None:
     chat, _ = make_chat(app_config)
     status = Mock()

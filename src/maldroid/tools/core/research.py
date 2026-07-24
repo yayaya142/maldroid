@@ -36,11 +36,16 @@ MAX_STRUCTURED_BYTES = 32 * 1024 * 1024
 MAX_MANIFEST_BYTES = 16 * 1024 * 1024
 MAX_SOURCE_MAP_BYTES = 64 * 1024 * 1024
 SOURCE_SUFFIXES = {
+    ".asm",
     ".c",
     ".cc",
+    ".cjs",
     ".cpp",
+    ".cs",
     ".cxx",
     ".dart",
+    ".go",
+    ".groovy",
     ".h",
     ".hpp",
     ".java",
@@ -50,12 +55,20 @@ SOURCE_SUFFIXES = {
     ".kts",
     ".lua",
     ".m",
+    ".mjs",
     ".mm",
+    ".php",
     ".py",
+    ".rb",
+    ".rs",
+    ".s",
+    ".scala",
     ".smali",
+    ".sol",
     ".swift",
     ".ts",
     ".tsx",
+    ".vue",
 }
 
 
@@ -188,11 +201,16 @@ EXPECTED_MAGIC_EXTENSIONS: dict[str, set[str]] = {
 }
 
 LANGUAGES = {
+    ".asm": "Assembly",
     ".c": "C",
     ".cc": "C++",
+    ".cjs": "JavaScript",
     ".cpp": "C++",
+    ".cs": "C#",
     ".cxx": "C++",
     ".dart": "Dart",
+    ".go": "Go",
+    ".groovy": "Groovy",
     ".h": "C/C++ header",
     ".hpp": "C++ header",
     ".java": "Java",
@@ -202,12 +220,20 @@ LANGUAGES = {
     ".kts": "Kotlin script",
     ".lua": "Lua",
     ".m": "Objective-C",
+    ".mjs": "JavaScript",
     ".mm": "Objective-C++",
+    ".php": "PHP",
     ".py": "Python",
+    ".rb": "Ruby",
+    ".rs": "Rust",
+    ".s": "Assembly",
+    ".scala": "Scala",
     ".smali": "Smali",
+    ".sol": "Solidity",
     ".swift": "Swift",
     ".ts": "TypeScript",
     ".tsx": "TypeScript TSX",
+    ".vue": "Vue",
 }
 
 IMPORT_PATTERNS = (
@@ -216,11 +242,27 @@ IMPORT_PATTERNS = (
     re.compile(r"(?m)^\s*import\s+([A-Za-z_][\w.]*)\s*;?"),
     re.compile(r"(?m)^\s*#\s*include\s*[<\"]([^>\"]+)[>\"]"),
     re.compile(r"(?m)^\s*(?:from\s+([\w.]+)\s+import|import\s+([\w.]+))"),
+    re.compile(r"(?m)^\s*use\s+([A-Za-z_][\w:]*)"),
+    re.compile(r"(?m)^\s*(?:package|using)\s+([A-Za-z_][\w.]*)"),
 )
 
 DECLARATION_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
-    ("class", re.compile(r"\b(?:class|interface|object|enum)\s+([A-Za-z_$][\w$]*)")),
+    (
+        "class",
+        re.compile(r"\b(?:class|interface|object|enum|struct|trait)\s+([A-Za-z_$][\w$]*)"),
+    ),
     ("function", re.compile(r"\b(?:function|fun|def)\s+([A-Za-z_$][\w$]*)\s*\(")),
+    ("function", re.compile(r"\bfn\s+([A-Za-z_$][\w$]*)\s*[<(]")),
+    (
+        "function",
+        re.compile(r"\bfunc\s+(?:\([^)]*\)\s*)?([A-Za-z_][\w]*)\s*\("),
+    ),
+    (
+        "function",
+        re.compile(
+            r"\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>"
+        ),
+    ),
     (
         "method",
         re.compile(

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Added large fenced-code capture, a contentless reusable source index, stale-aware code queries,
+  focused symbol context, encoded-literal/pipeline triage, and bounded multi-stage transforms with
+  per-stage provenance and decompression limits.
+- Added review-only Python decoder authoring under `workspace/scripts/` with append-only IDs,
+  private files, source hashes/diffs, provenance manifests, AST risk findings, `/scripts`, live
+  prepared/not-executed status, and deterministic final disclosure. MalDroid exposes no Python run
+  tool and makes no sandbox claim.
 - Added CLI `fast`, `balanced`, and `deep` modes through `--speed`, `/speed`, and
   `cli.speed_mode`. The modes bound per-round reasoning, generated tokens, and loaded tool schemas
   without limiting autonomous phases or total investigation time.

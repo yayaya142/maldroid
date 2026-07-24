@@ -16,11 +16,16 @@ TOOL_SEARCH_SYNONYMS: dict[str, tuple[str, ...]] = {
     "apk": ("archive", "zip", "manifest", "android"),
     "bundle": ("javascript", "source", "archive"),
     "code": ("source", "symbol", "dependencies", "references"),
+    "decrypt": ("decode", "transform", "obfuscation", "python", "script"),
+    "decoder": ("decode", "transform", "python", "script"),
     "database": ("sqlite", "table", "schema"),
     "db": ("sqlite", "table", "schema"),
     "hash": ("sha256", "fingerprint", "file"),
+    "encrypted": ("obfuscation", "decode", "encoding", "entropy", "script"),
+    "function": ("symbol", "declaration", "code", "context", "index"),
     "obfuscation": ("decode", "strings", "entropy", "source"),
     "reverse": ("source", "symbol", "native", "javascript"),
+    "snippet": ("source", "code", "context"),
 }
 
 
@@ -137,6 +142,7 @@ def _register_catalog_tool(registry: ToolRegistry) -> None:
 
 def build_registry() -> ToolRegistry:
     from maldroid.tools.core.builtin import register_core_tools
+    from maldroid.tools.core.code_analysis import register_code_analysis_tools
     from maldroid.tools.core.research import register_research_tools
     from maldroid.tools.core.triage import register_triage_tools
     from maldroid.tools.profiles.frameworks import register_framework_tools
@@ -147,6 +153,7 @@ def build_registry() -> ToolRegistry:
     register_core_tools(registry)
     register_triage_tools(registry)
     register_research_tools(registry)
+    register_code_analysis_tools(registry)
     register_react_native_tools(registry)
     register_native_tools(registry)
     register_framework_tools(registry)

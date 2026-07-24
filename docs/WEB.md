@@ -110,6 +110,12 @@ central `PathPolicy`, so case roots, evidence mappings, line limits, output limi
 rules, and audit behavior remain identical across CLI and Web. A multi-megabyte minified line is
 shown as a marked bounded prefix rather than loaded into browser or backend memory in full.
 
+The shared agent also captures fenced code blocks of at least 8,192 characters under
+`workspace/snippets/` and sends the model/session only a short untrusted reference. Code-index,
+obfuscation, transform, and review-only Python authoring tools are therefore available from Web
+chat through the same MCP dispatcher. Prepared scripts appear under `workspace/scripts/` after a
+Files refresh and remain `not_executed`; Web does not add or expose a Python execution action.
+
 Latest-turn markers are derived only from bounded activity path arguments and reset on the next
 turn or case switch. Hiding logs is a presentation filter only: it neither deletes log files nor
 changes which files MalDroid tools can access.

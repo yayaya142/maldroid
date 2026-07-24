@@ -1,5 +1,8 @@
 # Architecture Decisions
 
+- ADR 0020: Large fenced code becomes exact case-local untrusted snippets; contentless source
+  indexing and bounded transform tools reduce context cost; Python decoders are append-only,
+  risk-scanned review artifacts that MalDroid never executes.
 - ADR 0019: CLI speed presets bound per-round reasoning, response tokens, and selected tool schemas;
   a searchable dynamic catalog keeps the expanded static toolset available without sending every
   schema on every local-model request. Web remains BETA and keeps its existing request behavior.

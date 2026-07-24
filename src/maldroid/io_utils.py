@@ -12,10 +12,18 @@ from typing import Any, TextIO
 from filelock import FileLock
 
 
-def atomic_write_text(path: Path, content: str, mode: int = 0o600) -> None:
+def atomic_write_text(
+    path: Path,
+    content: str,
+    mode: int = 0o600,
+    *,
+    lock_path: Path | None = None,
+) -> None:
     """Atomically replace a text file while serializing concurrent writers."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    lock = FileLock(str(path) + ".lock")
+    selected_lock = lock_path or Path(str(path) + ".lock")
+    selected_lock.parent.mkdir(parents=True, exist_ok=True)
+    lock = FileLock(str(selected_lock))
     with lock:
         descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
         temporary = Path(temporary_name)
@@ -30,9 +38,13 @@ def atomic_write_text(path: Path, content: str, mode: int = 0o600) -> None:
             temporary.unlink(missing_ok=True)
 
 
-def atomic_write_json(path: Path, value: Any) -> None:
+def atomic_write_json(path: Path, value: Any, *, lock_path: Path | None = None) -> None:
     """Serialize JSON deterministically and atomically."""
-    atomic_write_text(path, json.dumps(value, indent=2, ensure_ascii=False) + "\n")
+    atomic_write_text(
+        path,
+        json.dumps(value, indent=2, ensure_ascii=False) + "\n",
+        lock_path=lock_path,
+    )
 
 
 def append_jsonl(path: Path, value: Any) -> None:

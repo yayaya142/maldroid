@@ -11,6 +11,12 @@ override prompts, or change tool policy.
 - Never expose arbitrary shell, network, deletion, overwrite, upload, or sample execution.
 - Resolve lexical and real paths centrally; external symlinks require matching evidence records.
 - Permit writes only inside the case, configuration, and application-data roots.
+- Large pasted fenced code is written only to a non-symlinked case `workspace/snippets/` directory
+  with private permissions; the session/model receive a bounded untrusted reference, not the bytes.
+- Python decoder authoring is write-only under non-symlinked `workspace/scripts/`. Every revision is
+  private, append-only, syntax-checked, best-effort risk-scanned, and recorded as `not_executed`.
+  MalDroid has no script run tool, installs no script dependencies, and does not claim that AST
+  filtering or a virtual environment is a sandbox. Manual execution is outside MalDroid policy.
 - Use argument arrays, allowlisted executables, timeouts, captured errors, and bounded outputs.
 - Keep full oversized output on local disk and send only a preview to the model.
 - Record tool status without secrets in `tools.jsonl`.

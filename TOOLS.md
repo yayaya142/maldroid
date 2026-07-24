@@ -42,6 +42,13 @@ Every public name is centrally namespaced with the `MalDroid_` prefix.
 | `MalDroid_search_behavior_patterns` | path, categories, limits | Grouped network/persistence/identity/crypto/dynamic/bridge/command/WebView leads | Bounded ripgrep or streaming fallback; matches are not reachability proof |
 | `MalDroid_read_byte_range` | path, offset, length | Exact bounded hex/ASCII rows | Maximum 64 KiB |
 | `MalDroid_build_research_report` | title, tentative filter | `reports/RESEARCH_REPORT.md` | Deterministic durable-state view; no evidence bytes |
+| `MalDroid_build_code_index` | path and file/entry/byte budgets | Contentless source file/declaration/import/signal snapshot | Skips nested symlinks; no source text stored |
+| `MalDroid_query_code_index` | query, kind, path prefix, limit | Ranked lexical locations and stale-file state | Immutable read-only SQLite query; verify with a source read |
+| `MalDroid_read_code_context` | path plus symbol or line, occurrence/range limits | Bounded lines and match-centered minified preview | Never reads the whole file; not a parsed function boundary |
+| `MalDroid_analyze_obfuscation` | path and scan/result budgets | Encoded literal candidates and decode/crypto/XOR/compression leads | Heuristic static data only; encryption is not inferred from entropy alone |
+| `MalDroid_decode_static_chain` | value, input encoding, up to 12 typed stages | Per-stage sizes/hashes and bounded final preview | 2 MiB output ceiling; transformed bytes are never executed |
+| `MalDroid_write_python_script` | name, objective, source, provenance fields | New script, manifest, hashes, diff, AST risk findings | `workspace/scripts/` only, private, append-only, never executed |
+| `MalDroid_list_python_scripts` | limit | Manifest summary and execution status | Returns no source and grants no execution authority |
 
 Example:
 
@@ -57,6 +64,12 @@ Example:
   "output_file": "tool-output/tool-20260714-234500-a1b2c3d4.json"
 }
 ```
+
+`MalDroid_write_python_script` is authoring only. It rejects known network, process, dynamic-code,
+native-loading, unsafe-deserialization, destructive, host-environment, absolute-path, and
+parent-traversal capabilities; relative output calls are marked for review. The scan is not a
+sandbox, and the registry deliberately has no `MalDroid_run_python_script`. Every script is created
+with `not_executed` provenance and must be manually reviewed before any use outside MalDroid.
 
 ## React Native tools
 

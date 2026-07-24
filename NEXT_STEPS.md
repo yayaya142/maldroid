@@ -53,6 +53,12 @@ loads only relevant internal/external tool schemas, expands the bounded generic 
 registry from 33 to 46 tools, and fixes new-case automatic profile mode. Physical GGUF throughput,
 catalog quality, macOS, and Ghidra MCP acceptance remains in `PLATFORM-011`.
 
+Completed out of sequence by explicit owner reprioritization: `PLATFORM-015` captures large fenced
+source as exact case-local snippets, adds a contentless reusable code index, focused symbol context,
+obfuscation detection, bounded provenance-rich transform chains, and append-only risk-scanned
+Python decoder artifacts. MalDroid never executes those scripts and exposes no run tool. Physical
+Gemma tool choice, large real-source performance, and owner review UX remain in `PLATFORM-011`.
+
 1. `PLATFORM-011` — Install the CLI research upgrade on the owner's macOS host. Benchmark identical
    focused questions in `fast`, `balanced`, and `deep`; record loaded schema counts, prompt
    evaluation, first-token and final latency, answer completeness, and catalog selections. Verify
@@ -67,8 +73,14 @@ catalog quality, macOS, and Ghidra MCP acceptance remains in `PLATFORM-011`.
    direct CLI research-tool latency, Ghidra connector catalog/loading names, model/server versions, and any repeated
    or low-value state. Exercise three- and five-identical-tool outcomes, generation-free shutdown,
    explicit generated-output search, archive traversal/duplicate reporting, immutable SQLite reads,
-   and a large-source summary/symbol trace. Acceptance: a fresh session resumes from MCP state without chat history and
-   `reports/RESEARCH_REPORT.md` is useful without manual cleanup. Confirm `/triage` uses ripgrep on
+   and a large-source summary/symbol trace. Capture one large fenced JavaScript/Smali fragment and
+   verify the model/session retain only its
+   `workspace/snippets/` reference. Build/query the contentless code index on a real large tree,
+   inspect an obfuscated literal and bounded transform chain, and have Gemma prepare one harmless
+   decoder. Verify the visible path, manifest/hash/diff/risk data, `/scripts` `not_executed` state,
+   deterministic final disclosure, absence of a run schema, and no source side effect. Acceptance:
+   a fresh session resumes from MCP state without chat history and `reports/RESEARCH_REPORT.md` is
+   useful without manual cleanup. Confirm `/triage` uses ripgrep on
    the configured Mac when present and the streaming fallback when it is absent.
 2. `REL-010` — Retest the fixed `MalDroid_save_finding` path on the owner's macOS case. Record
    the structured tool call/result, case state before/after, rendered Markdown, audit/session events,

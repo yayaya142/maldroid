@@ -376,6 +376,14 @@ def test_web_timeline_never_exposes_hidden_reasoning(tmp_path: Path) -> None:
                 "type": "turn_cancelled",
                 "content": {"objective": "private stopped request"},
             },
+            {
+                "timestamp": "2026-07-15T12:03:00+03:00",
+                "type": "code_snippet_captured",
+                "content": {
+                    "path": "workspace/snippets/SNIPPET-0001.js",
+                    "sha256": "private-source-fingerprint",
+                },
+            },
         ]
     )
     serialized = str(timeline)
@@ -385,3 +393,5 @@ def test_web_timeline_never_exposes_hidden_reasoning(tmp_path: Path) -> None:
     assert "arguments" not in serialized
     assert "turn_cancelled" in serialized
     assert "private stopped request" not in serialized
+    assert "workspace/snippets/SNIPPET-0001.js" in serialized
+    assert "private-source-fingerprint" not in serialized

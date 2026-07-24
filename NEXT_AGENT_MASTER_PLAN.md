@@ -1,6 +1,6 @@
 # MalDroid Reliability and Research Platform Master Plan
 
-Status: active gated backlog; `PLATFORM-010`, `PLATFORM-012`, `PLATFORM-013`, and `PLATFORM-014` are implemented locally
+Status: active gated backlog; `PLATFORM-010`, `PLATFORM-012`, `PLATFORM-013`, `PLATFORM-014`, and `PLATFORM-015` are implemented locally
 Owner priority: make MalDroid a trustworthy daily research CLI before expanding breadth  
 Execution model: one agent and one task ID at a time  
 Canonical original requirements: `Tasks.MD` (read-only)
@@ -41,6 +41,14 @@ request. It adds twelve bounded file/source/archive/structured/SQLite/manifest/s
 fixes implicit new cases remaining manually locked to Generic, makes CLI the recommended selector
 choice, and labels Web BETA. This is an explicit exception to the earlier broad-tool ordering; it
 does not close the remaining reliability tasks or physical `PLATFORM-011` acceptance.
+
+Later on 2026-07-24 the owner explicitly reprioritized efficient whole-code/obfuscation analysis
+and Python decoder authoring without execution. `PLATFORM-015` captures large fenced source outside
+model/session history, adds a contentless code index, focused symbol context, obfuscation triage,
+and provenance-rich bounded transform chains. ADR 0020 accepts restricted transforms plus
+append-only, risk-scanned, review-only Python artifacts; MalDroid exposes no script execution tool
+and makes no sandbox claim. This is another owner-authorized ordering exception and does not close
+physical acceptance or the durable-state chain.
 
 ## 1. Instructions for the next agent
 
@@ -466,6 +474,12 @@ Allow rerun, edit, cancel, archive, and promote a useful script into a reviewed 
 Gate 5 acceptance: arbitrary Python is disabled unless its displayed execution mode matches tested
 reality. Restricted decoding remains available without host-level authority.
 
+`PLATFORM-015` status: `PY-010` selects restricted built-in transforms as the only autonomous path.
+The write-only portions of `PY-011`/`PY-012` are implemented with `SCRIPT-xxxx` provenance,
+source hashes/diffs, private append-only files, AST risk findings, explicit `not_executed` status,
+and deterministic CLI/final-answer disclosure. `PY-014` through `PY-016` remain unimplemented;
+there is no run tool, OS-isolation claim, or execution approval mode.
+
 ### Gate 6 — Expand core static-analysis tools
 
 Each tool below requires bounded I/O, typed schemas, structured results, exact/heuristic labeling,
@@ -493,9 +507,11 @@ audit, hostile fixtures, documentation, and profile filtering where relevant.
 
 `PLATFORM-014` status: `TOOL-010`, `TOOL-018`, and `TOOL-019` are implemented. The non-extracting portion of
 `TOOL-012` is implemented with duplicate, encrypted, path-traversal, size, and compression-ratio
-reporting plus bounded in-memory entry reads. `TOOL-014`, `TOOL-015`, `TOOL-016`, `TOOL-023`, and
-`TOOL-025` have useful bounded first slices but still lack, respectively, very-large-file sampling
-hashes, entropy windows, multi-stage provenance chains, directory diff, and decoded source mappings. `TOOL-011`, `TOOL-021`, and
+reporting plus bounded in-memory entry reads. `PLATFORM-015` implements `TOOL-016` for supported
+Base64/Base32/hex/URL/Unicode/ROT13, byte/XOR/rotation, and gzip/zlib/bzip2/LZMA stages with
+per-stage provenance plus source-literal/pipeline detection. `TOOL-014`, `TOOL-015`, `TOOL-023`,
+and `TOOL-025` have useful bounded first slices but still lack, respectively, very-large-file sampling
+hashes, entropy windows, directory diff, and decoded source mappings. `TOOL-011`, `TOOL-021`, and
 `TOOL-028` were implemented earlier. Selective extraction, decompression, protobuf, correlation
 graphs, YARA, certificate/signature metadata, and complete coverage manifests remain open. New
 lexical large-source summary, dependency-map, and symbol-trace tools supplement this backlog but do

@@ -415,6 +415,7 @@ class WebWorkspace:
             "phase_checkpoint",
             "automatic_checkpoint",
             "turn_cancelled",
+            "code_snippet_captured",
         }
         output: list[dict[str, Any]] = []
         for item in events:
@@ -430,6 +431,8 @@ class WebWorkspace:
                     detail = str(content or "")[:300]
                 else:
                     detail = "Assistant response recorded"
+            elif kind == "code_snippet_captured" and isinstance(content, dict):
+                detail = str(content.get("path") or "Large code captured")[:300]
             elif isinstance(content, dict):
                 detail = str(content.get("name") or content.get("status") or "")[:300]
             output.append(

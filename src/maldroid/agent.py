@@ -10,6 +10,7 @@ from collections.abc import Callable
 from typing import Any
 
 from maldroid.case_manager import Case
+from maldroid.code_intake import capture_large_fenced_code
 from maldroid.config import AppConfig
 from maldroid.exceptions import TurnCancelledError
 from maldroid.external_mcp import ExternalMcpRuntime
@@ -42,6 +43,7 @@ NON_INVESTIGATION_TOOLS = {
     mcp_tool_name("detect_profile"),
     mcp_tool_name("select_profile"),
     mcp_tool_name("search_tool_catalog"),
+    mcp_tool_name("list_python_scripts"),
 }
 ESSENTIAL_MODEL_TOOLS = tuple(
     mcp_tool_name(name)
@@ -63,8 +65,6 @@ DEFAULT_MODEL_TOOLS = tuple(
         "inventory_case",
         "summarize_source_file",
         "inspect_file",
-        "detect_profile",
-        "select_profile",
     )
 )
 STATE_DISCIPLINE_REMINDER = (
@@ -253,12 +253,26 @@ class MalDroidAgent:
 
     def respond(self, text: str) -> str:
         self._prepare_turn()
-        self._active_objective = text
+        intake = capture_large_fenced_code(self.case, text)
+        model_text = intake.model_text
+        self._active_objective = model_text
         self._strip_completed_turn_reasoning()
-        self._detect_and_switch_profile()
+        for capture in intake.captures:
+            metadata = {
+                "snippet_id": capture.snippet_id,
+                "path": capture.path,
+                "language": capture.language,
+                "characters": capture.characters,
+                "bytes": capture.bytes,
+                "sha256": capture.sha256,
+                "action": f"Captured large code block as {capture.path}",
+            }
+            self.sessions.record("code_snippet_captured", content=metadata)
+            self._emit("code_snippet_captured", **metadata)
+        self._detect_and_switch_profile(force=bool(intake.captures))
         self._check_cancelled()
-        self.messages.append({"role": "user", "content": text})
-        self.sessions.record("message", role="user", content=text)
+        self.messages.append({"role": "user", "content": model_text})
+        self.sessions.record("message", role="user", content=model_text)
         phase = 1
         phase_tool_rounds = 0
         total_tool_rounds = 0
@@ -270,6 +284,7 @@ class MalDroidAgent:
         repetition_recoveries = 0
         last_tool_outcome = ""
         identical_tool_outcomes = 0
+        prepared_scripts: list[dict[str, str]] = []
         while True:
             self._check_cancelled()
             tools = self.available_tool_schemas()
@@ -313,12 +328,18 @@ class MalDroidAgent:
                         "Generation was stopped after repeated output loops. Your investigation "
                         "state is safe; retry the message or use a stronger local model."
                     )
+                    if prepared_scripts:
+                        fallback = self._ensure_script_disclosure(fallback, prepared_scripts)
                     self.messages.append({"role": "assistant", "content": fallback})
                     self.sessions.record("message", role="assistant", content=fallback)
                     return fallback
                 repetition_recoveries += 1
-                self._recover_from_repetition(text, exc, repetition_recoveries)
+                self._recover_from_repetition(model_text, exc, repetition_recoveries)
                 continue
+            if not assistant.tool_calls and assistant.content is not None and prepared_scripts:
+                assistant.content = self._ensure_script_disclosure(
+                    assistant.content, prepared_scripts
+                )
             history = assistant.as_history_message()
             self.messages.append(history)
             self.sessions.record("message", role="assistant", content=history)
@@ -344,14 +365,30 @@ class MalDroidAgent:
                 )
                 if call.name == mcp_tool_name("search_tool_catalog"):
                     self._accept_tool_catalog_result(result, call.arguments)
-                self._emit(
-                    "tool_result",
-                    name=call.name,
-                    status=result.status,
-                    truncated=result.truncated,
-                    output_file=result.output_file,
-                    error=result.error.message if result.error else None,
-                )
+                tool_event: dict[str, Any] = {
+                    "name": call.name,
+                    "status": result.status,
+                    "truncated": result.truncated,
+                    "output_file": result.output_file,
+                    "error": result.error.message if result.error else None,
+                }
+                if (
+                    call.name == mcp_tool_name("write_python_script")
+                    and result.status == "completed"
+                    and isinstance(result.data, dict)
+                    and result.data.get("prepared") is True
+                ):
+                    tool_event["prepared_path"] = result.data.get("path")
+                    tool_event["execution_status"] = result.data.get("execution_status")
+                    tool_event["script_id"] = result.data.get("script_id")
+                    prepared_scripts.append(
+                        {
+                            "script_id": str(result.data.get("script_id", "Python decoder")),
+                            "path": str(result.data.get("path", "")),
+                            "purpose": str(result.data.get("purpose", "Decoder script")),
+                        }
+                    )
+                self._emit("tool_result", **tool_event)
                 if call.name in CHECKPOINT_TOOLS:
                     if result.status == "completed" and investigation_performed:
                         checkpoint_saved = True
@@ -408,6 +445,8 @@ class MalDroidAgent:
                         "result five times. Completed results and durable research state are safe. "
                         "Retry with a more specific instruction or a stronger local model."
                     )
+                    if prepared_scripts:
+                        fallback = self._ensure_script_disclosure(fallback, prepared_scripts)
                     self.messages.append({"role": "assistant", "content": fallback})
                     self.sessions.record(
                         "tool_loop_stopped",
@@ -430,7 +469,7 @@ class MalDroidAgent:
             round_rollover = phase_tool_rounds >= self.config.limits.max_tool_rounds
             context_rollover = self.should_auto_compact()
             if round_rollover or context_rollover:
-                self._save_phase_checkpoint(text, phase, total_tool_rounds)
+                self._save_phase_checkpoint(model_text, phase, total_tool_rounds)
                 rollover_reason = "context_threshold" if context_rollover else "tool_window"
                 self._emit(
                     "phase_rollover",
@@ -503,6 +542,16 @@ class MalDroidAgent:
     @staticmethod
     def _assistant_has_output(assistant: AssistantMessage) -> bool:
         return bool((assistant.content or "").strip() or assistant.tool_calls)
+
+    @staticmethod
+    def _ensure_script_disclosure(content: str, scripts: list[dict[str, str]]) -> str:
+        lowered = content.lower()
+        if all(item["path"] in content for item in scripts) and "not executed" in lowered:
+            return content
+        lines = ["Prepared Python decoder artifacts (not executed by MalDroid):"]
+        for item in scripts:
+            lines.append(f"- `{item['path']}` — {item['purpose']}")
+        return content.rstrip() + "\n\n" + "\n".join(lines)
 
     def _recover_empty_response(
         self,
@@ -999,7 +1048,7 @@ class MalDroidAgent:
             (
                 (tool_search_score(schema, self._active_objective), name)
                 for name, schema in by_name.items()
-                if name not in selected
+                if name not in selected and name not in NON_INVESTIGATION_TOOLS
             ),
             key=lambda item: (-item[0], item[1]),
         )

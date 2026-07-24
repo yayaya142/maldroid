@@ -45,6 +45,7 @@ COMMANDS: dict[str, str] = {
     "/speed": "Show or change the CLI research speed",
     "/profile": "Show or change the active analysis profile",
     "/tools": "List tools available to the active profile",
+    "/scripts": "List prepared Python decoders and verify that none were executed",
     "/files": "List registered case files",
     "/findings": "List findings or expand one stable Finding ID",
     "/todo": "List or update TODO items",
@@ -297,6 +298,13 @@ class InteractiveChat:
             )
         elif event == "tool_loop_stopped":
             self._update_status("Repeated tool loop stopped safely")
+        elif event == "code_snippet_captured":
+            path = str(data.get("path", "workspace/snippets"))
+            characters = int(data.get("characters", 0))
+            self.console.print(
+                f"[green]✓ Large code block captured:[/green] [bold]{path}[/bold] "
+                f"[dim]({characters:,} characters; untrusted static source)[/dim]"
+            )
         elif event == "tool_start":
             self._turn_tools += 1
             name = self._short_tool_name(str(data.get("name", "tool")))
@@ -312,6 +320,13 @@ class InteractiveChat:
             status = str(data.get("status", "completed"))
             name = self._short_tool_name(str(data.get("name", "tool")))
             if status == "completed":
+                prepared_path = data.get("prepared_path")
+                if prepared_path:
+                    self.console.print(
+                        "  [green]✓ Python decoder prepared (not executed):[/green] "
+                        f"[bold]{prepared_path}[/bold]"
+                    )
+                    return
                 suffix = " · output saved" if data.get("output_file") else ""
                 if data.get("truncated"):
                     suffix += " · preview truncated"
@@ -477,6 +492,8 @@ class InteractiveChat:
             self._profile(rest)
         elif name == "/tools":
             self._show_tools()
+        elif name == "/scripts":
+            self._show_scripts()
         elif name == "/files":
             self._render_tool_result(self.dispatcher.execute(mcp_tool_name("list_case_files"), {}))
         elif name == "/findings":
@@ -882,6 +899,7 @@ class InteractiveChat:
                         "model_retry",
                         "context_prune",
                         "automatic_checkpoint",
+                        "code_snippet_captured",
                     }:
                         events.append(event)
         table = Table("Time", "Event", "Summary", box=box.SIMPLE, padding=(0, 1))
@@ -896,6 +914,8 @@ class InteractiveChat:
                 detail = "result recorded" if payload else "result"
             elif event_type == "compaction":
                 detail = "Context compacted; durable state retained"
+            elif event_type == "code_snippet_captured":
+                detail = str(content.get("path", "Large code captured"))
             else:
                 detail = ", ".join(
                     f"{key}={value}"
@@ -944,6 +964,28 @@ class InteractiveChat:
                 )
         self.console.print(
             Panel(table, title="MCP" if mcp_only else "Local servers", border_style="cyan")
+        )
+
+    def _show_scripts(self) -> None:
+        result = self.dispatcher.execute(mcp_tool_name("list_python_scripts"), {})
+        if result.status == "error" or not isinstance(result.data, dict):
+            self._render_tool_result(result)
+            return
+        scripts = result.data.get("scripts", [])
+        table = Table("ID", "Name", "Risk", "Execution", "Path", box=box.SIMPLE, padding=(0, 1))
+        for item in scripts:
+            table.add_row(
+                str(item.get("script_id", "")),
+                str(item.get("name", "")),
+                str(item.get("risk_level", "")),
+                str(item.get("execution_status", "")),
+                str(item.get("path", "")),
+            )
+        if not scripts:
+            table.add_row("—", "No prepared scripts", "—", "—", "—")
+        self.console.print(Panel(table, title="Python decoders · review only", border_style="cyan"))
+        self.console.print(
+            "[dim]MalDroid can prepare and inspect these files, but it has no Python execution tool.[/dim]"
         )
 
     def _render_tool_result(self, result: Any) -> None:

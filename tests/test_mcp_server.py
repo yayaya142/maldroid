@@ -70,6 +70,8 @@ def test_mcp_lists_profile_tools_and_executes_through_http(app_config: AppConfig
         names = anyio.run(list_tool_names, endpoint)
         assert mcp_tool_name("read_case_state") in names
         assert mcp_tool_name("detect_profile") in names
+        assert mcp_tool_name("write_python_script") in names
+        assert mcp_tool_name("run_python_script") not in names
         assert mcp_tool_name("inspect_javascript_bundle") not in names
         assert all(name.startswith(MCP_TOOL_PREFIX) for name in names)
 
@@ -77,6 +79,18 @@ def test_mcp_lists_profile_tools_and_executes_through_http(app_config: AppConfig
         result = client.execute(mcp_tool_name("read_case_state"), {})
         assert result.status == "completed"
         assert result.data["active_profile"] == "generic"
+
+        prepared = client.execute(
+            mcp_tool_name("write_python_script"),
+            {
+                "name": "mcp-decoder",
+                "objective": "Prove write-only MCP routing",
+                "source": "print('review only')\n",
+            },
+        )
+        assert prepared.status == "completed"
+        assert prepared.data["execution_status"] == "not_executed"
+        assert (dispatcher.context.case.root / prepared.data["path"]).is_file()
 
         dispatcher.context.case.state.active_profile = "react-native"
         names = anyio.run(list_tool_names, endpoint)

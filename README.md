@@ -149,6 +149,7 @@ Research-oriented shortcuts avoid unnecessary model turns:
 /findings [FIND-ID]        list or expand a complete Finding
 /timeline [COUNT]          concise tool/state/compaction timeline
 /report                    rebuild reports/RESEARCH_REPORT.md from durable state
+/scripts                   list prepared Python decoders and non-execution status
 ```
 
 Long investigations run through an autonomous phase controller. Every configured tool-round window
@@ -182,10 +183,25 @@ file previews also shorten an oversized logical line instead of loading the enti
 The complete generic registry now contains bounded tools for file magic/hashes/entropy, APK/ZIP
 inventory and in-memory entry reads, JSON/YAML/XML/plist/INI queries, immutable read-only SQLite,
 large-source summaries, dependency maps, symbol tracing, file comparison, static decoding, decoded
-Android manifests, and JavaScript source maps. The CLI does not send all of those schemas to the
+Android manifests, JavaScript source maps, contentless code indexing, focused symbol context,
+obfuscation triage, multi-stage transforms, and review-only Python decoder authoring. The CLI does
+not send all of those schemas to the
 local model on every round. A small working set is selected from the objective, and
 `MalDroid_search_tool_catalog` loads a specialized match on the next round. `/tools` shows both the
 complete active-profile catalog and which schemas are currently loaded.
+
+Paste a complete source fragment inside a fenced Markdown block. Blocks of at least 8,192
+characters are saved exactly under `workspace/snippets/` and replaced in model/session context by a
+short untrusted path/size/hash reference; smaller blocks remain inline. The model can build one
+contentless code index, query declarations/imports/signals, read a focused symbol context, detect
+encoded literals, and apply bounded transforms without repeatedly loading the whole source.
+
+When a custom decoder is needed, `MalDroid_write_python_script` can create a private append-only
+`workspace/scripts/SCRIPT-xxxx-*.py` file plus a provenance/risk manifest. MalDroid parses and
+statically scans the source, but **never runs it** and exposes no script-execution tool. The CLI
+prints the path with “not executed,” the final answer is deterministically corrected if the model
+forgets that disclosure, and `/scripts` shows every manifest. Manual execution is outside MalDroid
+policy and requires source/input/output/dependency review; the static scan is not a sandbox.
 
 Profile selection is automatic by default. MalDroid recursively inspects bounded artifact names,
 archive entries, ELF magic, and small content samples, then activates React Native, Flutter, Unity,
@@ -321,7 +337,9 @@ Evidence is registered by symlink or copy and is never overwritten. The assistan
 line ranges with explicit long-line truncation, uses exact or regex search, and stores oversized
 results under `tool-output/`. The
 large-text index stores chunk boundaries and a contentless FTS5 token index; it does not store a
-second readable copy of the source.
+second readable copy of the source. The separate code index stores only paths, metadata,
+declaration/import names, and named static-analysis signals; it reports stale files before a
+bounded source read.
 
 Findings, TODOs, typed checkpoints, meaningful research notes, session events, reports, and
 summaries survive exit and resume. Operational failures and tool dumps stay in session/audit logs;

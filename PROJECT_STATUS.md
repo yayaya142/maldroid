@@ -4,6 +4,18 @@ Last updated: 2026-07-24
 
 ## Completed
 
+- Whole-code and review-only decoder upgrade (`PLATFORM-015`): fenced source blocks of at least
+  8,192 characters are captured exactly as private untrusted `workspace/snippets/` artifacts before
+  model/session persistence. A contentless source index, stale-aware queries, focused symbol
+  context, encoded-literal/pipeline triage, and bounded provenance-rich transforms reduce repeated
+  scans of large/minified/obfuscated code.
+- The generic catalog now contains 53 tools. `MalDroid_write_python_script` creates private
+  append-only `SCRIPT-xxxx` source plus provenance/risk manifests, hashes, and diffs; it blocks
+  known active/host capabilities and never executes the file. `/scripts`, live CLI activity, and a
+  deterministic final-answer footer expose the path and `not_executed` boundary. No run schema or
+  sandbox claim exists. ADR 0020 records the restricted-transform decision and deferred execution.
+  The full generic schema set is about 8,496 estimated tokens; a representative obfuscation/script
+  objective selects 14/20/32 schemas at about 2,606/3,901/5,937 tokens in fast/balanced/deep.
 - CLI performance and static-research expansion (`PLATFORM-014`): `fast`, `balanced`, and `deep`
   presets now tune live reasoning, response-token caps, and model-visible schema budgets without
   limiting autonomous phases. The authoritative catalog dynamically loads internal and external
@@ -201,8 +213,10 @@ Last updated: 2026-07-24
 - Finding, Note, TODO, and Checkpoint writes roll canonical state back if deterministic Markdown
   rendering fails. Mutations still lack revision/idempotency semantics.
 - `maldroid cases` opens the configured directory; `--list` and `--json` provide inventories.
-- Safe Python decoding-script execution is requested but not designed or implemented. No sandbox
-  claim is authorized until an ADR and adversarial OS-isolation tests exist.
+- Python decoder authoring is implemented as review-only, append-only case artifacts. MalDroid has
+  no execution tool, does not install script dependencies, and cannot validate runtime behavior.
+  Arbitrary execution and any sandbox/isolation claim remain deferred until the later OS-boundary
+  and escape-test gates are explicitly authorized and completed.
 - Real Gemma 4 tool-call verification requires the supplied macOS model and local llama-server.
 - A physical Apple Silicon smoke test remains pending; hosted macOS 26 is the current CI target.
 - External MCP discovery and reconnection at the fixed endpoint pass in the user's macOS llama.cpp
@@ -217,10 +231,10 @@ Last updated: 2026-07-24
 
 ## Current test status
 
-The local 197-test suite and consolidated release checks pass with 77% coverage and one unchanged
-upstream Starlette/httpx2 warning. The final `PLATFORM-014` release result and remote macOS/Kali run are recorded in
-`docs/handoffs/CURRENT.md` and the final delivery. The prior GitHub Actions baseline run
-`29440563970` passed on macOS 26 and Kali, including dependency bootstrap, lint, formatting, all
+The local 233-test suite passes with one unchanged upstream Starlette/httpx2 warning. The final
+`PLATFORM-015` release result and remote macOS/Kali run are recorded in
+`docs/handoffs/CURRENT.md` and the final delivery. The prior `PLATFORM-014` GitHub Actions run
+`30121289384` passed on macOS 26 and Kali, including dependency bootstrap, lint, formatting, all
 tests, coverage, and installer dry-run. See
 `docs/handoffs/CURRENT.md` for exact commands and environment-gated acceptance work.
 
@@ -230,4 +244,6 @@ Install the pushed build on the owner's macOS host and benchmark `fast`, `balanc
 the same benign/real static questions. Then execute one long React Native case and one Native/Ghidra
 MCP case, recording schema counts, prompt evaluation, first-token latency, catalog selections,
 tool-call quality, semantic checkpoints, reports, context receipts, and external MCP behavior. Web
-acceptance remains deferred while the owner-requested hold is active.
+acceptance remains deferred while the owner-requested hold is active. Also exercise a real large
+code paste/index/query, obfuscation/transform flow, and harmless Python decoder preparation; verify
+the manifest, `/scripts` disclosure, absence of execution, and local-model tool selection.
