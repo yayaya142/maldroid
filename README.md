@@ -77,10 +77,10 @@ sessions.
 ## Daily use
 
 ```bash
-maldroid                         # choose Web or CLI
-maldroid server                  # modern local Web workspace
+maldroid                         # choose recommended CLI or Web (BETA)
+maldroid server                  # local Web workspace (BETA)
 maldroid server --port 8787
-maldroid cli /path/to/investigation
+maldroid cli /path/to/investigation --speed balanced
 maldroid new CASE_NAME
 maldroid /path/to/investigation
 maldroid /path/to/index.android.bundle --profile react-native
@@ -90,7 +90,8 @@ maldroid resume
 maldroid cases
 ```
 
-The Web workspace provides project conversations, multilingual chat with per-message RTL support,
+The Web workspace is currently **BETA**, and new Web feature work is on hold while CLI behavior is
+validated on real investigations. It provides project conversations, multilingual chat with per-message RTL support,
 a VS Code-style bounded file explorer and preview, live tool activity, durable research views,
 settings, reports, and external MCP connector management. It stays local on `127.0.0.1`, requires
 a random per-run browser token, and uses the same case runtime and path policy as the CLI. See
@@ -134,6 +135,9 @@ Alt+Enter for a newline, Tab to complete, arrow keys for history, Ctrl+L to redr
 exit. `/help` is the complete command index; `/context`, `/checkpoints`, `/history`, `/mcp`, and
 `/shortcuts` expose the most useful live views. Reasoning defaults to `medium`; `/reasoning` shows
 all levels and `/reasoning high` changes the budget immediately without restarting llama-server.
+CLI speed defaults to `balanced`. Use `--speed fast` for short daily inspection, `--speed deep` for
+the complete configured reasoning/response budget, or `/speed` to switch live. Speed changes the
+cost of each model round; it never imposes a task-duration or autonomous-phase ceiling.
 
 Research-oriented shortcuts avoid unnecessary model turns:
 
@@ -175,6 +179,14 @@ available. Search, behavior triage, indicator extraction, and large-bundle helpe
 chunks and label early-stopped totals as lower bounds rather than exact counts. Text-range and Web
 file previews also shorten an oversized logical line instead of loading the entire minified line.
 
+The complete generic registry now contains bounded tools for file magic/hashes/entropy, APK/ZIP
+inventory and in-memory entry reads, JSON/YAML/XML/plist/INI queries, immutable read-only SQLite,
+large-source summaries, dependency maps, symbol tracing, file comparison, static decoding, decoded
+Android manifests, and JavaScript source maps. The CLI does not send all of those schemas to the
+local model on every round. A small working set is selected from the objective, and
+`MalDroid_search_tool_catalog` loads a specialized match on the next round. `/tools` shows both the
+complete active-profile catalog and which schemas are currently loaded.
+
 Profile selection is automatic by default. MalDroid recursively inspects bounded artifact names,
 archive entries, ELF magic, and small content samples, then activates React Native, Flutter, Unity,
 Cordova, Cocos, Native, or Generic tools with evidence-backed confidence. Mixed apps use scored
@@ -197,7 +209,9 @@ durable case state used as a fallback if model summarization fails.
 
 Every normal interactive run starts a loopback-only MCP Streamable HTTP server and prints its exact
 endpoint and selected port. The model-side tool executor connects to this endpoint through the
-official MCP client; it does not bypass MCP. To expose a case without starting the model chat:
+official MCP client; it does not bypass MCP. The MCP server and direct clients continue to discover
+the complete core plus active-profile registry; CLI schema selection changes prompt composition,
+not execution authority. To expose a case without starting the model chat:
 
 ```bash
 maldroid mcp serve /path/to/case

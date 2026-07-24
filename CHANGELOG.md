@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Added CLI `fast`, `balanced`, and `deep` modes through `--speed`, `/speed`, and
+  `cli.speed_mode`. The modes bound per-round reasoning, generated tokens, and loaded tool schemas
+  without limiting autonomous phases or total investigation time.
+- Expanded the generic registry from 33 to 46 bounded tools with file fingerprint/entropy,
+  APK/ZIP inventory and in-memory entry reads, structured data, immutable SQLite, large-source
+  summaries, dependency maps, symbol tracing, file comparison, static decoding, decoded manifests,
+  and source maps. A dynamic internal/external MCP catalog keeps specialized schemas available
+  without sending the complete registry on every local-model request.
+- Made CLI the recommended bare-`maldroid` choice, labeled Web **BETA** while feature work is held,
+  showed loaded-versus-catalog tools in the terminal, and fixed implicit `maldroid new` runs so
+  automatic profile selection remains enabled unless `--profile` is actually supplied.
 - Hardened hour-scale investigations with a three-result strategy warning and five-result stop for
   identical tool outcomes, deterministic generation-free shutdown summaries, authoritative recovery
   sessions, strict manual-profile locking, and retryable failed profile detection.

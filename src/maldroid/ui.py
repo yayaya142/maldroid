@@ -31,6 +31,7 @@ from maldroid.case_manager import Case, CaseManager
 from maldroid.investigation import InvestigationManager
 from maldroid.process_manager import LlamaServerProcess
 from maldroid.profiles import PROFILES, get_profile
+from maldroid.speed import SPEED_PRESETS, SpeedMode
 from maldroid.tools.dispatcher import ToolExecutor
 from maldroid.tools.models import mcp_tool_name
 from maldroid.tools.registry import ToolRegistry
@@ -41,6 +42,7 @@ COMMANDS: dict[str, str] = {
     "/status": "Show the complete workspace status",
     "/context": "Show context usage and estimated capacity remaining",
     "/reasoning": "Show or change the model reasoning level",
+    "/speed": "Show or change the CLI research speed",
     "/profile": "Show or change the active analysis profile",
     "/tools": "List tools available to the active profile",
     "/files": "List registered case files",
@@ -83,6 +85,12 @@ class MalDroidCompleter(Completer):
             for level in ("off", "low", "medium", "high", "unlimited"):
                 if level.startswith(fragment):
                     yield Completion(level, start_position=-len(fragment))
+            return
+        if before.startswith("/speed "):
+            fragment = before.removeprefix("/speed ").lower()
+            for mode in SpeedMode:
+                if mode.value.startswith(fragment):
+                    yield Completion(mode.value, start_position=-len(fragment))
             return
         if " " in before:
             return
@@ -386,6 +394,7 @@ class InteractiveChat:
         details.add_row("Case", self.case.metadata.name)
         details.add_row("Profile", f"{self.case.state.active_profile} · {self.agent.profile_mode}")
         details.add_row("Reasoning", self.agent.reasoning_level)
+        details.add_row("Speed", self.agent.speed_mode)
         details.add_row("Model", model)
         details.add_row("llama.cpp", self._server_label(server_status))
         details.add_row("MCP", self.mcp_endpoint)
@@ -419,6 +428,8 @@ class InteractiveChat:
                 ),
                 ("class:bottom-toolbar", "│ "),
                 ("class:toolbar.key", f"reason {self.agent.reasoning_level}"),
+                ("class:bottom-toolbar", " │ "),
+                ("class:toolbar.key", f"speed {self.agent.speed_mode}"),
                 ("class:bottom-toolbar", " │ "),
                 (style, f"ctx {percent:.0f}% · ~{remaining:,} left"),
                 ("class:bottom-toolbar", " │ "),
@@ -460,6 +471,8 @@ class InteractiveChat:
             self._show_context()
         elif name == "/reasoning":
             self._reasoning(rest)
+        elif name == "/speed":
+            self._speed(rest)
         elif name == "/profile":
             self._profile(rest)
         elif name == "/tools":
@@ -566,6 +579,7 @@ class InteractiveChat:
                 f"{self.case.state.active_profile} ({self.agent.profile_mode})",
             ),
             ("Reasoning", self.agent.reasoning_level),
+            ("CLI speed", self.agent.speed_mode),
             ("Model", self.case.state.model_path or "not configured"),
             ("Context", f"~{used:,} / {total:,} tokens ({percent:.1f}%)"),
             ("Remaining", f"~{remaining:,} tokens"),
@@ -668,11 +682,49 @@ class InteractiveChat:
             f"[green]✓[/green] Reasoning changed to [bold]{level}[/bold] for this session."
         )
 
+    def _speed(self, value: str) -> None:
+        if not value:
+            table = Table(box=box.SIMPLE, show_header=False, padding=(0, 2))
+            for mode, preset in SPEED_PRESETS.items():
+                marker = "●" if mode.value == self.agent.speed_mode else "○"
+                token_budget = (
+                    preset.response_token_cap or self.agent.config.llama.max_response_tokens
+                )
+                reasoning = preset.reasoning_level or self.agent.config.llama.reasoning_level
+                table.add_row(
+                    marker,
+                    mode.value,
+                    f"{reasoning} reasoning · up to {token_budget:,} response tokens · "
+                    f"{preset.tool_schema_budget} loaded schemas",
+                    preset.description,
+                )
+            self.console.print(Panel(table, title="CLI research speed", border_style="cyan"))
+            self.console.print(
+                "[dim]Change this session with /speed MODE; persist with "
+                "maldroid config set cli.speed_mode MODE. Research phases remain unlimited.[/dim]"
+            )
+            return
+        try:
+            mode = SpeedMode(value.lower())
+        except ValueError:
+            self.console.print("[red]Unknown speed.[/red] Choose: fast, balanced, deep")
+            return
+        self.agent.set_speed_mode(mode)
+        self.console.print(
+            f"[green]✓[/green] CLI speed changed to [bold]{mode.value}[/bold] for this session."
+        )
+
     def _show_tools(self) -> None:
         tools = self.registry.enabled(self.case.state.active_profile)
-        table = Table("Tool", "Scope", "Description", box=box.SIMPLE, padding=(0, 1))
+        loaded = {
+            str(item.get("function", {}).get("name", ""))
+            for item in self.agent.available_tool_schemas()
+        }
+        table = Table("Tool", "Scope", "Loaded", "Description", box=box.SIMPLE, padding=(0, 1))
         for tool in tools:
-            table.add_row(tool.name, tool.profile, tool.description)
+            table.add_row(
+                tool.name, tool.profile, "●" if tool.name in loaded else "catalog", tool.description
+            )
         external_count = 0
         if self.agent.external_mcp is not None:
             for schema in self.agent.external_mcp.schemas():
@@ -680,6 +732,7 @@ class InteractiveChat:
                 table.add_row(
                     str(function.get("name", "external-tool")),
                     "external MCP",
+                    "●" if str(function.get("name", "")) in loaded else "catalog",
                     str(function.get("description", "")),
                 )
                 external_count += 1
@@ -689,6 +742,10 @@ class InteractiveChat:
                 title=(f"Tools · {self.case.state.active_profile} · {len(tools) + external_count}"),
                 border_style="cyan",
             )
+        )
+        self.console.print(
+            "[dim]Only the marked schemas are sent to the model this round. "
+            "Catalog tools remain available through capability search.[/dim]"
         )
 
     def _show_findings(self, record_id: str = "") -> None:

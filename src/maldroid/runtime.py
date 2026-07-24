@@ -18,6 +18,7 @@ from maldroid.mcp_server import MalDroidMcpServer, McpToolClient
 from maldroid.paths import PathPolicy
 from maldroid.process_manager import LlamaServerProcess
 from maldroid.session_manager import SessionManager
+from maldroid.speed import SpeedMode
 from maldroid.tools.dispatcher import ToolDispatcher
 from maldroid.tools.models import ToolContext
 from maldroid.tools.registry import ToolRegistry, build_registry
@@ -38,6 +39,7 @@ class WorkspaceRuntime:
         mcp_port: int | None = None,
         auto_profile: bool = True,
         event_handler: RuntimeEventHandler | None = None,
+        speed_mode: SpeedMode | None = None,
     ) -> None:
         self.config = config
         self.case = case
@@ -46,6 +48,7 @@ class WorkspaceRuntime:
         self.mcp_port = mcp_port
         self.auto_profile = auto_profile
         self.event_handler = event_handler
+        self.speed_mode = speed_mode
         self.logger = configure_case_logging(case.root)
         self.server = LlamaServerProcess(config, case.root)
         self.registry: ToolRegistry | None = None
@@ -105,6 +108,7 @@ class WorkspaceRuntime:
             event_handler=self.event_handler,
             auto_profile_enabled=self.auto_profile,
             external_mcp=self.external_mcp,
+            speed_mode=self.speed_mode,
         )
         self._emit("runtime_ready", mcp_endpoint=self.mcp_endpoint)
         return self

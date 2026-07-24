@@ -13,12 +13,14 @@ from maldroid.config import (
     save_config,
     set_config_value,
 )
+from maldroid.speed import SpeedMode
 
 
 def test_default_model_performance_settings() -> None:
     config = AppConfig()
     assert config.llama.model == "~/Desktop/Tools/Ai Models/gemma-4-12B-it-qat-q4_0.gguf"
     assert config.general.default_context_size == 65536
+    assert config.cli.speed_mode == SpeedMode.BALANCED
     assert config.llama.preferred_port == 7575
     assert config.llama.stream_idle_timeout_seconds == 120
     assert config.llama.parallel == 1
@@ -78,6 +80,7 @@ def test_config_get_reset_and_invalid_values() -> None:
     with pytest.raises(Exception, match="Invalid value"):
         set_config_value(AppConfig(), "llama.reasoning_level", "extreme")
     assert set_config_value(AppConfig(), "limits.max_task_phases", "0").limits.max_task_phases == 0
+    assert set_config_value(AppConfig(), "cli.speed_mode", "fast").cli.speed_mode == SpeedMode.FAST
     assert (
         set_config_value(
             AppConfig(), "llama.repetition_recovery_enabled", "false"

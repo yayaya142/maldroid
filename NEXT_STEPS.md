@@ -47,19 +47,27 @@ transactional evidence registration, manual-profile locking, authoritative Web r
 bounded session views, and a Settings **Stop model** action. Physical GGUF, macOS, and Ghidra MCP
 acceptance remains in `PLATFORM-011`.
 
-1. `PLATFORM-011` — Install the long-investigation and Web-workspace upgrade on the owner's macOS
-   host. Verify `maldroid` mode selection, `maldroid server`, exclusive CLI/Web locking, project
-   creation/switching, Hebrew input/output RTL, settings, bounded file preview, latest-turn file
-   markers and hidden/revealed log paths, Live Work telemetry and mid-generation Stop behavior,
-   live activity, reports, external Ghidra MCP, and shutdown. From the installed version, run `maldroid update`,
+Completed out of sequence by explicit owner reprioritization: `PLATFORM-014` makes CLI the
+recommended surface, labels Web BETA/held, adds `fast`/`balanced`/`deep` request presets, dynamically
+loads only relevant internal/external tool schemas, expands the bounded generic static-research
+registry from 33 to 46 tools, and fixes new-case automatic profile mode. Physical GGUF throughput,
+catalog quality, macOS, and Ghidra MCP acceptance remains in `PLATFORM-011`.
+
+1. `PLATFORM-011` — Install the CLI research upgrade on the owner's macOS host. Benchmark identical
+   focused questions in `fast`, `balanced`, and `deep`; record loaded schema counts, prompt
+   evaluation, first-token and final latency, answer completeness, and catalog selections. Verify
+   bare `maldroid` recommends CLI and labels Web BETA, but keep Web feature/acceptance work deferred
+   while the owner's hold remains active. Verify case creation, Hebrew input/output, `/speed`,
+   `/tools` loaded/catalog labels, direct new research tools, reports, external Ghidra MCP, and
+   shutdown. From the installed version, run `maldroid update`,
    verify the reported commit and absence of a retained clone, then continue the long-run tests. Run a minimum
    one-hour React Native investigation and one Native/Ghidra MCP investigation. Record context
    usage across phases, prompt-cache hit ratio, prompt evaluation and first-token timing, empty-
    response recovery, pruned-result receipts, checkpoint contents, Findings/TODO/report parity,
-   direct CLI triage latency, Ghidra connector tool names, model/server versions, and any repeated
+   direct CLI research-tool latency, Ghidra connector catalog/loading names, model/server versions, and any repeated
    or low-value state. Exercise three- and five-identical-tool outcomes, generation-free shutdown,
-   explicit generated-output search, Web reconnect during an idle/offline project, and **Stop model**
-   before changing Settings. Acceptance: a fresh session resumes from MCP state without chat history and
+   explicit generated-output search, archive traversal/duplicate reporting, immutable SQLite reads,
+   and a large-source summary/symbol trace. Acceptance: a fresh session resumes from MCP state without chat history and
    `reports/RESEARCH_REPORT.md` is useful without manual cleanup. Confirm `/triage` uses ripgrep on
    the configured Mac when present and the streaming fallback when it is absent.
 2. `REL-010` — Retest the fixed `MalDroid_save_finding` path on the owner's macOS case. Record
@@ -74,7 +82,7 @@ acceptance remains in `PLATFORM-011`.
    `PLATFORM-010`: typed checkpoints, record separation, low-value rejection, checkpoint UI, and
    evidence-aware final enforcement exist. Finish record linking, telemetry, revision semantics,
    and adversarial long-run acceptance in dependency order after `REL-011`.
-6. `WEB-001` — Completed locally: shared CLI/Web runtime, exclusive process lease, authenticated
+6. `WEB-001` — Completed locally and now held as BETA: shared CLI/Web runtime, exclusive process lease, authenticated
    loopback Web server, project conversations, chat/activity streaming, bounded Files, research
    state/actions, settings, MCP connectors, and per-message RTL. Physical macOS/model acceptance is
    folded into `PLATFORM-011`.

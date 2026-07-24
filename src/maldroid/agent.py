@@ -23,9 +23,10 @@ from maldroid.llama_client import (
 )
 from maldroid.prompts import SYSTEM_PROMPT, profile_prompt
 from maldroid.session_manager import SessionManager
+from maldroid.speed import SpeedMode, speed_preset
 from maldroid.tools.dispatcher import ToolExecutor
 from maldroid.tools.models import mcp_tool_name
-from maldroid.tools.registry import ToolRegistry
+from maldroid.tools.registry import ToolRegistry, tool_search_score
 
 CHECKPOINT_TOOLS = {
     mcp_tool_name("save_checkpoint"),
@@ -40,7 +41,32 @@ NON_INVESTIGATION_TOOLS = {
     mcp_tool_name("list_case_files"),
     mcp_tool_name("detect_profile"),
     mcp_tool_name("select_profile"),
+    mcp_tool_name("search_tool_catalog"),
 }
+ESSENTIAL_MODEL_TOOLS = tuple(
+    mcp_tool_name(name)
+    for name in (
+        "read_case_state",
+        "list_case_files",
+        "read_file_range",
+        "search_text",
+        "update_todo",
+        "save_finding",
+        "save_checkpoint",
+        "search_tool_catalog",
+    )
+)
+DEFAULT_MODEL_TOOLS = tuple(
+    mcp_tool_name(name)
+    for name in (
+        "get_file_info",
+        "inventory_case",
+        "summarize_source_file",
+        "inspect_file",
+        "detect_profile",
+        "select_profile",
+    )
+)
 STATE_DISCIPLINE_REMINDER = (
     "Maintain the case files while you investigate. Create concrete TODOs for the remaining plan "
     "with MalDroid_update_todo, complete them as work finishes, and call MalDroid_save_finding as "
@@ -91,6 +117,7 @@ class MalDroidAgent:
         event_handler: AgentEventHandler | None = None,
         auto_profile_enabled: bool = True,
         external_mcp: ExternalMcpRuntime | None = None,
+        speed_mode: SpeedMode | None = None,
     ):
         self.config = config
         self.case = case
@@ -101,6 +128,8 @@ class MalDroidAgent:
         self.event_handler = event_handler
         self._auto_profile_enabled = auto_profile_enabled
         self.external_mcp = external_mcp
+        self._speed_mode = speed_mode
+        self._activated_tool_names: list[str] = []
         self.messages: list[dict[str, Any]] = []
         self._active_objective = ""
         self._cancel_event = threading.Event()
@@ -110,6 +139,8 @@ class MalDroidAgent:
         if model_event_setter is not None:
             model_event_setter(self._handle_model_event)
         self._reset_messages(previous_summary)
+        if speed_mode is not None:
+            self._apply_speed_mode(speed_mode, record=False)
 
     def cancel_turn(self) -> None:
         """Request cooperative cancellation of the active turn and response stream."""
@@ -124,6 +155,7 @@ class MalDroidAgent:
         reset = getattr(self.client, "reset_cancellation", None)
         if callable(reset):
             reset()
+        self._activated_tool_names = []
 
     def finish_turn(self) -> None:
         """Clear cancellation state after the controller has left the active turn."""
@@ -310,6 +342,8 @@ class MalDroidAgent:
                     if self.external_mcp is not None and self.external_mcp.handles(call.name)
                     else self.dispatcher.execute(call.name, call.arguments)
                 )
+                if call.name == mcp_tool_name("search_tool_catalog"):
+                    self._accept_tool_catalog_result(result, call.arguments)
                 self._emit(
                     "tool_result",
                     name=call.name,
@@ -850,6 +884,39 @@ class MalDroidAgent:
             content={"level": level, "thinking_budget_tokens": REASONING_BUDGETS[level]},
         )
 
+    @property
+    def speed_mode(self) -> str:
+        return self._speed_mode.value if self._speed_mode is not None else "full"
+
+    def set_speed_mode(self, mode: SpeedMode | str) -> None:
+        selected = SpeedMode(mode)
+        self._speed_mode = selected
+        self._activated_tool_names = []
+        self._apply_speed_mode(selected, record=True)
+
+    def _apply_speed_mode(self, mode: SpeedMode, *, record: bool) -> None:
+        preset = speed_preset(mode)
+        reasoning = preset.reasoning_level or self.config.llama.reasoning_level
+        max_tokens = min(
+            self.config.llama.max_response_tokens,
+            preset.response_token_cap or self.config.llama.max_response_tokens,
+        )
+        reasoning_setter = getattr(self.client, "set_reasoning_level", None)
+        if callable(reasoning_setter):
+            reasoning_setter(reasoning)
+        token_setter = getattr(self.client, "set_max_tokens", None)
+        if callable(token_setter):
+            token_setter(max_tokens)
+        if record:
+            details = {
+                "mode": mode.value,
+                "reasoning_level": reasoning,
+                "max_response_tokens": max_tokens,
+                "tool_schema_budget": preset.tool_schema_budget,
+            }
+            self.sessions.record("speed_change", content=details)
+            self._emit("speed_change", **details)
+
     def estimate_tokens(self) -> int:
         serialized = json.dumps(
             {
@@ -906,10 +973,91 @@ class MalDroidAgent:
             self.sessions.record("context_prune", content={"tool_results_compacted": compacted})
 
     def available_tool_schemas(self) -> list[dict[str, Any]]:
-        tools = self.registry.schemas(self.case.state.active_profile)
-        if self.external_mcp is not None:
-            tools.extend(self.external_mcp.schemas())
-        return tools
+        internal = self.registry.schemas(self.case.state.active_profile)
+        external = self.external_mcp.schemas() if self.external_mcp is not None else []
+        if self._speed_mode is None:
+            return [*internal, *external]
+
+        budget = speed_preset(self._speed_mode).tool_schema_budget
+        all_schemas = [*internal, *external]
+        by_name = {
+            str(schema.get("function", {}).get("name", "")): schema for schema in all_schemas
+        }
+        selected: list[str] = []
+
+        def include(name: str) -> None:
+            if name in by_name and name not in selected and len(selected) < budget:
+                selected.append(name)
+
+        for name in ESSENTIAL_MODEL_TOOLS:
+            include(name)
+        for name in self._activated_tool_names:
+            include(name)
+        for name in DEFAULT_MODEL_TOOLS:
+            include(name)
+        ranked = sorted(
+            (
+                (tool_search_score(schema, self._active_objective), name)
+                for name, schema in by_name.items()
+                if name not in selected
+            ),
+            key=lambda item: (-item[0], item[1]),
+        )
+        for score, name in ranked:
+            if score <= 0:
+                break
+            include(name)
+        return [by_name[name] for name in selected]
+
+    def _accept_tool_catalog_result(self, result: Any, raw_arguments: Any) -> None:
+        if result.status != "completed" or not isinstance(result.data, dict):
+            return
+        matches = result.data.get("matches")
+        if not isinstance(matches, list):
+            return
+        query = ""
+        limit = 8
+        try:
+            arguments = (
+                json.loads(raw_arguments) if isinstance(raw_arguments, str) else raw_arguments
+            )
+            if isinstance(arguments, dict):
+                query = str(arguments.get("query", ""))
+                limit = min(20, max(1, int(arguments.get("limit", 8))))
+        except (json.JSONDecodeError, TypeError, ValueError):
+            pass
+        combined = [item for item in matches if isinstance(item, dict)]
+        if self.external_mcp is not None and query:
+            for schema in self.external_mcp.schemas():
+                score = tool_search_score(schema, query)
+                if score <= 0:
+                    continue
+                function = schema.get("function", {})
+                combined.append(
+                    {
+                        "name": str(function.get("name", "")),
+                        "scope": "external MCP",
+                        "description": str(function.get("description", "")),
+                        "score": score,
+                    }
+                )
+        combined.sort(key=lambda item: (-int(item.get("score", 0)), str(item.get("name", ""))))
+        deduplicated: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for item in combined:
+            name = str(item.get("name", ""))
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            deduplicated.append(item)
+            if len(deduplicated) >= limit:
+                break
+        result.data["matches"] = deduplicated
+        result.data["available_next_round"] = bool(deduplicated)
+        for item in deduplicated:
+            name = str(item.get("name", ""))
+            if name and name not in self._activated_tool_names:
+                self._activated_tool_names.append(name)
 
     def context_ratio(self) -> float:
         committed = self.estimate_tokens() + self.reserved_tokens()

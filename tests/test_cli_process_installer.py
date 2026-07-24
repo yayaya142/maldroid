@@ -7,6 +7,7 @@ import signal
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from rich.text import Text
@@ -15,7 +16,7 @@ from typer.testing import CliRunner
 import maldroid.cli as cli
 import maldroid.process_manager as process_manager_module
 from maldroid.config import AppConfig
-from maldroid.exceptions import ServerError
+from maldroid.exceptions import MalDroidError, ServerError
 from maldroid.llama_adapter import ServerCommand
 from maldroid.process_manager import (
     LlamaServerProcess,
@@ -36,6 +37,20 @@ def test_typer_commands_are_not_consumed_as_paths(
     tools = runner.invoke(cli.app, ["tools", "--profile", "generic"])
     assert tools.exit_code == 0
     assert "MalDroid_read_file_range" in tools.stdout
+
+
+def test_root_mode_selector_labels_cli_recommended_and_web_beta(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(cli.typer, "prompt", lambda *_args, **_kwargs: "invalid")
+
+    with pytest.raises(MalDroidError, match="Choose 1 for CLI or 2 for Web"):
+        cli.main(SimpleNamespace(invoked_subcommand=None), False)
+
+    output = capsys.readouterr().out
+    assert "CLI workspace" in output and "recommended" in output
+    assert "Web workspace" in output and "BETA" in output
 
 
 def test_cases_opens_configured_folder_and_list_remains_available(
@@ -111,6 +126,12 @@ def test_polished_help_version_and_mcp_client_config(
         "generic",
         "react-native",
     }
+
+    cli_help = Text.from_ansi(runner.invoke(cli.app, ["cli", "--help"]).stdout).plain
+    server_help = Text.from_ansi(runner.invoke(cli.app, ["server", "--help"]).stdout).plain
+    assert "--speed" in cli_help
+    assert "fast" in cli_help and "balanced" in cli_help and "deep" in cli_help
+    assert "BETA" in server_help
 
 
 def test_external_mcp_cli_add_list_history_and_remove(
@@ -236,6 +257,23 @@ def test_entrypoint_rewrites_daily_syntax(
         assert captured[0] == inserted
     else:
         assert captured == arguments
+
+
+def test_new_case_without_profile_keeps_automatic_detection_enabled(
+    app_config: AppConfig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(cli, "load_config", lambda: app_config)
+
+    def fake_run_case(*_args: object, **kwargs: object) -> None:
+        captured.update(kwargs)
+
+    monkeypatch.setattr(cli, "_run_case", fake_run_case)
+
+    cli._launch(None, "auto-profile", None, None, False, None, None, None, None, True, None)
+
+    assert captured["auto_profile"] is True
+    assert captured["speed_mode"] == app_config.cli.speed_mode
 
 
 def test_process_manager_start_and_shutdown(

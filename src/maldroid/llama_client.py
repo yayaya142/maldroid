@@ -174,6 +174,11 @@ class LocalLlamaClient:
             raise ValueError(f"Unknown reasoning level: {level}")
         self.reasoning_level = level
 
+    def set_max_tokens(self, max_tokens: int) -> None:
+        if max_tokens < 128:
+            raise ValueError("max_tokens must be at least 128")
+        self.max_tokens = max_tokens
+
     def complete(
         self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
     ) -> AssistantMessage:

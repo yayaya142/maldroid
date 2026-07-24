@@ -6,6 +6,12 @@
 official MCP client, dispatcher context, external MCP runtime, session, and agent. `InteractiveChat`
 and the loopback Web application are presentation adapters over that runtime. See ADR 0013.
 
+The terminal is the recommended product surface. It passes one CLI speed preset into the shared
+runtime; the preset bounds reasoning, response tokens, and model-visible schemas per round without
+limiting total phases or task duration. The Web surface is currently BETA and intentionally keeps
+the prior full active-profile request behavior while Web feature work is on hold. This difference
+affects model request composition only, not MCP publication, tool execution, case state, or policy.
+
 The Web server is a lightweight control plane until a case is activated. Its three-pane frontend
 uses authenticated same-origin HTTP/WebSocket endpoints for projects, bounded file inspection,
 research state, actions, settings, and activity. It never receives a direct unrestricted file API.
@@ -78,6 +84,7 @@ logging. External static utilities are temporary allowlisted subprocesses with `
 - `mcp_server`: MCP protocol discovery/calls, loopback port lifecycle, and the internal MCP client.
 - `agent`, `session_manager`, and `ui`: long-running tool controller, semantic checkpoints,
   bounded working context, append-only sessions, compaction, and interactive research workspace.
+- `speed`: CLI request presets for reasoning, response budget, and dynamic schema selection.
 - `tools.registry` and `tools.dispatcher`: schema discovery, profile filtering, execution, and
   truncation.
 - `large_files`: contentless FTS5 token index plus source offsets.
@@ -123,7 +130,12 @@ records, and direct internal dispatch all use the same unambiguous names.
 ## Message and tool lifecycle
 
 The request contains a short system prompt, one small active-profile instruction, persistent case
-summary, active conversation, and only core plus active-profile schemas. Parallel calls are off.
+summary, active conversation, and tools from the core plus active-profile registry. The MCP server
+publishes that complete registry. In CLI speed modes the agent sends only eight essential schemas,
+a small default research set, catalog-activated tools, and objective-ranked schemas up to the
+preset budget. `MalDroid_search_tool_catalog` searches the authoritative registry and makes its
+matches available on the next round; external MCP schemas use the same selection path. Parallel
+calls are off.
 Each returned call is sent through the official MCP client, validated by both MCP input schemas and
 the dispatcher, executed serially, serialized as a `tool` role message, persisted, and sent back.
 Eight investigation tool rounds form one autonomous work window rather than a terminal or context
@@ -205,6 +217,9 @@ MalDroid-case-policy enforcement.
 Reasoning effort is a per-request model-client property. The configured human-readable level maps
 to llama.cpp `thinking_budget_tokens`, can change between tool rounds without a server restart, and
 is recorded as a session event. No command-line reasoning budget is set, preserving dynamic control.
+CLI speed presets select a reasoning level and generated-token cap through those same live client
+properties; `/reasoning` can fine-tune the resulting session independently. Presets never add a
+wall-clock or autonomous-phase ceiling. See ADR 0019.
 
 ## Context and retrieval
 

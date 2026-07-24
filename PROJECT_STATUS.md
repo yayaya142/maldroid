@@ -1,9 +1,21 @@
 # Project Status
 
-Last updated: 2026-07-16
+Last updated: 2026-07-24
 
 ## Completed
 
+- CLI performance and static-research expansion (`PLATFORM-014`): `fast`, `balanced`, and `deep`
+  presets now tune live reasoning, response-token caps, and model-visible schema budgets without
+  limiting autonomous phases. The authoritative catalog dynamically loads internal and external
+  MCP tools, cutting a representative balanced generic request from about 6,765 to 3,249 estimated
+  schema tokens after expanding the generic registry from 33 to 46 tools. `/speed`, `--speed`,
+  `cli.speed_mode`, and loaded/catalog state in `/tools` make the behavior explicit.
+- Twelve bounded core operations now cover combined file magic/hash/entropy/encoding inspection,
+  APK/ZIP inventory and entry reads without extraction, structured-data queries, immutable
+  read-only SQLite, large-source summaries, dependency mapping, symbol tracing, file comparison,
+  static decoding, decoded Android manifests, and source maps. `maldroid new` without an explicit
+  profile now correctly retains automatic profile selection. Bare `maldroid` recommends CLI and
+  labels the held Web surface **BETA**.
 - Full long-runtime audit (`PLATFORM-013`): repeated identical tool results now trigger a visible
   strategy redirect at three and a safe persisted stop at five; shutdown summaries are deterministic
   and never start another model generation. Manual profile selections cannot be overridden, failed
@@ -174,8 +186,12 @@ Last updated: 2026-07-16
 ## Partial or environment-gated
 
 - The platform upgrade passes synthetic/local contracts but still requires a multi-hour real Gemma
-  4 investigation on the owner's React Native and Native/Ghidra cases. CLI latency and checkpoint
-  quality under real MCP/Ghidra output are not yet physically accepted.
+  4 investigation on the owner's React Native and Native/Ghidra cases. `fast`/`balanced` throughput,
+  catalog choices, external Ghidra schema loading, answer quality, and checkpoint quality are not
+  yet physically accepted.
+- Web is explicitly BETA and feature work is on hold. Its existing shared runtime and tool
+  execution remain supported, but the CLI-only speed/catalog request UX is intentionally not
+  mirrored until the hold is lifted.
 - Internal model subagents remain deliberately deferred. Typed state and context pruning address the
   immediate pollution problem without adding another model/state-merging security boundary.
 
@@ -201,16 +217,17 @@ Last updated: 2026-07-16
 
 ## Current test status
 
-The local 186-test suite and the `PLATFORM-013` consolidated release gate pass with 76% coverage;
-exact local results are recorded in `docs/handoffs/CURRENT.md`. Remote macOS/Kali status for the
-atomic `PLATFORM-013` commit is reported with its final delivery. The prior GitHub Actions baseline
-run `29440563970` passed on macOS 26 and Kali, including dependency bootstrap, lint, formatting, all
+The local 197-test suite and consolidated release checks pass with 77% coverage and one unchanged
+upstream Starlette/httpx2 warning. The final `PLATFORM-014` release result and remote macOS/Kali run are recorded in
+`docs/handoffs/CURRENT.md` and the final delivery. The prior GitHub Actions baseline run
+`29440563970` passed on macOS 26 and Kali, including dependency bootstrap, lint, formatting, all
 tests, coverage, and installer dry-run. See
 `docs/handoffs/CURRENT.md` for exact commands and environment-gated acceptance work.
 
 ## Immediate task
 
-Run Web/CLI parity acceptance on the owner's macOS host, then execute one long React Native case and
-one Native/Ghidra MCP case. Verify RTL chat, project switching, file preview, semantic checkpoints,
-latest-turn file markers, log visibility, report quality, context receipts, direct triage commands,
-and MCP connectors against real calls.
+Install the pushed build on the owner's macOS host and benchmark `fast`, `balanced`, and `deep` on
+the same benign/real static questions. Then execute one long React Native case and one Native/Ghidra
+MCP case, recording schema counts, prompt evaluation, first-token latency, catalog selections,
+tool-call quality, semantic checkpoints, reports, context receipts, and external MCP behavior. Web
+acceptance remains deferred while the owner-requested hold is active.

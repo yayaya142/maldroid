@@ -1,11 +1,11 @@
 # MalDroid Reliability and Research Platform Master Plan
 
-Status: active gated backlog; `PLATFORM-010`, `PLATFORM-012`, and `PLATFORM-013` are implemented locally
+Status: active gated backlog; `PLATFORM-010`, `PLATFORM-012`, `PLATFORM-013`, and `PLATFORM-014` are implemented locally
 Owner priority: make MalDroid a trustworthy daily research CLI before expanding breadth  
 Execution model: one agent and one task ID at a time  
 Canonical original requirements: `Tasks.MD` (read-only)
 
-## 0. Owner reprioritization implemented on 2026-07-15 and 2026-07-16
+## 0. Owner reprioritization implemented on 2026-07-15, 2026-07-16, and 2026-07-24
 
 The owner explicitly reprioritized broad long-investigation usability ahead of the original
 one-item reliability chain. `PLATFORM-010` implemented a coherent first slice across the existing
@@ -33,6 +33,14 @@ evidence/path-policy refresh, authoritative Web reconnect and concurrency handli
 views, a Settings **Stop model** action, and extensive regression fixtures. This closes the
 unchanged-static-tool loop slice of `AGENT-013`; adaptive planning beyond that guard remains future
 work. Physical model, macOS, and Ghidra acceptance still belongs to `PLATFORM-011`.
+
+On 2026-07-24 the owner put Web feature work on hold and reprioritized daily CLI latency plus a
+much broader static-research toolset. `PLATFORM-014` adds CLI `fast`/`balanced`/`deep` presets and a
+dynamic authoritative tool catalog so the new capabilities do not inflate every local-model
+request. It adds twelve bounded file/source/archive/structured/SQLite/manifest/source-map tools,
+fixes implicit new cases remaining manually locked to Generic, makes CLI the recommended selector
+choice, and labels Web BETA. This is an explicit exception to the earlier broad-tool ordering; it
+does not close the remaining reliability tasks or physical `PLATFORM-011` acceptance.
 
 ## 1. Instructions for the next agent
 
@@ -483,6 +491,16 @@ audit, hostile fixtures, documentation, and profile filtering where relevant.
 - `TOOL-027`: artifact inventory manifest with hashes, types, sizes, and analysis coverage.
 - `TOOL-028`: report builder from verified Findings and evidence references.
 
+`PLATFORM-014` status: `TOOL-010`, `TOOL-018`, and `TOOL-019` are implemented. The non-extracting portion of
+`TOOL-012` is implemented with duplicate, encrypted, path-traversal, size, and compression-ratio
+reporting plus bounded in-memory entry reads. `TOOL-014`, `TOOL-015`, `TOOL-016`, `TOOL-023`, and
+`TOOL-025` have useful bounded first slices but still lack, respectively, very-large-file sampling
+hashes, entropy windows, multi-stage provenance chains, directory diff, and decoded source mappings. `TOOL-011`, `TOOL-021`, and
+`TOOL-028` were implemented earlier. Selective extraction, decompression, protobuf, correlation
+graphs, YARA, certificate/signature metadata, and complete coverage manifests remain open. New
+lexical large-source summary, dependency-map, and symbol-trace tools supplement this backlog but do
+not claim a parsed call graph.
+
 ### Gate 7 — Android package, manifest, resource, and DEX depth
 
 - `APK-010`: APK/AAB/APKS split inventory and package relationships.
@@ -780,5 +798,6 @@ A task is done only when:
 git status --short --branch && git log -5 --oneline && ./scripts/dev test
 ```
 
-Then begin `REL-010`. Do not begin by changing the Finding schema. Capture the owner's exact failing
-tool call and persistence artifacts first.
+Then begin the physical CLI-focused `PLATFORM-011` acceptance described in `NEXT_STEPS.md`. Keep Web
+feature work on hold. After that acceptance, return to `REL-010`; do not change the Finding schema
+before capturing the owner's exact failing tool call and persistence artifacts.

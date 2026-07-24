@@ -13,8 +13,9 @@ maldroid cases --json  # automation-friendly case inventory
 
 ## Interactive terminal workspace
 
-Running `maldroid` without arguments now asks for `1` Web or `2` CLI. Use `maldroid server` or
-`maldroid cli [PATH]` to select a surface directly. A global runtime lease prevents Web and CLI
+Running `maldroid` without arguments asks for `1` recommended CLI or `2` Web **(BETA)**. Use
+`maldroid cli [PATH]` or `maldroid server` to select a surface directly. Web feature work is on hold
+while the CLI is physically validated. A global runtime lease prevents Web and CLI
 from loading the model at the same time. Complete Web usage is documented in
 [`WEB.md`](WEB.md).
 
@@ -73,6 +74,57 @@ maldroid config get limits.max_tool_rounds
 maldroid config get limits.max_task_phases
 maldroid config get limits.model_retry_attempts
 ```
+
+### CLI speed and dynamic tool loading
+
+The CLI defaults to `balanced` and supports one-run selection on every case-start command:
+
+```bash
+maldroid cli /path/to/case --speed fast
+maldroid open /path/to/artifact --speed balanced
+maldroid resume --speed deep
+maldroid config set cli.speed_mode fast
+```
+
+| Mode | Reasoning | Per-response cap | Model-visible schema budget | Intended use |
+|---|---:|---:|---:|---|
+| `fast` | low | 1,024 tokens | 14 | Focused daily questions and quick inspection |
+| `balanced` | medium | 2,048 tokens | 20 | Default static research |
+| `deep` | configured level | configured cap | 32 | Difficult, synthesis-heavy investigation |
+
+`/speed` displays the presets and `/speed MODE` changes the current session without restarting
+llama-server. `/reasoning LEVEL` can still fine-tune reasoning separately. These are per-model-round
+controls: phases, total tool calls, and task duration remain unlimited.
+
+The complete generic registry contains 46 tools after the current expansion, so sending every
+schema would erase much of the speed gain. Eight state/navigation schemas and a small research set
+are always loaded; the current objective fills remaining slots. If a capability is absent, the
+model calls `MalDroid_search_tool_catalog` with a precise query. Matching internal or connected
+external MCP schemas become available on the next round and displace lower-priority defaults.
+`/tools` shows the full catalog and marks the schemas currently loaded into the model request.
+
+The catalog includes twelve new bounded static-research operations:
+
+- `MalDroid_inspect_file`: magic, encoding, SHA-256/SHA-1/MD5 identification hashes, entropy, and
+  byte characteristics in one streaming pass.
+- `MalDroid_inspect_archive` and `MalDroid_read_archive_entry`: APK/ZIP/JAR/AAB/APKS inventory,
+  duplicate/encrypted/unsafe-name checks, and bounded in-memory reads without extraction.
+- `MalDroid_inspect_structured_data`: bounded JSON, YAML-without-aliases, plist, XML, and INI reads
+  with an optional path/tag query.
+- `MalDroid_inspect_sqlite`: immutable read-only schema, table sample, and bounded text search; it
+  accepts no arbitrary SQL.
+- `MalDroid_summarize_source_file`, `MalDroid_map_source_dependencies`, and
+  `MalDroid_trace_symbol`: single-pass large-source triage, cross-file imports/includes, and lexical
+  definition/call/reference locations.
+- `MalDroid_compare_files` and `MalDroid_decode_static_value`: bounded binary/text comparison and
+  hex/Base64/URL/ROT13/single-byte-XOR decoding as data only.
+- `MalDroid_inspect_android_manifest` and `MalDroid_inspect_source_map`: decoded manifest
+  declarations and bounded JavaScript original-source metadata/content.
+
+All remain behind `PathPolicy`, dispatcher validation, command deadlines, output overflow, and the
+static-only rule. Lexical source classifications and manifest security observations are triage
+leads, not proof of runtime reachability. Compiled binary AXML still requires a trusted static
+decoder; no archive entry or decoded value is executed.
 
 ### Automatic profile selection
 
@@ -222,7 +274,8 @@ CLI or Web workspace before updating.
 ## Daily workflow
 
 ```bash
-maldroid new NAME --profile generic
+maldroid new NAME                         # automatic profile mode
+maldroid new NAME --profile generic       # explicit manual lock
 maldroid open /path/to/case
 maldroid open /path/to/artifact --copy --profile react-native
 maldroid resume
@@ -242,6 +295,8 @@ maldroid config show --json
 maldroid config get llama.model
 maldroid config get llama.api_key_enabled
 maldroid config get llama.reasoning_level
+maldroid config get cli.speed_mode
+maldroid config set cli.speed_mode fast
 maldroid config set llama.api_key_enabled true
 maldroid config get mcp.preferred_port --json
 maldroid config set mcp.preferred_port 8765

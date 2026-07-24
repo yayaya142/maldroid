@@ -76,11 +76,13 @@ def test_slash_completion_includes_commands_and_profiles() -> None:
     profiles = list(completer.get_completions(Document("/profile rea"), CompleteEvent()))
     automatic = list(completer.get_completions(Document("/profile au"), CompleteEvent()))
     reasoning = list(completer.get_completions(Document("/reasoning hi"), CompleteEvent()))
+    speed = list(completer.get_completions(Document("/speed ba"), CompleteEvent()))
 
     assert [item.text for item in commands] == ["/context"]
     assert [item.text for item in profiles] == ["react-native"]
     assert [item.text for item in automatic] == ["auto"]
     assert [item.text for item in reasoning] == ["high"]
+    assert [item.text for item in speed] == ["balanced"]
 
 
 def test_toolbar_exposes_remaining_context_and_durable_state(app_config) -> None:
@@ -97,6 +99,15 @@ def test_toolbar_exposes_remaining_context_and_durable_state(app_config) -> None
     assert "left" in toolbar
     assert "generic" in toolbar
     assert "1 checkpoints" in toolbar
+
+
+def test_cli_speed_command_changes_the_session_without_model_work(app_config) -> None:
+    chat, output = make_chat(app_config)
+
+    assert chat._slash("/speed fast") is True
+
+    assert chat.agent.speed_mode == "fast"
+    assert "CLI speed changed to fast" in output.getvalue()
 
 
 def test_dashboard_and_direct_report_commands_are_research_focused(app_config) -> None:

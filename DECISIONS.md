@@ -1,5 +1,8 @@
 # Architecture Decisions
 
+- ADR 0019: CLI speed presets bound per-round reasoning, response tokens, and selected tool schemas;
+  a searchable dynamic catalog keeps the expanded static toolset available without sending every
+  schema on every local-model request. Web remains BETA and keeps its existing request behavior.
 - ADR 0018: Long-running work uses deterministic shutdown summaries, identical-tool outcome guards,
   non-following broad traversal, bounded streamed artifacts, and authoritative Web/session recovery.
 - ADR 0017: Local model turns use one retry authority, cached and observable streaming, cross-turn

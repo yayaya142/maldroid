@@ -15,6 +15,7 @@ from maldroid.constants import DEFAULT_MODEL_PATH, DEFAULT_PORT, SUPPORTED_PROFI
 from maldroid.exceptions import ConfigurationError
 from maldroid.io_utils import atomic_write_text
 from maldroid.paths import config_directory, default_cases_directory, expand_path
+from maldroid.speed import SpeedMode
 
 DANGEROUS_SERVER_FLAGS = {
     "--agent",
@@ -47,6 +48,11 @@ class GeneralConfig(BaseModel):
         if value not in SUPPORTED_PROFILES:
             raise ValueError(f"Unknown profile: {value}")
         return value
+
+
+class CliConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    speed_mode: SpeedMode = SpeedMode.BALANCED
 
 
 class LlamaConfig(BaseModel):
@@ -132,6 +138,7 @@ class WebConfig(BaseModel):
 class AppConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     general: GeneralConfig = Field(default_factory=GeneralConfig)
+    cli: CliConfig = Field(default_factory=CliConfig)
     llama: LlamaConfig = Field(default_factory=LlamaConfig)
     limits: LimitsConfig = Field(default_factory=LimitsConfig)
     external_tools: ExternalToolsConfig = Field(default_factory=ExternalToolsConfig)
@@ -247,6 +254,7 @@ def _validate_config_key(config: AppConfig, dotted_key: str) -> tuple[str, str]:
     parts = dotted_key.split(".")
     if len(parts) != 2 or parts[0] not in {
         "general",
+        "cli",
         "llama",
         "limits",
         "external_tools",

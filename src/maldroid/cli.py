@@ -51,6 +51,7 @@ from maldroid.profile_detection import detect_profiles
 from maldroid.profiles import PROFILES, get_profile
 from maldroid.runtime import WorkspaceRuntime, build_tool_runtime
 from maldroid.runtime_lock import RuntimeLease
+from maldroid.speed import SpeedMode
 from maldroid.tools.registry import build_registry
 from maldroid.ui import InteractiveChat
 from maldroid.updater import update_from_official_repository
@@ -89,6 +90,7 @@ CONFIG_DESCRIPTIONS = {
     "general.default_profile": "Profile selected for newly created cases.",
     "general.default_context_size": "Model context window used for new cases.",
     "general.evidence_mode": "Default evidence registration mode: symlink or copy.",
+    "cli.speed_mode": "Default CLI research speed: fast, balanced, or deep.",
     "llama.binary": "Path or command name for the local llama-server executable.",
     "llama.model": "Absolute path to the local GGUF model.",
     "llama.host": "Validated loopback host for llama-server.",
@@ -168,25 +170,25 @@ def main(
     console = _console()
     console.print(
         Panel.fit(
-            "[bold]1[/bold]  Web workspace  [dim](recommended)[/dim]\n"
-            "[bold]2[/bold]  CLI workspace",
+            "[bold]1[/bold]  CLI workspace  [dim](recommended)[/dim]\n"
+            "[bold]2[/bold]  Web workspace  [yellow](BETA)[/yellow]",
             title="How would you like to run MalDroid?",
             border_style="cyan",
         )
     )
     choice = typer.prompt("Choose 1 or 2", default="1")
     if choice == "1":
-        from maldroid.web.server import run_web_server
-
-        _run_guarded(lambda: run_web_server(load_config()), False, console)
-    elif choice == "2":
         _run_guarded(
-            lambda: _launch(None, None, None, None, False, None, None, None, None, False),
+            lambda: _launch(None, None, None, None, False, None, None, None, None, False, None),
             False,
             console,
         )
+    elif choice == "2":
+        from maldroid.web.server import run_web_server
+
+        _run_guarded(lambda: run_web_server(load_config()), False, console)
     else:
-        raise MalDroidError("Choose 1 for Web or 2 for CLI.")
+        raise MalDroidError("Choose 1 for CLI or 2 for Web (BETA).")
 
 
 @app.command("server")
@@ -195,7 +197,7 @@ def server_command(
     no_open: bool = typer.Option(False, "--no-open", help="Do not open the browser automatically."),
     debug: bool = typer.Option(False, "--debug", help="Show tracebacks for unexpected failures."),
 ) -> None:
-    """Start the modern loopback-only Web workspace."""
+    """Start the loopback-only Web workspace (BETA)."""
     from maldroid.web.server import run_web_server
 
     _run_guarded(
@@ -213,11 +215,14 @@ def cli_command(
     name: str | None = typer.Option(None, "--name", help="Name for a new investigation."),
     profile: str | None = typer.Option(None, "--profile", help="Static-analysis profile."),
     copy: bool = typer.Option(False, "--copy", help="Copy evidence instead of symlinking."),
+    speed: SpeedMode | None = typer.Option(
+        None, "--speed", case_sensitive=False, help="CLI speed: fast, balanced, or deep."
+    ),
     debug: bool = typer.Option(False, "--debug", help="Show tracebacks for unexpected failures."),
 ) -> None:
     """Start the terminal workspace explicitly."""
     _run_guarded(
-        lambda: _launch(path, name, profile, None, copy, None, None, None, None, False),
+        lambda: _launch(path, name, profile, None, copy, None, None, None, None, False, speed),
         debug,
         _console(),
     )
@@ -265,7 +270,9 @@ def help_command(
 @app.command()
 def new(
     name: str | None = typer.Argument(None, help="Optional human-readable case name."),
-    profile: str = typer.Option("generic", "--profile", help="Initial static-analysis profile."),
+    profile: str | None = typer.Option(
+        None, "--profile", help="Manual static-analysis profile override."
+    ),
     context_size: int | None = typer.Option(
         None,
         "--context-size",
@@ -284,6 +291,9 @@ def new(
     mcp_port: int | None = typer.Option(
         None, "--mcp-port", min=1, max=65535, help="One-run fixed MCP port override."
     ),
+    speed: SpeedMode | None = typer.Option(
+        None, "--speed", case_sensitive=False, help="CLI speed: fast, balanced, or deep."
+    ),
     no_color: bool = typer.Option(False, "--no-color", help="Disable terminal colors."),
     debug: bool = typer.Option(False, "--debug", help="Show tracebacks for unexpected failures."),
 ) -> None:
@@ -300,6 +310,7 @@ def new(
             port,
             mcp_port,
             no_color,
+            speed,
         ),
         debug,
         _console(no_color),
@@ -332,6 +343,9 @@ def open_command(
     mcp_port: int | None = typer.Option(
         None, "--mcp-port", min=1, max=65535, help="One-run fixed MCP port override."
     ),
+    speed: SpeedMode | None = typer.Option(
+        None, "--speed", case_sensitive=False, help="CLI speed: fast, balanced, or deep."
+    ),
     no_color: bool = typer.Option(False, "--no-color", help="Disable terminal colors."),
     debug: bool = typer.Option(False, "--debug", help="Show tracebacks for unexpected failures."),
 ) -> None:
@@ -348,6 +362,7 @@ def open_command(
             port,
             mcp_port,
             no_color,
+            speed,
         ),
         debug,
         _console(no_color),
@@ -355,9 +370,13 @@ def open_command(
 
 
 @app.command()
-def resume() -> None:
+def resume(
+    speed: SpeedMode | None = typer.Option(
+        None, "--speed", case_sensitive=False, help="CLI speed: fast, balanced, or deep."
+    ),
+) -> None:
     """Resume the most recently opened case."""
-    _run_guarded(lambda: _launch_resume(), False, _console())
+    _run_guarded(lambda: _launch_resume(speed), False, _console())
 
 
 @app.command(epilog="Examples: maldroid cases | maldroid cases --list | maldroid cases --json")
@@ -944,6 +963,7 @@ def _launch(
     port: int | None,
     mcp_port: int | None,
     no_color: bool,
+    speed: SpeedMode | None,
 ) -> None:
     config = _config_with_overrides(load_config(), model, llama_server)
     selected_context_size = validate_context_size(config, context_size)
@@ -990,14 +1010,23 @@ def _launch(
         mcp_port,
         no_color,
         auto_profile=profile is None,
+        speed_mode=speed or config.cli.speed_mode,
     )
 
 
-def _launch_resume() -> None:
+def _launch_resume(speed: SpeedMode | None = None) -> None:
     config = load_config()
     manager = CaseManager(config)
     case = manager.resume()
-    _run_case(config, case, manager, None, None, False)
+    _run_case(
+        config,
+        case,
+        manager,
+        None,
+        None,
+        False,
+        speed_mode=speed or config.cli.speed_mode,
+    )
 
 
 def _run_case(
@@ -1008,6 +1037,7 @@ def _run_case(
     mcp_port: int | None,
     no_color: bool,
     auto_profile: bool = True,
+    speed_mode: SpeedMode | None = None,
 ) -> None:
     console = _console(no_color)
     runtime = WorkspaceRuntime(
@@ -1017,6 +1047,7 @@ def _run_case(
         llama_port=port,
         mcp_port=mcp_port,
         auto_profile=auto_profile,
+        speed_mode=speed_mode,
     )
     lease = RuntimeLease("CLI", {"case": str(case.root)}).acquire()
     try:

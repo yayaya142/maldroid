@@ -1,5 +1,8 @@
 # Web Workspace
 
+> **BETA:** The CLI is the recommended daily surface. New Web feature work is on hold while the
+> expanded CLI workflow is validated on physical React Native and Native/Ghidra investigations.
+
 MalDroid includes a local, loopback-only Web workspace backed by the same model, agent, MCP
 transport, case state, tools, and reports as the terminal workspace.
 
